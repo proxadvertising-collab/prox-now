@@ -108,7 +108,7 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="hidden items-center gap-2 border-b border-border bg-surface-2 px-4 py-2 md:flex" aria-label="Primary">
+      <nav className="hidden min-h-11 items-center gap-2 border-b border-surface-2 bg-transparent px-4 md:flex" aria-label="Primary">
         {SLOTS.map((slot) => {
           const current = isCurrent(pathname, slot.href);
           return (

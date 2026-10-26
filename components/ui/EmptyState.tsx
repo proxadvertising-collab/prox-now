@@ -13,7 +13,7 @@ export function EmptyState({
       {action ? (
         <Link
           href={action.href}
-          className="inline-flex h-14 min-h-11 w-full items-center justify-center rounded-full bg-accent px-6 text-label font-semibold text-accent-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-6 text-center text-body font-semibold text-accent-ink no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
         >
           {action.label}
         </Link>
