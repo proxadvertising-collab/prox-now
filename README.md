@@ -1,2 +1,50 @@
 # prox-now
 Prox Now: Meta Global AI Developer Hackathon
+
+## What Prox Now is
+
+Prox Now is a mobile-first web app. A shopper snaps a photo of a local shop, the AI matches the shop, and a live pin shows on a map for 2 hours.
+
+## Hackathon
+
+Built during the Meta Global AI Developer Hackathon, Oct 26 to Nov 4 2026, all code written this week.
+
+## How to run
+
+Install dependencies and start the dev server:
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000.
+
+Copy `.env.example` to `.env.local` and set the values on your machine. Do not commit that file.
+
+```bash
+npm test
+npm run build
+```
+
+Routes in this scaffold:
+
+- `GET /api/health` returns `{ ok: true, time }`.
+- `GET /api/meta-ping` makes one server-side Meta API call.
+
+## Environment variables
+
+`.env.example` lists the names only. Set values in `.env.local`.
+
+- `META_API_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold.
+
+## Where Meta models are used
+
+- `muse-spark-1.3` in `GET /api/meta-ping` (one server-side proof call to `https://api.meta.ai/v1/responses`).
+- Shop photo matching: placeholder, not implemented in this scaffold.
+- Live map pin: placeholder, not implemented in this scaffold.
