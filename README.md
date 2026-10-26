@@ -27,6 +27,16 @@ npm test
 npm run build
 ```
 
+## Design system
+
+Tokens, type, motion, and the app shell are specified in [docs/design/DESIGN.md](docs/design/DESIGN.md). Screen notes are in [docs/design/SCREENS.md](docs/design/SCREENS.md).
+
+Regenerate the home-screen icons (180, 192, 512, and maskable 512) with:
+
+```bash
+npm run icons
+```
+
 Routes in this scaffold:
 
 - `GET /api/health` returns `{ ok: true, time }`.
