@@ -117,7 +117,7 @@ create table if not exists public.posts (
   status text not null default 'live' check (status in ('live', 'kept', 'passed')),
   is_demo boolean not null default false,
   created_at timestamptz not null default now(),
-  -- Always created_at plus 2 hours. Clients cannot choose this value.
+  -- Always created_at plus 2 hours. The trigger stamps created_at to now(), so a client can never choose created_at or expires_at.
   -- A stored generated column cannot add an interval to timestamptz:
   -- that operator is only stable, not immutable. The trigger below sets it.
   expires_at timestamptz not null,
@@ -135,7 +135,8 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  new.created_at := coalesce(new.created_at, now());
+  -- Stamp the server clock so a client can never choose created_at.
+  new.created_at := now();
   new.expires_at := new.created_at + interval '2 hours';
   return new;
 end;

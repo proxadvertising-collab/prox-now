@@ -1,18 +1,26 @@
-import { CountdownRing } from "@/components/ui/CountdownRing";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { MapView } from "@/components/map/MapView";
+import { ShopList } from "@/components/map/ShopList";
+import { DemoBanner } from "@/components/ui/DemoBanner";
 import { t } from "@/lib/copy";
 
 export default function MapPage() {
   return (
-    <>
-      <h1 className="text-title font-bold text-fg">{t("en", "nav.map")}</h1>
-      <div className="mt-8 flex justify-center">
-        <CountdownRing remainingMs={4_320_000} size={168} />
+    <div className="flex flex-col">
+      <div className="flex h-[calc(100dvh-var(--safe-top)-var(--nav-h)-var(--safe-bottom))] flex-col overflow-hidden md:h-[calc(100dvh-var(--safe-top)-2.75rem)]">
+        <DemoBanner />
+        <div className="min-h-0 flex-1">
+          <MapView />
+        </div>
       </div>
-      <EmptyState
-        message={t("en", "empty.map")}
-        action={{ href: "/snap", label: t("en", "snap.cta") }}
-      />
-    </>
+      <section
+        className="px-4 pb-[calc(var(--nav-h)+var(--safe-bottom)+1.5rem)] pt-4 md:pb-8"
+        aria-labelledby="shops-near"
+      >
+        <h1 id="shops-near" className="text-heading font-bold text-fg">
+          {t("en", "map.near")}
+        </h1>
+        <ShopList />
+      </section>
+    </div>
   );
 }

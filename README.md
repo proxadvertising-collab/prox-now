@@ -39,6 +39,10 @@ npm run icons
 
 Routes in this scaffold:
 
+- `/login` signs in with Google or a 6-digit email code.
+- `/auth/callback` finishes the sign-in redirect.
+- `/map` shows the demo map from a local shop fixture. It does not query a shop table.
+- `/snap`, `/wallet`, and `/inbox` send a signed-out visitor to `/login`.
 - `GET /api/health` returns `{ ok: true, time }`.
 - `GET /api/meta-ping` makes one server-side Meta API call.
 
@@ -57,4 +61,4 @@ Routes in this scaffold:
 
 - `muse-spark-1.3` in `GET /api/meta-ping` (one server-side proof call to `https://api.meta.ai/v1/responses`).
 - Shop photo matching: placeholder, not implemented in this scaffold.
-- Live map pin: placeholder, not implemented in this scaffold.
+- Live map: MapLibre demo pins from `lib/fixtures`. No shop table is queried.

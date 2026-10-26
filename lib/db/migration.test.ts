@@ -76,4 +76,9 @@ describe("core schema files", () => {
       expect(file.toLowerCase()).not.toContain("password");
     }
   });
+
+  it("never lets a client choose posts.created_at", () => {
+    expect(migration).not.toContain("coalesce(new.created_at");
+    expect(migration).toContain("new.created_at := now()");
+  });
 });
