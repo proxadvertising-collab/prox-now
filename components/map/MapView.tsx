@@ -19,14 +19,16 @@ export function MapView({
   shops,
   fixtures = true,
   livePosts = EMPTY_POSTS,
+  demoSession = false,
 }: {
   shops?: FixtureShop[];
   fixtures?: boolean;
   livePosts?: LivePost[];
+  demoSession?: boolean;
 }) {
   return (
     <div className="h-full min-h-0 w-full bg-bg">
-      <ProxMap shops={shops} fixtures={fixtures} livePosts={livePosts} />
+      <ProxMap shops={shops} fixtures={fixtures} livePosts={livePosts} demoSession={demoSession} />
     </div>
   );
 }

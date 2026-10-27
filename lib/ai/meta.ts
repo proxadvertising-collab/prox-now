@@ -20,9 +20,14 @@ export class MetaCallError extends Error {
 }
 
 export class MetaParseError extends Error {
-  constructor() {
+  readonly model: string | null;
+  readonly ms: number;
+
+  constructor(model: string | null, ms: number) {
     super("parse");
     this.name = "MetaParseError";
+    this.model = model;
+    this.ms = ms;
   }
 }
 
@@ -30,10 +35,33 @@ export type SparkResult = {
   raw: unknown;
   usage: unknown;
   ms: number;
+  model: string | null;
 };
 
 const META_URL = "https://api.meta.ai/v1/responses";
 const TIMEOUT_MS = 25_000;
+
+async function metaFailureCode(response: Response): Promise<MetaErrorCode> {
+  if (response.status === 401 || response.status === 403) {
+    await response.body?.cancel().catch(() => undefined);
+    return "auth";
+  }
+  if (response.status === 429 || response.status === 402) {
+    await response.body?.cancel().catch(() => undefined);
+    return "busy";
+  }
+  const text = await response.text().catch(() => "");
+  const lower = text.slice(0, 500).toLowerCase();
+  if (
+    lower.includes("credit") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit") ||
+    lower.includes("rate_limit")
+  ) {
+    return "busy";
+  }
+  return "upstream";
+}
 
 function collectOutputText(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
@@ -53,6 +81,15 @@ function collectOutputText(payload: unknown): string {
     }
   }
   return chunks.join("");
+}
+
+export function readModel(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const model = (payload as { model?: unknown }).model;
+  if (typeof model !== "string") return null;
+  const trimmed = model.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  return trimmed;
 }
 
 function stripFences(text: string): string {
@@ -107,28 +144,22 @@ export async function callSpark(input: {
     }
 
     if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined);
-      const code: MetaErrorCode =
-        response.status === 401 || response.status === 403
-          ? "auth"
-          : response.status === 429
-            ? "busy"
-            : "upstream";
-      throw new MetaCallError(code);
+      throw new MetaCallError(await metaFailureCode(response));
     }
 
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      throw new MetaParseError();
+      throw new MetaParseError(null, Date.now() - started);
     }
 
+    const model = readModel(payload);
     let raw: unknown;
     try {
       raw = JSON.parse(stripFences(collectOutputText(payload)));
     } catch {
-      throw new MetaParseError();
+      throw new MetaParseError(model, Date.now() - started);
     }
 
     const usage =
@@ -136,7 +167,7 @@ export async function callSpark(input: {
         ? (payload as { usage: unknown }).usage
         : null;
 
-    return { raw, usage, ms: Date.now() - started };
+    return { raw, usage, ms: Date.now() - started, model };
   } finally {
     clearTimeout(timer);
   }

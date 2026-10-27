@@ -28,6 +28,12 @@ async function LoginContent({ searchParams }: { searchParams: Promise<LoginQuery
       >
         {t("en", "demo.try")}
       </Link>
+      <Link
+        href="/judge"
+        className="inline-flex min-h-11 items-center text-label font-semibold text-fg-muted no-underline"
+      >
+        {t("en", "judge.link")}
+      </Link>
     </main>
   );
 }

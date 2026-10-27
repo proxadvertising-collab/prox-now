@@ -9,6 +9,12 @@ Prox Now is a mobile-first web app. A shopper snaps a photo of a local shop, the
 
 Built during the Meta Global AI Developer Hackathon, Oct 26 to Nov 4 2026, all code written this week.
 
+## Repository timeline
+
+The repo was created on GitHub on 2026-10-26 at 14:28 +0700 (07:28 UTC), before kickoff, with a GitHub-generated initial commit that holds only README.md; all application code, schema, assets and data start at commit 370d5b7 (2026-10-26 16:27 UTC, after the 16:00 UTC start).
+
+The same paragraph, and the split between existing tools and event work, is in [docs/PROVENANCE.md](docs/PROVENANCE.md).
+
 ## How to run
 
 Install dependencies and start the dev server:
@@ -40,6 +46,7 @@ npm run icons
 Routes in this scaffold:
 
 - `/login` signs in with Google or a 6-digit email code.
+- `/judge` signs in as the shopper or the shop owner with one tap. Email and password are the fallback.
 - `/auth/callback` finishes the sign-in redirect.
 - `/map` shows shops from the database when the Supabase env vars are set, and the local fixture otherwise.
 - `/snap` matches a photo to a nearby shop. It does not require a session. Adding a shop does.
@@ -55,8 +62,12 @@ Routes in this scaffold:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `DEMO_EXPLORER_EMAIL`
+- `DEMO_EXPLORER_PASSWORD`
+- `DEMO_OWNER_EMAIL`
+- `DEMO_OWNER_PASSWORD`
 
-`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold.
+`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold. The `DEMO_*` values stay on the server. They are not in client code.
 
 ## Where Meta models are used
 

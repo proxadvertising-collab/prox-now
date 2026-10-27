@@ -237,3 +237,116 @@ describe("loop migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("demo zone migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0007_demo_zone.sql"), "utf8");
+
+  it("falls back to the Soi 102 point when no shop is marked demo", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("function public.demo_zone()");
+    expect(sql).toContain("security invoker");
+    expect(sql).toContain("grant execute on function public.demo_zone() to public, anon, authenticated");
+    expect(sql).toContain("coalesce(avg(shops.lat), 12.5684)");
+    expect(sql).toContain("coalesce(avg(shops.lng), 99.9577)");
+    expect(sql).toContain("16.5::double precision as zoom");
+    expect(sql).toContain("where shops.is_demo");
+    expect(sql).toContain("is_seed boolean not null default false");
+    expect(sql).toContain("timestamptz '2026-11-12 00:00+00'");
+    expect(sql.split("p.is_seed = false").length - 1).toBe(4);
+    expect(sql).toContain("function public.expired_undecided()");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+    expect(sql).not.toContain("demo_reset");
+  });
+
+  it("lets a non-seed post end early and rejects one that lasts past two hours", () => {
+    const twoHours = 2 * 60 * 60 * 1000;
+    const created = Date.parse("2026-10-27T12:00:00.000Z");
+    const branch = sql.slice(sql.indexOf("check ("), sql.indexOf(");", sql.indexOf("check (")));
+    expect(branch).toContain("(is_seed and expires_at = timestamptz '2026-11-12 00:00+00')");
+    expect(branch).toContain("(not is_seed and expires_at <= created_at + interval '2 hours')");
+    expect(branch).not.toContain("not is_seed and expires_at = created_at + interval '2 hours'");
+    const earlyAllowed = created + twoHours - 60_000 <= created + twoHours;
+    const exactAllowed = created + twoHours <= created + twoHours;
+    const lateRejected = created + twoHours + 1_000 <= created + twoHours;
+    expect(earlyAllowed).toBe(true);
+    expect(exactAllowed).toBe(true);
+    expect(lateRejected).toBe(false);
+    expect(sql).toContain("elsif tg_op = 'INSERT' then");
+    expect(sql).toContain("new.expires_at := new.created_at + interval '2 hours'");
+  });
+});
+
+describe("demo accounts migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0008_demo_accounts.sql"), "utf8");
+
+  it("lets a person read only their own demo row", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create table if not exists public.demo_accounts");
+    expect(sql).toContain("user_id uuid primary key references auth.users (id) on delete cascade");
+    expect(sql).toContain("check (role in ('explorer', 'owner'))");
+    expect(sql).toContain("alter table public.demo_accounts enable row level security");
+    expect(sql).toContain("demo_accounts_select_own");
+    expect(sql).toContain("user_id = (select auth.uid())");
+    expect(sql).toContain("grant select on table public.demo_accounts to authenticated");
+    expect(sql).not.toContain("grant insert");
+    expect(sql).not.toContain("grant update");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
+
+describe("demo window migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0009_demo_window.sql"), "utf8");
+
+  it("rejects a non-owner, a real shop, and a seed post, and repeats only the explorer coupon", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("function public.demo_end_window(p_post_id uuid)");
+    expect(sql).toContain("raise exception 'not_owner'");
+    expect(sql).toContain("raise exception 'not_demo_shop'");
+    expect(sql).toContain("raise exception 'seed_post'");
+    expect(sql).toContain("set expires_at = now()");
+    expect(sql).toContain("grant execute on function public.demo_end_window(uuid) to authenticated");
+    expect(sql).toContain("where demo_repeat = false");
+    expect(sql).toContain("demo_accounts.role = 'explorer'");
+    expect(sql).toContain("and shops.is_demo");
+    expect(sql).toContain("'liveNow'");
+    expect(sql).toContain("and s.is_demo");
+    expect(sql).toContain("and p.is_seed = false");
+    expect(sql).toContain("and p.expires_at > now()");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
+
+describe("rate limit migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0010_rate_limits.sql"), "utf8");
+
+  it("counts snap and judge hits in a locked hour window the client cannot write", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create table if not exists public.rate_counters");
+    expect(sql).toContain("primary key (bucket, subject, window_start)");
+    expect(sql).toContain("check (bucket in ('snap', 'judge'))");
+    expect(sql).toContain("alter table public.rate_counters enable row level security");
+    expect(sql).toContain("using (false)");
+    expect(sql).toContain("revoke all on table public.rate_counters from public, anon, authenticated");
+    expect(sql).not.toContain("grant select on table public.rate_counters");
+    expect(sql).not.toContain("grant insert on table public.rate_counters");
+    expect(sql).toContain("function public.take_rate_limit(p_bucket text, p_subjects text[])");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("v_limit := 20");
+    expect(sql).toContain("v_limit := 60");
+    expect(sql).toContain("v_subject <> 'user:' || auth.uid()::text");
+    expect(sql).toContain("date_trunc('hour', pg_catalog.now())");
+    expect(sql).toContain("pg_catalog.pg_advisory_xact_lock");
+    const denyAt = sql.indexOf("if coalesce(v_hits, 0) >= v_limit then");
+    const insertAt = sql.indexOf("insert into public.rate_counters");
+    expect(denyAt).toBeGreaterThan(0);
+    expect(insertAt).toBeGreaterThan(denyAt);
+    expect(sql).toContain("return false;");
+    expect(sql).toContain("grant execute on function public.take_rate_limit(text, text[]) to anon, authenticated");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

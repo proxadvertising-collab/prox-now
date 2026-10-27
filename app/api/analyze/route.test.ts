@@ -3,9 +3,10 @@ import { POST } from "./route";
 
 const SECRET = "test-meta-key";
 
-function jsonResponse(text: string, status = 200) {
+function jsonResponse(text: string, status = 200, model?: string) {
   return new Response(
     JSON.stringify({
+      ...(model ? { model } : {}),
       output: [{ type: "message", content: [{ type: "output_text", text }] }],
       usage: { input_tokens: 1, output_tokens: 1 },
     }),
@@ -48,7 +49,9 @@ describe("POST /api/analyze", () => {
     vi.stubEnv("META_API_KEY", SECRET);
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
       jsonResponse(
-        '```json\n{"shop_id":"mala-mafia","confidence":0.92,"sign_text":[{"thai":"มาล่า","english":"mala"}],"quality_score":8,"quality_reason":"sharp","faces":[],"category":"food","safe_to_post":true,"safe_reason":""}\n```',
+        '```json\n{"shop_id":"mala-mafia","confidence":0.92,"sign_text":[{"thai":"มาล่า","english":"mala"}],"quality_score":8,"quality_reason":"sharp","faces":[[0.1,0.1,0.2,0.2]],"category":"food","safe_to_post":true,"safe_reason":"","facts":{"sign_language":"th","captions":{"en":"Mala"}}}\n```',
+        200,
+        "response-model",
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -65,7 +68,29 @@ describe("POST /api/analyze", () => {
     const sent = JSON.parse(String(init?.body));
     expect(sent.store).toBe(false);
     expect(sent.model).toBe("muse-spark-1.3");
+    expect(body.scene.model).toBe("response-model");
+    expect(body.scene.facesFound).toBe(1);
+    expect(body.scene.facesBlurred).toBeNull();
+    expect(body.scene.languages).toEqual({ source: "th", target: "en" });
+    expect(body.scene.signs).toEqual([{ original: "มาล่า", translated: "mala" }]);
+    expect(body.scene.steps.map((step: { step: string }) => step.step)).toEqual(["shops", "match"]);
+    expect(body.scene.steps.every((step: { ms: number }) => step.ms >= 0)).toBe(true);
     expect(JSON.stringify(sent).includes("previous_response_id")).toBe(false);
+  });
+
+  it("says the AI is resting when Meta is rate limited or out of credits", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    const limited = vi.fn(async () => new Response("rate limit", { status: 429 }));
+    vi.stubGlobal("fetch", limited);
+    const rate = await POST(imageRequest(new Uint8Array([7])));
+    expect(rate.status).toBe(503);
+    expect(await rate.json()).toEqual({ error: "ai_resting" });
+
+    const credits = vi.fn(async () => new Response("insufficient credits", { status: 402 }));
+    vi.stubGlobal("fetch", credits);
+    const broke = await POST(imageRequest(new Uint8Array([8])));
+    expect(broke.status).toBe(503);
+    expect(await broke.json()).toEqual({ error: "ai_resting" });
   });
 
   it("turns malformed model output into pick-all", async () => {

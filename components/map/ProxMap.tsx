@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
+import { DEMO_ZONE_FALLBACK, showExploreChip } from "@/lib/demo/zone";
 import { pickLanguage } from "@/lib/i18n/viewer";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
@@ -113,6 +114,7 @@ function asLivePost(value: LivePost): LivePost {
     category: typeof value.category === "string" ? value.category : "other",
     facts: asFacts(value.facts),
     mine: value.mine === true,
+    seed: value.seed === true,
   };
 }
 
@@ -138,10 +140,12 @@ function nearestShopMeters(point: LatLng, shops: readonly FixtureShop[]): number
 export function ProxMap({
   shops = FIXTURE_SHOPS,
   fixtures = true,
+  demoSession = false,
   livePosts = EMPTY_POSTS,
 }: {
   shops?: FixtureShop[];
   fixtures?: boolean;
+  demoSession?: boolean;
   livePosts?: LivePost[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -260,6 +264,26 @@ export function ProxMap({
     map.touchPitch.disable();
     map.addControl(new AttributionControl({ compact: true }), "bottom-left");
     map.on("load", () => {
+      if (demoSession) {
+        void (async () => {
+          let lat = DEMO_ZONE_FALLBACK.lat;
+          let lng = DEMO_ZONE_FALLBACK.lng;
+          let zoom = DEMO_ZONE_FALLBACK.zoom;
+          try {
+            const supabase = createClient();
+            const result = await supabase.rpc("demo_zone");
+            const row = Array.isArray(result.data) ? result.data[0] : null;
+            if (row && typeof row.lat === "number" && typeof row.lng === "number") {
+              lat = row.lat;
+              lng = row.lng;
+              if (typeof row.zoom === "number") zoom = row.zoom;
+            }
+          } catch {
+            lat = DEMO_ZONE_FALLBACK.lat;
+          }
+          map.flyTo({ center: [lng, lat], zoom, essential: true });
+        })();
+      }
       applyDarkOverrides({
         getLayer: (id) => map.getLayer(id),
         setPaintProperty: (layerId, property, value) => {
@@ -285,7 +309,7 @@ export function ProxMap({
       mapRef.current = null;
       markersRef.current = [];
     };
-  }, [webgl]);
+  }, [webgl, demoSession]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -299,7 +323,7 @@ export function ProxMap({
       for (const shop of shops) {
         const post = byShop.get(shop.id);
         const element = post
-          ? createLivePinElement(shop.name, post.expiresAt, tick)
+          ? createLivePinElement(shop.name, post.expiresAt, tick, post.seed)
           : document.createElement("button");
         if (!post) {
           element.type = "button";
@@ -444,6 +468,41 @@ export function ProxMap({
     <div className="prox-map relative h-full w-full" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
       <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
+        {!fixtures &&
+        showExploreChip({
+          demoSession,
+          viewer: userPoint,
+          posts: posts.map((post) => ({ lat: post.lat, lng: post.lng })),
+        }) ? (
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 text-left text-label font-semibold text-accent-ink shadow-card"
+            onClick={() => {
+              const map = mapRef.current;
+              if (!map) return;
+              void (async () => {
+                let lat = DEMO_ZONE_FALLBACK.lat;
+                let lng = DEMO_ZONE_FALLBACK.lng;
+                let zoom = DEMO_ZONE_FALLBACK.zoom;
+                try {
+                  const supabase = createClient();
+                  const result = await supabase.rpc("demo_zone");
+                  const row = Array.isArray(result.data) ? result.data[0] : null;
+                  if (row && typeof row.lat === "number" && typeof row.lng === "number") {
+                    lat = row.lat;
+                    lng = row.lng;
+                    if (typeof row.zoom === "number") zoom = row.zoom;
+                  }
+                } catch {
+                  lat = DEMO_ZONE_FALLBACK.lat;
+                }
+                map.flyTo({ center: [lng, lat], zoom, essential: true });
+              })();
+            }}
+          >
+            {t("en", "demo.chip")}
+          </button>
+        ) : null}
         <button
           type="button"
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 px-3 text-label font-semibold text-fg no-underline shadow-card disabled:opacity-60"
@@ -480,7 +539,16 @@ export function ProxMap({
           ) : liveLine ? (
             <p className="mt-2 text-body text-fg">{liveLine}</p>
           ) : null}
-          <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+          {selectedLive.seed ? (
+            <p className="mt-2 flex items-center gap-2 text-body text-fg">
+              <span className="inline-flex rounded-full bg-accent px-2 py-0.5 text-caption font-extrabold text-accent-ink">
+                {t("en", "demo.pill")}
+              </span>
+              {t("en", "demo.live")}
+            </p>
+          ) : (
+            <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+          )}
           {liveMeters !== null ? (
             <p className="text-label text-fg-muted">
               {t("en", "snap.meters", { n: String(liveMeters) })}

@@ -104,9 +104,10 @@ export async function getShopsNear(
 export function mapShopsFromRows(
   rows: readonly MapShopRow[],
   center: LatLng = DEMO_CENTER,
+  options?: { includeDemo?: boolean },
 ): FixtureShop[] {
   return rows
-    .filter((row) => row.is_demo === false)
+    .filter((row) => options?.includeDemo || row.is_demo === false)
     .map((row) => ({
       id: String(row.id),
       slug: row.slug,

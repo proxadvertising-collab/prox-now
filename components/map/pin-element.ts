@@ -1,3 +1,4 @@
+import { t } from "@/lib/copy";
 import type { DemoPost } from "@/lib/fixtures/demo-posts";
 import type { FixtureShop } from "@/lib/fixtures/shops";
 import { formatRemaining, phaseFor, remainingMs, ringOffset } from "@/lib/freshness";
@@ -80,16 +81,22 @@ export function createPinElement(post: DemoPost, shop: FixtureShop, nowMs: numbe
 const LIVE_RADIUS = 18;
 const LIVE_CIRCUMFERENCE = 2 * Math.PI * LIVE_RADIUS;
 
-export function createLivePinElement(shopName: string, expiresAt: string, nowMs: number): HTMLButtonElement {
+export function createLivePinElement(
+  shopName: string,
+  expiresAt: string,
+  nowMs: number,
+  seed = false,
+): HTMLButtonElement {
   const remaining = Math.max(0, remainingMs(expiresAt, nowMs));
-  const phase = phaseFor(remaining);
-  const time = formatRemaining(remaining);
+  const phase = seed ? "fresh" : phaseFor(remaining);
+  const time = seed ? t("en", "demo.live") : formatRemaining(remaining);
   const button = document.createElement("button");
   button.type = "button";
   button.className = "prox-pin";
   button.dataset.phase = phase;
   button.dataset.live = "true";
-  button.setAttribute("aria-label", shopName + " – " + time + " left");
+  if (seed) button.dataset.seed = "true";
+  button.setAttribute("aria-label", seed ? shopName + " – " + time : shopName + " – " + time + " left");
 
   const body = document.createElement("span");
   body.className = "prox-pin__body";
@@ -109,7 +116,10 @@ export function createLivePinElement(shopName: string, expiresAt: string, nowMs:
   circle.setAttribute("stroke-width", "3");
   circle.setAttribute("stroke-linecap", "round");
   circle.setAttribute("stroke-dasharray", String(LIVE_CIRCUMFERENCE));
-  circle.setAttribute("stroke-dashoffset", String(ringOffset(LIVE_CIRCUMFERENCE, remaining)));
+  circle.setAttribute(
+    "stroke-dashoffset",
+    seed ? "0" : String(ringOffset(LIVE_CIRCUMFERENCE, remaining)),
+  );
   circle.setAttribute("transform", "rotate(-90 22 22)");
   svg.append(circle);
 
@@ -118,6 +128,15 @@ export function createLivePinElement(shopName: string, expiresAt: string, nowMs:
   dot.textContent = shopName.slice(0, 1);
 
   body.append(svg, dot);
+  if (seed) {
+    const pill = document.createElement("span");
+    pill.className = "prox-pin__pill";
+    pill.textContent = t("en", "demo.pill");
+    const chip = document.createElement("span");
+    chip.className = "prox-pin__chip";
+    chip.textContent = time;
+    body.append(pill, chip);
+  }
   button.append(body);
   return button;
 }

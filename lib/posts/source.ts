@@ -16,6 +16,7 @@ export type LivePost = {
   category: string;
   facts: PlaceFacts | null;
   mine: boolean;
+  seed: boolean;
 };
 
 export type LivePostRow = {
@@ -28,6 +29,7 @@ export type LivePostRow = {
   expires_at: string;
   status?: string;
   author_id?: string | null;
+  is_seed?: boolean;
   facts?: unknown;
   shops:
     | {
@@ -104,6 +106,7 @@ export function mapLiveRows(
       category: shop.category ?? "other",
       facts: parseMatcherResult({ facts: row.facts }).facts,
       mine: Boolean(viewerId && row.author_id && row.author_id === viewerId),
+      seed: row.is_seed === true,
     });
   }
   return posts;
@@ -112,15 +115,22 @@ export function mapLiveRows(
 async function defaultQuery(): Promise<LivePostRow[] | null> {
   const { createClient } = await import("../supabase/server");
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const columns =
+    "id, shop_id, photo_path, text_original, text_translated, created_at, expires_at, facts, author_id, is_seed, shops(name, name_local, lat, lng, category)";
+  const first = await supabase
     .from("posts")
-    .select(
-      "id, shop_id, photo_path, text_original, text_translated, created_at, expires_at, facts, author_id, shops(name, name_local, lat, lng, category)",
-    )
+    .select(columns)
     .eq("status", "live")
     .gt("expires_at", new Date().toISOString());
-  if (error) throw new Error("posts");
-  return (data ?? []) as LivePostRow[];
+  if (!first.error) return (first.data ?? []) as LivePostRow[];
+  if (!String(first.error.message ?? "").includes("is_seed")) throw new Error("posts");
+  const second = await supabase
+    .from("posts")
+    .select(columns.replace(", is_seed", ""))
+    .eq("status", "live")
+    .gt("expires_at", new Date().toISOString());
+  if (second.error) throw new Error("posts");
+  return (second.data ?? []) as unknown as LivePostRow[];
 }
 
 export async function getLivePosts(

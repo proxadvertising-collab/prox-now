@@ -65,7 +65,10 @@ describe("mapLiveRows", () => {
       shopNameLocal: "ร้าน",
       photoUrl: "https://example.supabase.co/storage/v1/object/public/post-photos/user/post-1.jpg",
       textTranslated: { en: "Shop" },
+      seed: false,
     });
+    const seeded = mapLiveRows([row({ is_seed: true })], "https://example.supabase.co/");
+    expect(seeded[0]?.seed).toBe(true);
   });
 });
 

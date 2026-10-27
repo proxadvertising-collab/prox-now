@@ -4,12 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { DemoBanner } from "@/components/ui/DemoBanner";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
+import { DEMO_ZONE_FALLBACK, nearestDemoShop } from "@/lib/demo/zone";
 import { locate, type LocateResult } from "@/lib/geo/locate";
+import { createClient } from "@/lib/supabase/client";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
+import { ScenePanel } from "@/components/snap/ScenePanel";
+import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
 
 type ShopCard = {
   id: string;
@@ -32,6 +36,7 @@ type AnalyzeBody = {
   candidates?: ShopCard[];
   demo?: boolean;
   error?: string;
+  scene?: SceneReport;
 };
 
 type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "error";
@@ -135,6 +140,7 @@ export function SnapFlow() {
   const [elapsed, setElapsed] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [demo, setDemo] = useState(false);
+  const [demoShopName, setDemoShopName] = useState("");
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
   const [guessId, setGuessId] = useState<string | null>(null);
@@ -156,6 +162,7 @@ export function SnapFlow() {
   const [faceBoxes, setFaceBoxes] = useState<NormBox[]>([]);
   const [shown, setShown] = useState<number[]>([]);
   const [friendAgrees, setFriendAgrees] = useState(false);
+  const [scene, setScene] = useState<SceneReport | null>(null);
 
   function forgetOriginal() {
     const dropped = dropOriginalMemory(blobsRef.current, (url) => URL.revokeObjectURL(url));
@@ -329,6 +336,7 @@ export function SnapFlow() {
     setFaceBoxes([]);
     setShown([]);
     setFriendAgrees(false);
+    setScene(null);
     forgetOriginal();
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -347,6 +355,33 @@ export function SnapFlow() {
     setDemo(true);
   }
 
+  async function demoSnapPoint(): Promise<{ lat: number; lng: number; name: string } | null> {
+    try {
+      const supabase = createClient();
+      const account = await supabase.from("demo_accounts").select("role").limit(1);
+      if (account.error || (account.data?.length ?? 0) === 0) return null;
+      const zoneResult = await supabase.rpc("demo_zone");
+      const row = Array.isArray(zoneResult.data) ? zoneResult.data[0] : null;
+      const from =
+        row && typeof row.lat === "number" && typeof row.lng === "number"
+          ? { lat: row.lat, lng: row.lng }
+          : { lat: DEMO_ZONE_FALLBACK.lat, lng: DEMO_ZONE_FALLBACK.lng };
+      const shops = await supabase.from("shops").select("id, name, lat, lng, is_demo").eq("is_demo", true);
+      const points = (shops.data ?? []).map((shop) => ({
+        id: String(shop.id),
+        name: typeof shop.name === "string" ? shop.name : "",
+        lat: Number(shop.lat),
+        lng: Number(shop.lng),
+        isDemo: true,
+      }));
+      const nearest = nearestDemoShop(points, from);
+      if (!nearest) return { lat: from.lat, lng: from.lng, name: "" };
+      return { lat: nearest.lat, lng: nearest.lng, name: nearest.name };
+    } catch {
+      return null;
+    }
+  }
+
   async function analyse(file: File) {
     const run = ++runRef.current;
     setPhase("reading");
@@ -354,14 +389,30 @@ export function SnapFlow() {
     setElapsed(0);
     setAdded(false);
     startedRef.current = Date.now();
+    const locateStarted = Date.now();
     try {
-      const located = await locate();
+      const demoPoint = await demoSnapPoint();
       if (run !== runRef.current) return;
-      const here = located.status === "ok" ? located.point : null;
-      rememberPoint(here);
-      setLocStatus(located.status);
-      setDemo(!here);
+      let here: Point | null = null;
+      if (demoPoint) {
+        here = { lat: demoPoint.lat, lng: demoPoint.lng };
+        rememberPoint(here);
+        setLocStatus("ok");
+        setDemo(true);
+        setDemoShopName(demoPoint.name);
+      } else {
+        const located = await locate();
+        if (run !== runRef.current) return;
+        here = located.status === "ok" ? located.point : null;
+        rememberPoint(here);
+        setLocStatus(located.status);
+        setDemo(!here);
+        setDemoShopName("");
+      }
+      const locateMs = Date.now() - locateStarted;
+      const resizeStarted = Date.now();
       const jpeg = await resizeToJpeg(file);
+      const resizeMs = Date.now() - resizeStarted;
       if (run !== runRef.current) return;
       const form = new FormData();
       form.set("image", jpeg, "snap.jpg");
@@ -372,17 +423,36 @@ export function SnapFlow() {
       const response = await fetch("/api/analyze", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as AnalyzeBody | null;
       if (run !== runRef.current) return;
-      if (response.status === 503 && body?.error === "ai_not_configured") {
+      const failure = analyzeFailure(response.status, body?.error);
+      if (failure === "offline") {
         setError(t("en", "err.ai"));
         setPhase("error");
         return;
       }
-      if (!response.ok || !body?.decision || !body.result) {
+      if (failure === "resting") {
+        setError(t("en", "err.resting"));
+        setPhase("error");
+        return;
+      }
+      if (failure === "rate") {
+        setError(t("en", "snap.rate"));
+        setPhase("error");
+        return;
+      }
+      if (failure === "net" || !body?.decision || !body.result) {
         setError(t("en", "err.net"));
         setPhase("error");
         return;
       }
       const shops = body.candidates ?? [];
+      setScene(
+        body.scene
+          ? prependSteps(body.scene, [
+              { step: "locate", ms: locateMs },
+              { step: "resize", ms: resizeMs },
+            ])
+          : null,
+      );
       signRef.current = body.result.signText ?? [];
       categoryRef.current = body.result.category ?? "";
       setFaceBoxes(cleanFaceBoxes(body.result.faces));
@@ -421,6 +491,7 @@ export function SnapFlow() {
     setFaceBoxes([]);
     setShown([]);
     setFriendAgrees(false);
+    setScene(null);
     setPreview(URL.createObjectURL(file));
     void analyse(file);
   }
@@ -541,6 +612,7 @@ export function SnapFlow() {
       const response = await fetch("/api/posts", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        facesBlurred?: number;
         post?: { id?: string; expiresAt?: string | null };
       } | null;
       const code = body?.error ?? "";
@@ -579,6 +651,9 @@ export function SnapFlow() {
         return;
       }
       clearPostDraft();
+      if (typeof body.facesBlurred === "number") {
+        setScene((current) => (current ? { ...current, facesBlurred: body.facesBlurred ?? null } : current));
+      }
       setPosted({
         id: body.post.id,
         expiresAt: body.post.expiresAt ?? new Date(Date.now() + 7_200_000).toISOString(),
@@ -628,6 +703,10 @@ export function SnapFlow() {
     <div className="flex flex-col gap-4">
       <h1 className="text-title font-bold text-fg">{t("en", "nav.snap")}</h1>
       {demo ? <DemoBanner /> : null}
+      {demo && demoShopName ? (
+        <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
+      ) : null}
+      {scene && phase !== "idle" && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
       <input
         ref={inputRef}
         type="file"
