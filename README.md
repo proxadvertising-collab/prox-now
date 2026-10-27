@@ -42,7 +42,8 @@ Routes in this scaffold:
 - `/login` signs in with Google or a 6-digit email code.
 - `/auth/callback` finishes the sign-in redirect.
 - `/map` shows the demo map from a local shop fixture. It does not query a shop table.
-- `/snap`, `/wallet`, and `/inbox` send a signed-out visitor to `/login`.
+- `/snap` matches a photo to a demo shop. It does not require a session.
+- `/wallet` and `/inbox` send a signed-out visitor to `/login`.
 - `GET /api/health` returns `{ ok: true, time }`.
 - `GET /api/meta-ping` makes one server-side Meta API call.
 
@@ -60,5 +61,12 @@ Routes in this scaffold:
 ## Where Meta models are used
 
 - `muse-spark-1.3` in `GET /api/meta-ping` (one server-side proof call to `https://api.meta.ai/v1/responses`).
+- `muse-spark-1.3` in `POST /api/analyze` matches a shop photo. The photo is not stored.
+
+## Snap pipeline
+
+`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby demo shop it is. Confirm the guess, or pick from the list. The photo is not stored, and nothing is written to the database.
+
+`META_API_KEY` is required for `/api/analyze`. The name is the only value in the repo. Without it the route returns `ai_not_configured`.
 - Shop photo matching: placeholder, not implemented in this scaffold.
 - Live map: MapLibre demo pins from `lib/fixtures`. No shop table is queried.

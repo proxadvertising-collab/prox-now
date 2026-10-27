@@ -10,10 +10,8 @@ type AuthLike = {
   getUser: () => Promise<{ data: { user: unknown } }>;
 };
 
-function isProtectedPath(pathname: string): boolean {
+export function isProtectedPath(pathname: string): boolean {
   return (
-    pathname === "/snap" ||
-    pathname.startsWith("/snap/") ||
     pathname === "/wallet" ||
     pathname.startsWith("/wallet/") ||
     pathname === "/inbox" ||
