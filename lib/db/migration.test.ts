@@ -318,3 +318,35 @@ describe("demo window migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("rate limit migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0010_rate_limits.sql"), "utf8");
+
+  it("counts snap and judge hits in a locked hour window the client cannot write", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create table if not exists public.rate_counters");
+    expect(sql).toContain("primary key (bucket, subject, window_start)");
+    expect(sql).toContain("check (bucket in ('snap', 'judge'))");
+    expect(sql).toContain("alter table public.rate_counters enable row level security");
+    expect(sql).toContain("using (false)");
+    expect(sql).toContain("revoke all on table public.rate_counters from public, anon, authenticated");
+    expect(sql).not.toContain("grant select on table public.rate_counters");
+    expect(sql).not.toContain("grant insert on table public.rate_counters");
+    expect(sql).toContain("function public.take_rate_limit(p_bucket text, p_subjects text[])");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("v_limit := 20");
+    expect(sql).toContain("v_limit := 60");
+    expect(sql).toContain("v_subject <> 'user:' || auth.uid()::text");
+    expect(sql).toContain("date_trunc('hour', pg_catalog.now())");
+    expect(sql).toContain("pg_catalog.pg_advisory_xact_lock");
+    const denyAt = sql.indexOf("if coalesce(v_hits, 0) >= v_limit then");
+    const insertAt = sql.indexOf("insert into public.rate_counters");
+    expect(denyAt).toBeGreaterThan(0);
+    expect(insertAt).toBeGreaterThan(denyAt);
+    expect(sql).toContain("return false;");
+    expect(sql).toContain("grant execute on function public.take_rate_limit(text, text[]) to anon, authenticated");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

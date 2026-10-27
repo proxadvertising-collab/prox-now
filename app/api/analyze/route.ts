@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   const mime = type === "image/jpg" ? "image/jpeg" : type;
   const bytes = Buffer.from(await image.arrayBuffer());
   const imageDataUrl = "data:" + mime + ";base64," + bytes.toString("base64");
-  if (!allowSnap(clientIp(request), await signedInUserId(), Date.now())) {
+  if (!(await allowSnap(clientIp(request), await signedInUserId()))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

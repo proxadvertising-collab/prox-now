@@ -24,7 +24,7 @@ async function signIn(email: string, password: string) {
 }
 
 export async function POST(request: Request) {
-  if (!allowJudge(clientIp(request), Date.now())) {
+  if (!(await allowJudge(clientIp(request)))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
