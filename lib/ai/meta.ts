@@ -41,6 +41,28 @@ export type SparkResult = {
 const META_URL = "https://api.meta.ai/v1/responses";
 const TIMEOUT_MS = 25_000;
 
+async function metaFailureCode(response: Response): Promise<MetaErrorCode> {
+  if (response.status === 401 || response.status === 403) {
+    await response.body?.cancel().catch(() => undefined);
+    return "auth";
+  }
+  if (response.status === 429 || response.status === 402) {
+    await response.body?.cancel().catch(() => undefined);
+    return "busy";
+  }
+  const text = await response.text().catch(() => "");
+  const lower = text.slice(0, 500).toLowerCase();
+  if (
+    lower.includes("credit") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit") ||
+    lower.includes("rate_limit")
+  ) {
+    return "busy";
+  }
+  return "upstream";
+}
+
 function collectOutputText(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
   const output = (payload as { output?: unknown }).output;
@@ -122,14 +144,7 @@ export async function callSpark(input: {
     }
 
     if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined);
-      const code: MetaErrorCode =
-        response.status === 401 || response.status === 403
-          ? "auth"
-          : response.status === 429
-            ? "busy"
-            : "upstream";
-      throw new MetaCallError(code);
+      throw new MetaCallError(await metaFailureCode(response));
     }
 
     let payload: unknown;

@@ -78,6 +78,21 @@ describe("POST /api/analyze", () => {
     expect(JSON.stringify(sent).includes("previous_response_id")).toBe(false);
   });
 
+  it("says the AI is resting when Meta is rate limited or out of credits", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    const limited = vi.fn(async () => new Response("rate limit", { status: 429 }));
+    vi.stubGlobal("fetch", limited);
+    const rate = await POST(imageRequest(new Uint8Array([7])));
+    expect(rate.status).toBe(503);
+    expect(await rate.json()).toEqual({ error: "ai_resting" });
+
+    const credits = vi.fn(async () => new Response("insufficient credits", { status: 402 }));
+    vi.stubGlobal("fetch", credits);
+    const broke = await POST(imageRequest(new Uint8Array([8])));
+    expect(broke.status).toBe(503);
+    expect(await broke.json()).toEqual({ error: "ai_resting" });
+  });
+
   it("turns malformed model output into pick-all", async () => {
     vi.stubEnv("META_API_KEY", SECRET);
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse("this is not json")));

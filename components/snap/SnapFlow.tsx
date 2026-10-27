@@ -13,7 +13,7 @@ import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/l
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
-import { prependSteps, type SceneReport } from "@/lib/snap/scene";
+import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
 
 type ShopCard = {
   id: string;
@@ -423,17 +423,23 @@ export function SnapFlow() {
       const response = await fetch("/api/analyze", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as AnalyzeBody | null;
       if (run !== runRef.current) return;
-      if (response.status === 503 && body?.error === "ai_not_configured") {
+      const failure = analyzeFailure(response.status, body?.error);
+      if (failure === "offline") {
         setError(t("en", "err.ai"));
         setPhase("error");
         return;
       }
-      if (response.status === 429 || body?.error === "rate_limited") {
+      if (failure === "resting") {
+        setError(t("en", "err.resting"));
+        setPhase("error");
+        return;
+      }
+      if (failure === "rate") {
         setError(t("en", "snap.rate"));
         setPhase("error");
         return;
       }
-      if (!response.ok || !body?.decision || !body.result) {
+      if (failure === "net" || !body?.decision || !body.result) {
         setError(t("en", "err.net"));
         setPhase("error");
         return;

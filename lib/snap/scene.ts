@@ -80,6 +80,17 @@ export function buildScene(input: {
   };
 }
 
+export function analyzeFailure(
+  status: number,
+  error: string | undefined,
+): "offline" | "resting" | "rate" | "net" | null {
+  if (status === 503 && error === "ai_not_configured") return "offline";
+  if (error === "ai_resting" || error === "busy") return "resting";
+  if (status === 429 || error === "rate_limited") return "rate";
+  if (status >= 400) return "net";
+  return null;
+}
+
 export function prependSteps(scene: SceneReport, steps: readonly SceneStep[]): SceneReport {
   return { ...scene, steps: [...finiteSteps(steps), ...scene.steps] };
 }

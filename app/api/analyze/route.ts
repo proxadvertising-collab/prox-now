@@ -161,6 +161,7 @@ export async function POST(request: Request) {
       });
     }
     const code = error instanceof MetaCallError ? error.code : "upstream";
-    return NextResponse.json({ error: code }, { status: code === "busy" ? 503 : 502 });
+    if (code === "busy") return NextResponse.json({ error: "ai_resting" }, { status: 503 });
+    return NextResponse.json({ error: code }, { status: 502 });
   }
 }

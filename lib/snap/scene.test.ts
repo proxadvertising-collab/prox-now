@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { emptyMatcherResult, parseMatcherResult } from "../ai/matcher";
-import { buildScene, prependSteps } from "./scene";
+import { analyzeFailure, buildScene, prependSteps } from "./scene";
 
 describe("behind the scenes", () => {
   it("reads the model, match, faces, sign pair, and step times from the response", () => {
@@ -68,6 +68,15 @@ describe("behind the scenes", () => {
       ],
     );
     expect(scene.steps.map((step) => step.step)).toEqual(["locate", "resize", "match"]);
+  });
+
+  it("maps a Meta credit or rate failure to the resting message", () => {
+    expect(analyzeFailure(503, "ai_resting")).toBe("resting");
+    expect(analyzeFailure(503, "busy")).toBe("resting");
+    expect(analyzeFailure(503, "ai_not_configured")).toBe("offline");
+    expect(analyzeFailure(429, "rate_limited")).toBe("rate");
+    expect(analyzeFailure(502, "upstream")).toBe("net");
+    expect(analyzeFailure(200, undefined)).toBeNull();
   });
 
   it("does not name a model in the panel copy", () => {
