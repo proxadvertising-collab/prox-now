@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AttributionControl, Map, Marker, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
-import { t } from "@/lib/copy";
+import { LocationHelp } from "@/components/ui/LocationHelp";
+import { t, type CopyKey } from "@/lib/copy";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
 import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, walkingDirectionsUrl, walkingMinutes, type LatLng } from "@/lib/geo";
+import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import type { LivePost } from "@/lib/posts/source";
 import { createClient } from "@/lib/supabase/client";
@@ -113,6 +115,7 @@ export function ProxMap({
   const [locMessage, setLocMessage] = useState(t("en", "loc.why"));
   const [locProblem, setLocProblem] = useState(false);
   const [locBusy, setLocBusy] = useState(false);
+  const [locStatus, setLocStatus] = useState<LocateResult["status"] | null>(null);
 
   useEffect(() => {
     setWebgl(supportsWebGL2());
@@ -308,35 +311,43 @@ export function ProxMap({
     };
   }, [userPoint, webgl]);
 
-  function useMyLocation() {
-    if (!navigator.geolocation) {
+  function failureKey(status: LocateResult["status"]): CopyKey {
+    if (status === "denied") return "loc.denied";
+    if (status === "timeout") return "loc.timeout";
+    if (status === "insecure") return "loc.insecure";
+    if (status === "no_api") return "loc.noApi";
+    return "loc.unavailable";
+  }
+
+  async function useMyLocation() {
+    setLocBusy(true);
+    setLocProblem(false);
+    setLocMessage(t("en", "loc.finding"));
+    try {
+      const result = await locate();
+      setLocStatus(result.status);
+      if (result.status !== "ok") {
+        setLocProblem(true);
+        setLocMessage(t("en", failureKey(result.status)));
+        return;
+      }
+      if (nearestShopMeters(result.point, shops) > FAR_METERS) {
+        setLocProblem(false);
+        setLocMessage(t("en", "loc.far"));
+        return;
+      }
+      setUserPoint(result.point);
+      setWalkOrigin(result.point);
+      setLocProblem(false);
+      setLocMessage(t("en", "loc.why"));
+      mapRef.current?.flyTo({ center: [result.point.lng, result.point.lat], essential: true });
+    } catch {
+      setLocStatus("unavailable");
       setLocProblem(true);
       setLocMessage(t("en", "loc.unavailable"));
-      return;
+    } finally {
+      setLocBusy(false);
     }
-    setLocBusy(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setLocBusy(false);
-        if (nearestShopMeters(point, shops) > FAR_METERS) {
-          setLocProblem(false);
-          setLocMessage(t("en", "loc.far"));
-          return;
-        }
-        setUserPoint(point);
-        setWalkOrigin(point);
-        setLocProblem(false);
-        setLocMessage("");
-        mapRef.current?.flyTo({ center: [point.lng, point.lat], essential: true });
-      },
-      (error) => {
-        setLocBusy(false);
-        setLocProblem(true);
-        setLocMessage(error.code === 1 ? t("en", "loc.denied") : t("en", "loc.unavailable"));
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
-    );
   }
 
   if (webgl === null) {
@@ -370,6 +381,8 @@ export function ProxMap({
   const liveMeters = selectedLive && userPoint ? Math.round(haversineMeters(userPoint, selectedLive)) : null;
   const liveLine =
     selectedLive?.textTranslated.en || selectedLive?.textOriginal || "";
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const showLocationHelp = needsExternalBrowser(userAgent, locStatus) || locStatus === "denied";
 
   return (
     <div className="prox-map relative h-full w-full" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
@@ -389,6 +402,9 @@ export function ProxMap({
         >
           {locMessage}
         </p>
+        {showLocationHelp ? (
+          <LocationHelp status={locStatus} onTryAgain={() => void useMyLocation()} />
+        ) : null}
       </div>
       {selectedLive ? (
         <div className="absolute inset-x-3 bottom-16 z-20 max-h-[70%] overflow-y-auto rounded-lg bg-surface-1 p-4 shadow-sheet">

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DemoBanner } from "@/components/ui/DemoBanner";
+import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
+import { locate, type LocateResult } from "@/lib/geo/locate";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 
@@ -91,27 +93,6 @@ const secondary =
 const field =
   "min-h-12 w-full rounded-md bg-surface-2 px-3 text-base text-fg";
 
-function locate(): Promise<Point | null> {
-  if (typeof navigator === "undefined" || !navigator.geolocation) {
-    return Promise.resolve(null);
-  }
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (point: Point | null) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      resolve(point);
-    };
-    const timer = window.setTimeout(() => finish(null), 8000);
-    navigator.geolocation.getCurrentPosition(
-      (position) => finish({ lat: position.coords.latitude, lng: position.coords.longitude }),
-      () => finish(null),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
-    );
-  });
-}
-
 function writeDraft(draft: Draft) {
   try {
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -155,6 +136,7 @@ export function SnapFlow() {
   const [chosen, setChosen] = useState<ShopCard | null>(null);
   const [added, setAdded] = useState(false);
   const [point, setPoint] = useState<Point | null>(null);
+  const [locStatus, setLocStatus] = useState<LocateResult["status"] | null>(null);
   const [name, setName] = useState("");
   const [nameLocal, setNameLocal] = useState("");
   const [category, setCategory] = useState<ShopCategory>("other");
@@ -321,7 +303,22 @@ export function SnapFlow() {
     setPostError("");
     setPosted(null);
     setPhotoMissing(false);
+    setLocStatus(null);
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function askLocation() {
+    const result = await locate();
+    if (result.status === "ok") {
+      rememberPoint(result.point);
+      setLocStatus("ok");
+      setDemo(false);
+      writeDraft(draftFrom({ lat: result.point.lat, lng: result.point.lng, demo: false }));
+      return;
+    }
+    rememberPoint(null);
+    setLocStatus(result.status);
+    setDemo(true);
   }
 
   async function analyse(file: File) {
@@ -334,15 +331,17 @@ export function SnapFlow() {
     try {
       const located = await locate();
       if (run !== runRef.current) return;
-      rememberPoint(located);
-      setDemo(!located);
+      const here = located.status === "ok" ? located.point : null;
+      rememberPoint(here);
+      setLocStatus(located.status);
+      setDemo(!here);
       const jpeg = await resizeToJpeg(file);
       if (run !== runRef.current) return;
       const form = new FormData();
       form.set("image", jpeg, "snap.jpg");
-      if (located) {
-        form.set("lat", String(located.lat));
-        form.set("lng", String(located.lng));
+      if (here) {
+        form.set("lat", String(here.lat));
+        form.set("lng", String(here.lng));
       }
       const response = await fetch("/api/analyze", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as AnalyzeBody | null;
@@ -704,7 +703,7 @@ export function SnapFlow() {
               {t("en", "add.using")} · {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
             </p>
           ) : (
-            <p className="text-body text-fg">{t("en", "add.needLoc")}</p>
+            <LocationHelp status={locStatus} onTryAgain={() => void askLocation()} force />
           )}
           {addError ? (
             <p role="alert" className="min-h-6 text-body text-danger">
