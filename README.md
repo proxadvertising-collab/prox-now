@@ -91,6 +91,28 @@ The server reads faces again on the uploaded photo. It keeps a face visible only
 
 After a successful post, the success screen has a button to save the original on the phone. It opens the phone share sheet when the browser can share a file, and otherwise downloads `prox-now-original.jpg`. iPhone and Android web pages cannot always save to the camera roll silently, so we ask the person to tap Save. Leaving that screen drops the original from memory. The shop only ever receives the edited photo.
 
+## The loop
+
+A photographer posts a moment. For two hours it is a live pin. After that, a verified shop owner has 7 days to Keep or Pass. Keep sends that person one coupon for that shop for the local day. Pass deletes the blurred photo for good. There is no undo.
+
+The owner sees one undecided card at a time on `/owner`, with Keep and Pass. The photographer sees the coupon in `/wallet`, scratches it, and shows the QR or the short code at the till. The owner types or scans that code on `/owner/redeem`. The map shows how many active coupons are waiting.
+
+Someone who says "I own this shop" is only marked pending. Nothing is verified automatically. The captain verifies an account by hand.
+
+One coupon is allowed per person, per shop, per local day. A missing or invalid shop time zone is treated as UTC.
+
+Moments still undecided after 7 days leave the inbox and count as passed on screen. TODO: deleting those files needs a server cleanup job with an admin key. That key does not exist yet, so the files stay until an owner passes them or the author deletes the post.
+
+`supabase/migrations/0006_loop.sql` is a migration file only until the captain writes apply.
+
+## What we keep
+
+A post can also leave anonymous place facts: item names, a price only when it was readable, a currency, crowd level, open or closed, a few signals, and the sign language. Captions and any free text from the person are not stored in that record.
+
+Those facts stay linked to the post while the photo is kept. When the owner passes, the photo, the sign text, and the post facts are cleared, and the place record is unlinked so it names no one. If the author deletes their own post, that place record is deleted too.
+
+`GET /api/places/[shopId]/facts` returns the latest 20 of those records for a shop. The shop page shows a usual price when at least three exist. The public place export and the stats route are unchanged. The original photo is never stored.
+
 ## What we read from a photo
 
 One Spark call reads facts about the place and the moment. Missing or malformed facts are dropped. They are not invented.
