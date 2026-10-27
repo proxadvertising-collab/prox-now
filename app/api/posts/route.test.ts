@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "./route";
+import { DELETE, POST } from "./route";
 
 const { getUser, maybeSingle, upload, remove, rpc } = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -174,5 +174,109 @@ describe("POST /api/posts", () => {
     expect(await response.json()).toEqual({ error: "rate_limited" });
     expect(upload).toHaveBeenCalledTimes(1);
     expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves validated facts from the same Spark call", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        sparkResponse(
+          JSON.stringify({
+            shop_id: SHOP,
+            confidence: 0.9,
+            sign_text: [{ thai: "ร้าน", english: "Shop" }],
+            quality_score: 8,
+            quality_reason: "sharp",
+            faces: [],
+            category: "other",
+            safe_to_post: true,
+            safe_reason: "",
+            facts: {
+              caption: "Noodles",
+              items: [{ name: "Noodle", price: 40, currency: "THB" }],
+              crowd: "few",
+              open_status: "open",
+              signals: ["fresh_batch"],
+              sign_language: "th",
+              captions: { en: "Noodles", th: "ก๋วยเตี๋ยว" },
+            },
+          }),
+        ),
+      ),
+    );
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith(
+      "create_post",
+      expect.objectContaining({
+        p_facts: expect.objectContaining({
+          caption: "Noodles",
+          items: [{ name: "Noodle", price: 40, currency: "THB" }],
+        }),
+      }),
+    );
+  });
+
+  it("retries without facts when the new function is missing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([]))));
+    rpc
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST202", message: "Could not find the function public.create_post in the schema cache" },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: "33333333-3333-4333-8333-333333333333",
+          shop_id: SHOP,
+          created_at: "2026-10-26T02:00:00.000Z",
+          expires_at: "2026-10-26T04:00:00.000Z",
+        },
+        error: null,
+      });
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[1]?.[1]).not.toHaveProperty("p_facts");
+    expect(remove).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
+describe("DELETE /api/posts", () => {
+  beforeEach(() => {
+    getUser.mockReset();
+    rpc.mockReset();
+    remove.mockReset();
+    getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+    remove.mockResolvedValue({ data: null, error: null });
+  });
+
+  it("returns 403 when the caller is not the author and deletes nothing", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "not_author" } });
+    const response = await DELETE(
+      new Request("http://localhost/api/posts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "33333333-3333-4333-8333-333333333333" }),
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "not_author" });
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("deletes the row and the blurred object for the author", async () => {
+    rpc.mockResolvedValue({ data: USER + "/photo.jpg", error: null });
+    const response = await DELETE(
+      new Request("http://localhost/api/posts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: "33333333-3333-4333-8333-333333333333" }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(remove).toHaveBeenCalledWith([USER + "/photo.jpg"]);
   });
 });

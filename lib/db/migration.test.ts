@@ -169,3 +169,31 @@ describe("worldwide shop fields migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("post facts migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0005_post_facts.sql"), "utf8");
+
+  it("adds optional facts and an author-only delete", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("add column if not exists facts jsonb");
+    expect(sql).toContain("jsonb_typeof(facts) = 'object'");
+    expect(sql).toContain("pg_column_size(facts) <= 4096");
+    expect(sql).toContain("p_facts jsonb default null");
+    expect(sql).toContain("drop function if exists public.create_post(uuid, text, text, jsonb);");
+    expect(sql).toContain(
+      "revoke all on function public.create_post(uuid, text, text, jsonb, jsonb) from public, anon;",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.create_post(uuid, text, text, jsonb, jsonb) to authenticated;",
+    );
+    expect(sql).toContain("not_author");
+    expect(sql).toContain("delete_own_post");
+    expect(sql).toContain(
+      "revoke all on function public.delete_own_post(uuid) from public, anon;",
+    );
+    expect(sql).toContain("grant execute on function public.delete_own_post(uuid) to authenticated;");
+    expect(sql).toContain("post_photos_delete_own");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

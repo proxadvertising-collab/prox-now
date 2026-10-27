@@ -3,6 +3,7 @@ import { buildMatcherPrompt, parseMatcherResult } from "../../../lib/ai/matcher"
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
 import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, normalizeBoxes } from "../../../lib/image/blur";
+import { hasShopEnv } from "../../../lib/shops/source";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
 
@@ -22,9 +23,32 @@ function blurUnavailable() {
   return NextResponse.json({ error: "blur_unavailable" }, { status: 503 });
 }
 
+let loggedFactsFallback = false;
+
+function missingFactsFunction(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const message = String(error.message ?? "").toLowerCase();
+  return (
+    error.code === "PGRST202" ||
+    message.includes("could not find the function") ||
+    message.includes("function not found") ||
+    message.includes("schema cache")
+  );
+}
+
 export async function GET() {
   await connection();
-  const posts = await getLivePosts();
+  let viewerId: string | null = null;
+  if (hasShopEnv()) {
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase.auth.getUser();
+      viewerId = data.user?.id ?? null;
+    } catch {
+      viewerId = null;
+    }
+  }
+  const posts = await getLivePosts(undefined, viewerId);
   return NextResponse.json({ posts });
 }
 
@@ -119,7 +143,7 @@ export async function POST(request: Request) {
   });
   if (uploaded.error) return NextResponse.json({ error: "upload_failed" }, { status: 502 });
 
-  const created = await supabase.rpc("create_post", {
+  const postArgs = {
     p_shop_id: shopId,
     p_photo_path: path,
     p_text_original: result.signText
@@ -134,7 +158,17 @@ export async function POST(request: Request) {
         .join(" | ")
         .slice(0, 400),
     },
-  });
+    p_facts: result.facts,
+  };
+  let created = await supabase.rpc("create_post", postArgs);
+  if (created.error && missingFactsFunction(created.error)) {
+    if (!loggedFactsFallback) {
+      loggedFactsFallback = true;
+      console.warn("create_post facts argument is not available yet");
+    }
+    const { p_facts: _facts, ...withoutFacts } = postArgs;
+    created = await supabase.rpc("create_post", withoutFacts);
+  }
 
   if (created.error) {
     try {
@@ -170,4 +204,51 @@ export async function POST(request: Request) {
     },
     facesBlurred: boxes.length,
   });
+}
+
+export async function DELETE(request: Request) {
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return bad("bad_form");
+  }
+  const id = payload && typeof payload === "object" ? (payload as { id?: unknown }).id : null;
+  if (typeof id !== "string" || !UUID.test(id)) return bad("bad_id");
+
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch {
+    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+  }
+
+  const removed = await supabase.rpc("delete_own_post", { p_id: id });
+  if (removed.error) {
+    const message = String(removed.error.message ?? "");
+    if (message.includes("not_signed_in")) {
+      return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+    }
+    if (message.includes("not_author")) {
+      return NextResponse.json({ error: "not_author" }, { status: 403 });
+    }
+    if (message.includes("not_found")) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    return NextResponse.json({ error: "upstream" }, { status: 502 });
+  }
+
+  const path = typeof removed.data === "string" ? removed.data : null;
+  if (path) {
+    try {
+      await supabase.storage.from("post-photos").remove([path]);
+    } catch {
+      // The row is already gone. A later cleanup can remove the object.
+    }
+  }
+  return NextResponse.json({ ok: true });
 }
