@@ -12,6 +12,8 @@ import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
+import { ScenePanel } from "@/components/snap/ScenePanel";
+import { prependSteps, type SceneReport } from "@/lib/snap/scene";
 
 type ShopCard = {
   id: string;
@@ -34,6 +36,7 @@ type AnalyzeBody = {
   candidates?: ShopCard[];
   demo?: boolean;
   error?: string;
+  scene?: SceneReport;
 };
 
 type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "error";
@@ -159,6 +162,7 @@ export function SnapFlow() {
   const [faceBoxes, setFaceBoxes] = useState<NormBox[]>([]);
   const [shown, setShown] = useState<number[]>([]);
   const [friendAgrees, setFriendAgrees] = useState(false);
+  const [scene, setScene] = useState<SceneReport | null>(null);
 
   function forgetOriginal() {
     const dropped = dropOriginalMemory(blobsRef.current, (url) => URL.revokeObjectURL(url));
@@ -332,6 +336,7 @@ export function SnapFlow() {
     setFaceBoxes([]);
     setShown([]);
     setFriendAgrees(false);
+    setScene(null);
     forgetOriginal();
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -384,6 +389,7 @@ export function SnapFlow() {
     setElapsed(0);
     setAdded(false);
     startedRef.current = Date.now();
+    const locateStarted = Date.now();
     try {
       const demoPoint = await demoSnapPoint();
       if (run !== runRef.current) return;
@@ -403,7 +409,10 @@ export function SnapFlow() {
         setDemo(!here);
         setDemoShopName("");
       }
+      const locateMs = Date.now() - locateStarted;
+      const resizeStarted = Date.now();
       const jpeg = await resizeToJpeg(file);
+      const resizeMs = Date.now() - resizeStarted;
       if (run !== runRef.current) return;
       const form = new FormData();
       form.set("image", jpeg, "snap.jpg");
@@ -430,6 +439,14 @@ export function SnapFlow() {
         return;
       }
       const shops = body.candidates ?? [];
+      setScene(
+        body.scene
+          ? prependSteps(body.scene, [
+              { step: "locate", ms: locateMs },
+              { step: "resize", ms: resizeMs },
+            ])
+          : null,
+      );
       signRef.current = body.result.signText ?? [];
       categoryRef.current = body.result.category ?? "";
       setFaceBoxes(cleanFaceBoxes(body.result.faces));
@@ -468,6 +485,7 @@ export function SnapFlow() {
     setFaceBoxes([]);
     setShown([]);
     setFriendAgrees(false);
+    setScene(null);
     setPreview(URL.createObjectURL(file));
     void analyse(file);
   }
@@ -588,6 +606,7 @@ export function SnapFlow() {
       const response = await fetch("/api/posts", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        facesBlurred?: number;
         post?: { id?: string; expiresAt?: string | null };
       } | null;
       const code = body?.error ?? "";
@@ -626,6 +645,9 @@ export function SnapFlow() {
         return;
       }
       clearPostDraft();
+      if (typeof body.facesBlurred === "number") {
+        setScene((current) => (current ? { ...current, facesBlurred: body.facesBlurred ?? null } : current));
+      }
       setPosted({
         id: body.post.id,
         expiresAt: body.post.expiresAt ?? new Date(Date.now() + 7_200_000).toISOString(),
@@ -678,6 +700,7 @@ export function SnapFlow() {
       {demo && demoShopName ? (
         <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
       ) : null}
+      {scene && phase !== "idle" && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
       <input
         ref={inputRef}
         type="file"

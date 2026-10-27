@@ -9,6 +9,7 @@ import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../
 import type { LatLng } from "../../../lib/geo";
 import { allowSnap, clientIp } from "../../../lib/rate/window";
 import { getShopsNear, hasShopEnv, type NearbyShopRow } from "../../../lib/shops/source";
+import { buildScene } from "../../../lib/snap/scene";
 import { createClient } from "../../../lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -66,7 +67,6 @@ function orderCandidates(
 }
 
 export async function POST(request: Request) {
-  const started = Date.now();
   let form: FormData;
   try {
     form = await request.formData();
@@ -88,7 +88,9 @@ export async function POST(request: Request) {
   if (typeof lng === "number" && (lng < -180 || lng > 180)) return bad("bad_location");
 
   const point = typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
+  const shopStarted = Date.now();
   const selected = await getShopsNear(point, hasShopEnv() ? queryNearby : undefined);
+  const shopsMs = Date.now() - shopStarted;
   const ids = selected.candidates.map((shop) => shop.id);
   const prompt = buildMatcherPrompt({
     areaLabel: AREA_LABEL,
@@ -106,17 +108,29 @@ export async function POST(request: Request) {
     const spark = await callSpark({ prompt, imageDataUrl });
     const result = parseMatcherResult(spark.raw, ids);
     const decision = decide(result);
+    const candidates = orderCandidates(selected.candidates, result.shopId).map((shop) => ({
+      id: shop.id,
+      name: shop.name,
+      nameLocal: shop.nameLocal,
+      distanceM: shop.distanceM,
+    }));
+    const scene = buildScene({
+      model: spark.model,
+      result,
+      raw: spark.raw,
+      shopName: candidates.find((shop) => shop.id === result.shopId)?.name ?? null,
+      steps: [
+        { step: "shops", ms: shopsMs },
+        { step: "match", ms: spark.ms },
+      ],
+    });
     return NextResponse.json({
       decision,
       result,
-      candidates: orderCandidates(selected.candidates, result.shopId).map((shop) => ({
-        id: shop.id,
-        name: shop.name,
-        nameLocal: shop.nameLocal,
-        distanceM: shop.distanceM,
-      })),
+      candidates,
       demo: selected.demo,
       ms: spark.ms,
+      scene,
     });
   } catch (error) {
     if (error instanceof MetaKeyMissing) {
@@ -133,7 +147,17 @@ export async function POST(request: Request) {
           distanceM: shop.distanceM,
         })),
         demo: selected.demo,
-        ms: Date.now() - started,
+        ms: error.ms,
+        scene: buildScene({
+          model: error.model,
+          result: emptyMatcherResult(),
+          raw: null,
+          shopName: null,
+          steps: [
+            { step: "shops", ms: shopsMs },
+            { step: "match", ms: error.ms },
+          ],
+        }),
       });
     }
     const code = error instanceof MetaCallError ? error.code : "upstream";

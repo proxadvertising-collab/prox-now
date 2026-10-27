@@ -20,9 +20,14 @@ export class MetaCallError extends Error {
 }
 
 export class MetaParseError extends Error {
-  constructor() {
+  readonly model: string | null;
+  readonly ms: number;
+
+  constructor(model: string | null, ms: number) {
     super("parse");
     this.name = "MetaParseError";
+    this.model = model;
+    this.ms = ms;
   }
 }
 
@@ -30,6 +35,7 @@ export type SparkResult = {
   raw: unknown;
   usage: unknown;
   ms: number;
+  model: string | null;
 };
 
 const META_URL = "https://api.meta.ai/v1/responses";
@@ -53,6 +59,15 @@ function collectOutputText(payload: unknown): string {
     }
   }
   return chunks.join("");
+}
+
+export function readModel(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const model = (payload as { model?: unknown }).model;
+  if (typeof model !== "string") return null;
+  const trimmed = model.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  return trimmed;
 }
 
 function stripFences(text: string): string {
@@ -121,14 +136,15 @@ export async function callSpark(input: {
     try {
       payload = await response.json();
     } catch {
-      throw new MetaParseError();
+      throw new MetaParseError(null, Date.now() - started);
     }
 
+    const model = readModel(payload);
     let raw: unknown;
     try {
       raw = JSON.parse(stripFences(collectOutputText(payload)));
     } catch {
-      throw new MetaParseError();
+      throw new MetaParseError(model, Date.now() - started);
     }
 
     const usage =
@@ -136,7 +152,7 @@ export async function callSpark(input: {
         ? (payload as { usage: unknown }).usage
         : null;
 
-    return { raw, usage, ms: Date.now() - started };
+    return { raw, usage, ms: Date.now() - started, model };
   } finally {
     clearTimeout(timer);
   }
