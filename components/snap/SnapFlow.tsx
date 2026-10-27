@@ -6,6 +6,9 @@ import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { locate, type LocateResult } from "@/lib/geo/locate";
 import { resizeToJpeg } from "@/lib/image/resize";
+import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
+import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
+import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 
 type ShopCard = {
@@ -24,6 +27,7 @@ type AnalyzeBody = {
     confidence: number;
     category?: string;
     signText?: SignLine[];
+    faces?: unknown;
   };
   candidates?: ShopCard[];
   demo?: boolean;
@@ -121,6 +125,7 @@ export function SnapFlow() {
   const inputRef = useRef<HTMLInputElement>(null);
   const runRef = useRef(0);
   const fileRef = useRef<File | null>(null);
+  const blobsRef = useRef<string[]>([]);
   const startedRef = useRef(0);
   const pointRef = useRef<Point | null>(null);
   const signRef = useRef<SignLine[]>([]);
@@ -148,12 +153,29 @@ export function SnapFlow() {
   const [posted, setPosted] = useState<Posted | null>(null);
   const [clock, setClock] = useState(0);
   const [photoMissing, setPhotoMissing] = useState(false);
+  const [faceBoxes, setFaceBoxes] = useState<NormBox[]>([]);
+  const [shown, setShown] = useState<number[]>([]);
+  const [friendAgrees, setFriendAgrees] = useState(false);
+
+  function forgetOriginal() {
+    const dropped = dropOriginalMemory(blobsRef.current, (url) => URL.revokeObjectURL(url));
+    blobsRef.current = dropped.urls;
+    fileRef.current = dropped.file;
+  }
 
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview);
     };
   }, [preview]);
+
+  useEffect(() => {
+    return () => {
+      fileRef.current = null;
+      for (const url of blobsRef.current) URL.revokeObjectURL(url);
+      blobsRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== "reading") return;
@@ -304,6 +326,10 @@ export function SnapFlow() {
     setPosted(null);
     setPhotoMissing(false);
     setLocStatus(null);
+    setFaceBoxes([]);
+    setShown([]);
+    setFriendAgrees(false);
+    forgetOriginal();
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -359,6 +385,9 @@ export function SnapFlow() {
       const shops = body.candidates ?? [];
       signRef.current = body.result.signText ?? [];
       categoryRef.current = body.result.category ?? "";
+      setFaceBoxes(cleanFaceBoxes(body.result.faces));
+      setShown([]);
+      setFriendAgrees(false);
       setCandidates(shops);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
@@ -389,6 +418,9 @@ export function SnapFlow() {
     clearDraft();
     clearPostDraft();
     fileRef.current = file;
+    setFaceBoxes([]);
+    setShown([]);
+    setFriendAgrees(false);
     setPreview(URL.createObjectURL(file));
     void analyse(file);
   }
@@ -504,6 +536,8 @@ export function SnapFlow() {
       form.set("shopId", shop.id);
       form.set("lat", String(here.lat));
       form.set("lng", String(here.lng));
+      const chosenFaces = showFacesPayload(faceBoxes, shown);
+      if (chosenFaces.length > 0) form.set("showFaces", JSON.stringify(chosenFaces));
       const response = await fetch("/api/posts", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
@@ -557,6 +591,37 @@ export function SnapFlow() {
     }
   }
 
+  function saveOriginal() {
+    const file = fileRef.current;
+    if (!file) return;
+    const download = (item: File) => {
+      const url = URL.createObjectURL(item);
+      blobsRef.current.push(url);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = item.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    };
+    const canShareFiles = typeof navigator.canShare === "function" && navigator.canShare({ files: [file] });
+    const run = buildOriginalSave({
+      canShareFiles,
+      file,
+      share: async (item) => {
+        try {
+          await navigator.share({ files: [item] });
+        } catch (error) {
+          const name = error && typeof error === "object" && "name" in error ? String(error.name) : "";
+          if (name === "AbortError") return;
+          throw error;
+        }
+      },
+      download,
+    });
+    run();
+  }
+
   const guess = candidates.find((shop) => shop.id === guessId) ?? chosen;
 
   return (
@@ -581,7 +646,7 @@ export function SnapFlow() {
         </div>
       ) : null}
 
-      {preview && phase !== "idle" ? (
+      {preview && phase !== "idle" && !(phase === "offer" && faceBoxes.length > 0) ? (
         <img src={preview} alt={t("en", "snap.alt")} className="aspect-[4/3] w-full rounded-lg object-cover" />
       ) : null}
 
@@ -731,6 +796,41 @@ export function SnapFlow() {
           <p className="text-heading font-bold text-fg">{chosen.name}</p>
           {chosen.nameLocal ? <p className="text-label text-fg-muted">{chosen.nameLocal}</p> : null}
           {added ? <p className="text-body text-fg">{t("en", "success.added")}</p> : null}
+          {preview && faceBoxes.length > 0 ? (
+            <>
+              <FaceChooser
+                src={preview}
+                alt={t("en", "snap.alt")}
+                boxes={faceBoxes}
+                shown={shown}
+                label={t("en", "face.thatsMe")}
+                onToggle={(index) => setShown((current) => toggleShown(current, index, friendAgrees))}
+              />
+              <p className="text-body text-fg">{t("en", "face.others")}</p>
+              {faceBoxes.length > 1 ? (
+                <button
+                  type="button"
+                  className={secondary}
+                  aria-pressed={friendAgrees}
+                  onClick={() => {
+                    const next = !friendAgrees;
+                    setFriendAgrees(next);
+                    if (!next) setShown((current) => current.slice(0, 1));
+                  }}
+                >
+                  {t("en", "face.agree")}
+                </button>
+              ) : null}
+              {shown.length > 0 ? (
+                <p className="inline-flex min-h-11 items-center rounded-full bg-surface-2 px-3 text-label font-semibold text-fg">
+                  {t("en", "face.confirm")}
+                </p>
+              ) : null}
+              <PublishPreview src={preview} boxes={faceBoxes} shown={shown} />
+              <p className="text-label text-fg-muted">{t("en", "face.preview")}</p>
+              {shown.length > 0 ? <p className="text-body text-fg">{t("en", "face.onlyYou")}</p> : null}
+            </>
+          ) : null}
           <p className="text-body text-fg">{t("en", "post.blurNote")}</p>
           <p className="text-label text-fg-muted">{t("en", "success.time", { t: String(totalSeconds) })}</p>
           {photoMissing ? (
@@ -783,7 +883,12 @@ export function SnapFlow() {
           <p className="text-heading font-bold tabular-nums text-fg" aria-live="polite">
             {formatClock(Date.parse(posted.expiresAt) - (clock || Date.now()))}
           </p>
-          <a className={primary} href={"/map?post=" + encodeURIComponent(posted.id)}>
+          {preview ? (
+            <button type="button" className={primary} onClick={saveOriginal}>
+              {t("en", "face.save")}
+            </button>
+          ) : null}
+          <a className={secondary} href={"/map?post=" + encodeURIComponent(posted.id)}>
             {t("en", "post.see")}
           </a>
           <button type="button" className={secondary} onClick={reset}>
