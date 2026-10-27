@@ -197,3 +197,43 @@ describe("post facts migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("loop migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0006_loop.sql"), "utf8");
+
+  it("fixes keep, deletes on pass, and keeps anonymous place facts", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("coalesce(nullif(btrim(shops.timezone), ''), 'UTC')");
+    expect(sql).toContain("when others then");
+    expect(sql).toContain("v_tz := 'UTC'");
+    expect(sql).toContain("pass_post_begin");
+    expect(sql).toContain("pass_post_finish");
+    expect(sql).toContain("photo_still_stored");
+    expect(sql).toContain("revoke all on function public.pass_post(uuid) from public, anon, authenticated");
+    expect(sql).not.toContain("grant execute on function public.pass_post(uuid) to authenticated");
+    expect(sql).toContain("post_photos_delete_owner");
+    expect(sql).toContain("redeem_coupon");
+    expect(sql).toContain("not_found");
+    expect(sql).toContain("not_owner");
+    expect(sql).toContain("already_used");
+    expect(sql).toContain("expired");
+    expect(sql).toContain("interval '1 hour'");
+    expect(sql).toContain("v_recent >= 60");
+    expect(sql).toContain("claim_shop");
+    expect(sql).toContain("'pending'");
+    expect(sql).toContain("create table if not exists public.place_facts");
+    expect(sql).toContain("place_facts_select_public");
+    expect(sql).toContain("grant select on table public.place_facts to anon, authenticated");
+    expect(sql).not.toContain("grant insert on table public.place_facts");
+    expect(sql).toContain("place_facts_shop_observed_idx");
+    expect(sql).toContain("anonymous_place_facts");
+    expect(sql).toContain("- 'caption' - 'captions'");
+    expect(sql).toContain("insert into public.place_facts");
+    expect(sql).toContain("delete from public.place_facts where post_id = p_id");
+    expect(sql).toContain("expired_undecided");
+    expect(sql).toContain("interval '7 days'");
+    expect(sql).toContain("text_original = null");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
