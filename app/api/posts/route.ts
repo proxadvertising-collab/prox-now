@@ -4,6 +4,7 @@ import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../
 import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
+import { factsWithConsent } from "../../../lib/posts/consent";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
 
@@ -171,7 +172,7 @@ export async function POST(request: Request) {
         .join(" | ")
         .slice(0, 400),
     },
-    p_facts: result.facts,
+    p_facts: factsWithConsent(result.facts, split.shown),
   };
   let created = await supabase.rpc("create_post", postArgs);
   if (created.error && missingFactsFunction(created.error)) {

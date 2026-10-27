@@ -177,9 +177,9 @@ describe("POST /api/posts", () => {
   }
 
   it("keeps every detected face blurred when no face is requested", async () => {
-    const left = [0.05, 0.15, 0.3, 0.85];
-    const right = [0.7, 0.15, 0.95, 0.85];
-    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([left, right]))));
+    const top = [0.4, 0.05, 0.6, 0.4];
+    const bottom = [0.4, 0.6, 0.6, 0.95];
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([top, bottom]))));
     const original = await checkerJpeg();
     const response = await postImage(original);
     expect(response.status).toBe(200);
@@ -187,37 +187,40 @@ describe("POST /api/posts", () => {
     expect(body.facesShown).toBe(0);
     expect(body.facesBlurred).toBe(2);
     const uploaded = upload.mock.calls[0]?.[1] as Buffer;
-    const full = await blurFaces(original, [left, right]);
-    expect(await pixelDelta(uploaded, full, 14, 40)).toBeLessThan(8);
-    expect(await pixelDelta(uploaded, full, 66, 40)).toBeLessThan(8);
+    const full = await blurFaces(original, [top, bottom]);
+    expect(await pixelDelta(uploaded, full, 40, 18)).toBeLessThan(8);
+    expect(await pixelDelta(uploaded, full, 40, 62)).toBeLessThan(8);
   });
 
   it("leaves a matched face unblurred and ignores a box that matches nothing", async () => {
-    const left = [0.05, 0.15, 0.3, 0.85];
-    const right = [0.7, 0.15, 0.95, 0.85];
-    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([left, right]))));
+    const top = [0.4, 0.05, 0.6, 0.4];
+    const bottom = [0.4, 0.6, 0.6, 0.95];
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([top, bottom]))));
     const original = await checkerJpeg();
-    const matched = await postImage(original, { showFaces: JSON.stringify([left]) });
+    const matched = await postImage(original, { showFaces: JSON.stringify([top]) });
     expect(matched.status).toBe(200);
     expect((await matched.json()).facesShown).toBe(1);
+    const saved = rpc.mock.calls[0]?.[1] as { p_facts?: { consent_shown?: number } };
+    expect(saved.p_facts?.consent_shown).toBe(1);
+    expect(JSON.stringify(saved.p_facts)).not.toContain("0.4");
     const uploaded = upload.mock.calls[0]?.[1] as Buffer;
-    const full = await blurFaces(original, [left, right]);
-    expect(await pixelDelta(uploaded, full, 14, 40)).toBeGreaterThan(20);
-    expect(await pixelDelta(uploaded, full, 66, 40)).toBeLessThan(8);
+    const full = await blurFaces(original, [top, bottom]);
+    expect(await pixelDelta(uploaded, full, 40, 18)).toBeGreaterThan(20);
+    expect(await pixelDelta(uploaded, full, 40, 62)).toBeLessThan(8);
 
     upload.mockClear();
     const missed = await postImage(original, { showFaces: JSON.stringify([[0, 0, 0.08, 0.08]]) });
     expect((await missed.json()).facesShown).toBe(0);
     const ignored = upload.mock.calls[0]?.[1] as Buffer;
-    expect(await pixelDelta(ignored, full, 14, 40)).toBeLessThan(8);
-    expect(await pixelDelta(ignored, full, 66, 40)).toBeLessThan(8);
+    expect(await pixelDelta(ignored, full, 40, 18)).toBeLessThan(8);
+    expect(await pixelDelta(ignored, full, 40, 62)).toBeLessThan(8);
   });
 
   it("caps shown faces at two", async () => {
     const faces = [
-      [0.02, 0.05, 0.18, 0.28],
-      [0.4, 0.05, 0.58, 0.28],
-      [0.78, 0.7, 0.96, 0.95],
+      [0.42, 0.02, 0.58, 0.22],
+      [0.42, 0.4, 0.58, 0.6],
+      [0.42, 0.78, 0.58, 0.98],
     ];
     vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText(faces))));
     const original = await checkerJpeg();
@@ -228,8 +231,8 @@ describe("POST /api/posts", () => {
     const uploaded = upload.mock.calls[0]?.[1] as Buffer;
     const onlyThird = await blurFaces(original, [faces[2]]);
     const none = await blurFaces(original, []);
-    expect(await pixelDelta(uploaded, onlyThird, 70, 66)).toBeLessThan(12);
-    expect(await pixelDelta(uploaded, none, 70, 66)).toBeGreaterThan(20);
+    expect(await pixelDelta(uploaded, onlyThird, 40, 70)).toBeLessThan(12);
+    expect(await pixelDelta(uploaded, none, 40, 70)).toBeGreaterThan(20);
   });
 
   it("fails closed when the face read fails even if showFaces is set", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanFaceBoxes, previewRgba, showFacesPayload, toggleShown } from "./faces";
+import { cleanFaceBoxes, previewRgba, showFacesPayload, toggleShown, type NormBox } from "./faces";
 
 describe("face choice", () => {
   it("keeps at most two faces and requires agreement for the second", () => {
@@ -26,10 +26,10 @@ describe("face choice", () => {
     const height = 8;
     const pixels = new Uint8Array(width * height * 4);
     for (let index = 0; index < pixels.length; index += 1) pixels[index] = index % 251;
-    const boxes = [
+    const boxes: NormBox[] = [
       [0, 0, 0.5, 1],
       [0.5, 0, 1, 1],
-    ] as const;
+    ];
     const kept = previewRgba(pixels, width, height, boxes, [0]);
     const left = (width + 1) * 4;
     expect(kept[left]).toBe(pixels[left]);

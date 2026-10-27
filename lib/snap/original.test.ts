@@ -14,7 +14,9 @@ describe("original on the phone", () => {
       share: (item) => {
         calls.push("share:" + item.name);
       },
-      download: () => calls.push("download"),
+      download: () => {
+        calls.push("download");
+      },
     });
     expect(calls).toEqual([]);
     shareRun();
@@ -23,8 +25,12 @@ describe("original on the phone", () => {
     const downloadRun = buildOriginalSave({
       canShareFiles: false,
       file: new File([Uint8Array.from([4]).buffer], ORIGINAL_NAME, { type: "image/jpeg" }),
-      share: () => calls.push("share"),
-      download: (item) => calls.push("download:" + item.name),
+      share: () => {
+        calls.push("share");
+      },
+      download: (item) => {
+        calls.push("download:" + item.name);
+      },
     });
     downloadRun();
     expect(calls).toEqual(["share:" + ORIGINAL_NAME, "download:" + ORIGINAL_NAME]);
@@ -32,7 +38,9 @@ describe("original on the phone", () => {
 
   it("drops the original file and blob urls from memory", () => {
     const revoked: string[] = [];
-    const next = dropOriginalMemory(["blob:one", "blob:two"], (url) => revoked.push(url));
+    const next = dropOriginalMemory(["blob:one", "blob:two"], (url) => {
+      revoked.push(url);
+    });
     expect(revoked).toEqual(["blob:one", "blob:two"]);
     expect(next).toEqual({ file: null, urls: [] });
   });
