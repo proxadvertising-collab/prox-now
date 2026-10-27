@@ -28,7 +28,7 @@ type AnalyzeBody = {
   error?: string;
 };
 
-type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "success" | "error";
+type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "error";
 
 type Point = { lat: number; lng: number };
 
@@ -42,6 +42,34 @@ type Draft = {
 };
 
 const DRAFT_KEY = "prox.snap.add";
+const POST_KEY = "prox.snap.post";
+
+type PostDraft = {
+  shopId: string;
+  name: string;
+  nameLocal: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+type Posted = { id: string; expiresAt: string };
+
+function readStorage(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function formatClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return hours + ":" + pad(minutes) + ":" + pad(seconds);
+}
 
 const CATEGORY_LABEL: Record<ShopCategory, CopyKey> = {
   street_food: "cat.street_food",
@@ -100,6 +128,14 @@ function clearDraft() {
   }
 }
 
+function clearPostDraft() {
+  try {
+    sessionStorage.removeItem(POST_KEY);
+  } catch {
+    // Storage can be blocked. The offer still works for this visit.
+  }
+}
+
 export function SnapFlow() {
   const inputRef = useRef<HTMLInputElement>(null);
   const runRef = useRef(0);
@@ -125,6 +161,11 @@ export function SnapFlow() {
   const [addError, setAddError] = useState("");
   const [showLogin, setShowLogin] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState("");
+  const [posted, setPosted] = useState<Posted | null>(null);
+  const [clock, setClock] = useState(0);
+  const [photoMissing, setPhotoMissing] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -141,12 +182,41 @@ export function SnapFlow() {
   }, [phase]);
 
   useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = sessionStorage.getItem(DRAFT_KEY);
-    } catch {
-      raw = null;
+    if (phase !== "posted") return;
+    setClock(Date.now());
+    const id = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    const postRaw = readStorage(POST_KEY);
+    if (postRaw) {
+      try {
+        const draft = JSON.parse(postRaw) as Partial<PostDraft>;
+        if (draft && typeof draft.shopId === "string" && typeof draft.name === "string") {
+          const here =
+            typeof draft.lat === "number" && typeof draft.lng === "number"
+              ? { lat: draft.lat, lng: draft.lng }
+              : null;
+          pointRef.current = here;
+          setPoint(here);
+          setChosen({
+            id: draft.shopId,
+            name: draft.name,
+            nameLocal: typeof draft.nameLocal === "string" ? draft.nameLocal : null,
+            distanceM: 0,
+          });
+          setPhotoMissing(true);
+          setPostError(t("en", "post.needPhoto"));
+          if (!startedRef.current) startedRef.current = Date.now();
+          setPhase("offer");
+          return;
+        }
+      } catch {
+        clearPostDraft();
+      }
     }
+    const raw = readStorage(DRAFT_KEY);
     if (!raw) return;
     try {
       const draft = JSON.parse(raw) as Partial<Draft>;
@@ -189,7 +259,25 @@ export function SnapFlow() {
     };
   }
 
+  function writePostDraft(shop: ShopCard) {
+    const here = pointRef.current;
+    const draft: PostDraft = {
+      shopId: shop.id,
+      name: shop.name,
+      nameLocal: shop.nameLocal ?? null,
+      lat: here?.lat ?? null,
+      lng: here?.lng ?? null,
+    };
+    try {
+      sessionStorage.setItem(POST_KEY, JSON.stringify(draft));
+    } catch {
+      // Private mode can block storage. Sign-in then asks for a new photo.
+    }
+    clearDraft();
+  }
+
   function openAdd(signText: SignLine[], matcherCategory: string) {
+    clearPostDraft();
     const filled = prefillShop({ signText, category: matcherCategory });
     const here = pointRef.current;
     setName(filled.name);
@@ -214,6 +302,7 @@ export function SnapFlow() {
     fileRef.current = null;
     rememberPoint(null);
     clearDraft();
+    clearPostDraft();
     setPhase("idle");
     setPreview(null);
     setElapsed(0);
@@ -228,6 +317,10 @@ export function SnapFlow() {
     setCategory("other");
     setAddError("");
     setShowLogin(false);
+    setPosting(false);
+    setPostError("");
+    setPosted(null);
+    setPhotoMissing(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -295,16 +388,21 @@ export function SnapFlow() {
     if (!file) return;
     if (preview) URL.revokeObjectURL(preview);
     clearDraft();
+    clearPostDraft();
     fileRef.current = file;
     setPreview(URL.createObjectURL(file));
     void analyse(file);
   }
 
-  function choose(shop: ShopCard | null) {
+  function choose(shop: ShopCard) {
     setChosen(shop);
     setAdded(false);
+    setPostError("");
+    setShowLogin(false);
+    setPhotoMissing(false);
     setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
-    setPhase("success");
+    writePostDraft(shop);
+    setPhase("offer");
   }
 
   async function saveShop() {
@@ -364,12 +462,98 @@ export function SnapFlow() {
         distanceM: 0,
       });
       setAdded(true);
+      setPostError("");
+      setShowLogin(false);
+      setPhotoMissing(false);
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
-      setPhase("success");
+      writePostDraft({
+        id: String(body.shop.id ?? ""),
+        name: String(body.shop.name),
+        nameLocal: body.shop.nameLocal ?? null,
+        distanceM: 0,
+      });
+      setPhase("offer");
     } catch {
       setAddError(t("en", "add.failed"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function publish() {
+    const shop = chosen;
+    const here = pointRef.current;
+    const file = fileRef.current;
+    if (!shop) return;
+    if (!file) {
+      setPhotoMissing(true);
+      setPostError(t("en", "post.needPhoto"));
+      return;
+    }
+    if (!here) {
+      setPostError(t("en", "post.tooFar"));
+      return;
+    }
+    setPosting(true);
+    setPostError("");
+    setShowLogin(false);
+    try {
+      const jpeg = await resizeToJpeg(file);
+      const form = new FormData();
+      form.set("image", jpeg, "snap.jpg");
+      form.set("shopId", shop.id);
+      form.set("lat", String(here.lat));
+      form.set("lng", String(here.lng));
+      const response = await fetch("/api/posts", { method: "POST", body: form });
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        post?: { id?: string; expiresAt?: string | null };
+      } | null;
+      const code = body?.error ?? "";
+      if (response.status === 401 || code === "not_signed_in") {
+        writePostDraft(shop);
+        setPostError(t("en", "post.signin"));
+        setShowLogin(true);
+        return;
+      }
+      if (code === "blur_unavailable") {
+        setPostError(t("en", "post.blurFail"));
+        return;
+      }
+      if (code === "photo_unusable") {
+        setPostError(t("en", "post.unusable"));
+        return;
+      }
+      if (code === "too_far" || code === "bad_location") {
+        setPostError(t("en", "post.tooFar"));
+        return;
+      }
+      if (response.status === 429 || code === "rate_limited") {
+        setPostError(t("en", "post.rate"));
+        return;
+      }
+      if (response.status === 409 || code === "already_live") {
+        setPostError(t("en", "post.already"));
+        return;
+      }
+      if (code === "bad_shop") {
+        setPostError(t("en", "post.badShop"));
+        return;
+      }
+      if (!response.ok || !body?.post?.id) {
+        setPostError(t("en", "post.failed"));
+        return;
+      }
+      clearPostDraft();
+      setPosted({
+        id: body.post.id,
+        expiresAt: body.post.expiresAt ?? new Date(Date.now() + 7_200_000).toISOString(),
+      });
+      setPhase("posted");
+    } catch {
+      setPostError(t("en", "post.failed"));
+    } finally {
+      setPosting(false);
     }
   }
 
@@ -542,15 +726,64 @@ export function SnapFlow() {
         </form>
       ) : null}
 
-      {phase === "success" ? (
+      {phase === "offer" && chosen ? (
         <div className="flex flex-col gap-3">
-          <p className="text-heading font-bold text-fg">
-            {chosen ? t("en", "success.pin", { name: chosen.name }) : t("en", "pick.skipped")}
-          </p>
+          <p className="text-heading font-bold text-fg">{chosen.name}</p>
+          {chosen.nameLocal ? <p className="text-label text-fg-muted">{chosen.nameLocal}</p> : null}
           {added ? <p className="text-body text-fg">{t("en", "success.added")}</p> : null}
+          <p className="text-body text-fg">{t("en", "post.blurNote")}</p>
           <p className="text-label text-fg-muted">{t("en", "success.time", { t: String(totalSeconds) })}</p>
-          <p className="text-body text-fg">{t("en", "success.demo")}</p>
-          <button type="button" className={primary} onClick={reset}>
+          {photoMissing ? (
+            <p role="alert" className="min-h-6 text-body text-fg">
+              {t("en", "post.needPhoto")}
+            </p>
+          ) : null}
+          {postError && !photoMissing ? (
+            <p role="alert" className="min-h-6 text-body text-danger">
+              {postError}
+            </p>
+          ) : null}
+          {photoMissing ? (
+            <button type="button" className={primary + " min-h-16"} onClick={() => inputRef.current?.click()}>
+              {t("en", "snap.cta")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={primary}
+              disabled={posting}
+              aria-busy={posting}
+              onClick={() => void publish()}
+            >
+              {t("en", "post.cta")}
+            </button>
+          )}
+          {postError && !photoMissing ? (
+            <button type="button" className={secondary} disabled={posting} onClick={() => void publish()}>
+              {t("en", "err.retry")}
+            </button>
+          ) : null}
+          {showLogin ? (
+            <a className={secondary} href="/login?next=/snap" onClick={() => writePostDraft(chosen)}>
+              {t("en", "auth.signIn")}
+            </a>
+          ) : null}
+          <button type="button" className={secondary} onClick={reset}>
+            {t("en", "success.again")}
+          </button>
+        </div>
+      ) : null}
+
+      {phase === "posted" && chosen && posted ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-heading font-bold text-fg">{t("en", "post.live", { name: chosen.name })}</p>
+          <p className="text-heading font-bold tabular-nums text-fg" aria-live="polite">
+            {formatClock(Date.parse(posted.expiresAt) - (clock || Date.now()))}
+          </p>
+          <a className={primary} href={"/map?post=" + encodeURIComponent(posted.id)}>
+            {t("en", "post.see")}
+          </a>
+          <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}
           </button>
         </div>

@@ -5,20 +5,32 @@ import { ShopList } from "@/components/map/ShopList";
 import { DemoBanner } from "@/components/ui/DemoBanner";
 import { t } from "@/lib/copy";
 import { DEMO_CENTER, FIXTURE_SHOPS, type FixtureShop } from "@/lib/fixtures/shops";
+import type { LivePost } from "@/lib/posts/source";
+import { getLivePosts } from "@/lib/posts/source";
 import { hasShopEnv, mapShopsFromRows, type MapShopRow } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
+
+const NO_LIVE_POSTS: LivePost[] = [];
 
 function isDigest(error: unknown): boolean {
   return typeof error === "object" && error !== null && "digest" in error;
 }
 
-function MapChrome({ shops, fixtures }: { shops: FixtureShop[]; fixtures: boolean }) {
+function MapChrome({
+  shops,
+  fixtures,
+  livePosts = NO_LIVE_POSTS,
+}: {
+  shops: FixtureShop[];
+  fixtures: boolean;
+  livePosts?: LivePost[];
+}) {
   return (
     <div className="flex flex-col">
       <div className="flex h-[calc(100dvh-var(--safe-top)-var(--nav-h)-var(--safe-bottom))] flex-col overflow-hidden md:h-[calc(100dvh-var(--safe-top)-2.75rem)]">
         {fixtures ? <DemoBanner /> : null}
         <div className="min-h-0 flex-1">
-          <MapView shops={shops} fixtures={fixtures} />
+          <MapView shops={shops} fixtures={fixtures} livePosts={fixtures ? NO_LIVE_POSTS : livePosts} />
         </div>
       </div>
       <section
@@ -44,7 +56,8 @@ async function MapFromDatabase() {
       .eq("is_demo", false);
     if (error || !data) return <MapChrome shops={FIXTURE_SHOPS} fixtures />;
     const shops = mapShopsFromRows(data as MapShopRow[], DEMO_CENTER);
-    return <MapChrome shops={shops} fixtures={false} />;
+    const posts = await getLivePosts();
+    return <MapChrome shops={shops} fixtures={false} livePosts={posts} />;
   } catch (error) {
     if (isDigest(error)) throw error;
     return <MapChrome shops={FIXTURE_SHOPS} fixtures />;

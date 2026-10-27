@@ -1,6 +1,6 @@
 import type { DemoPost } from "@/lib/fixtures/demo-posts";
 import type { FixtureShop } from "@/lib/fixtures/shops";
-import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
+import { formatRemaining, phaseFor, remainingMs, ringOffset } from "@/lib/freshness";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -75,4 +75,49 @@ export function createPinElement(post: DemoPost, shop: FixtureShop, nowMs: numbe
   });
 
   return root;
+}
+
+const LIVE_RADIUS = 18;
+const LIVE_CIRCUMFERENCE = 2 * Math.PI * LIVE_RADIUS;
+
+export function createLivePinElement(shopName: string, expiresAt: string, nowMs: number): HTMLButtonElement {
+  const remaining = Math.max(0, remainingMs(expiresAt, nowMs));
+  const phase = phaseFor(remaining);
+  const time = formatRemaining(remaining);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "prox-pin";
+  button.dataset.phase = phase;
+  button.dataset.live = "true";
+  button.setAttribute("aria-label", shopName + " – " + time + " left");
+
+  const body = document.createElement("span");
+  body.className = "prox-pin__body";
+
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "prox-pin__ring");
+  svg.setAttribute("viewBox", "0 0 44 44");
+  svg.setAttribute("width", "44");
+  svg.setAttribute("height", "44");
+  svg.setAttribute("aria-hidden", "true");
+  const circle = document.createElementNS(SVG_NS, "circle");
+  circle.setAttribute("cx", "22");
+  circle.setAttribute("cy", "22");
+  circle.setAttribute("r", String(LIVE_RADIUS));
+  circle.setAttribute("fill", "none");
+  circle.setAttribute("stroke", "var(--color-accent)");
+  circle.setAttribute("stroke-width", "3");
+  circle.setAttribute("stroke-linecap", "round");
+  circle.setAttribute("stroke-dasharray", String(LIVE_CIRCUMFERENCE));
+  circle.setAttribute("stroke-dashoffset", String(ringOffset(LIVE_CIRCUMFERENCE, remaining)));
+  circle.setAttribute("transform", "rotate(-90 22 22)");
+  svg.append(circle);
+
+  const dot = document.createElement("span");
+  dot.className = "prox-pin__dot";
+  dot.textContent = shopName.slice(0, 1);
+
+  body.append(svg, dot);
+  button.append(body);
+  return button;
 }

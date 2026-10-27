@@ -10,8 +10,10 @@ import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shop
 import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, walkingDirectionsUrl, walkingMinutes, type LatLng } from "@/lib/geo";
 import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
+import type { LivePost } from "@/lib/posts/source";
+import { createClient } from "@/lib/supabase/client";
 import { getClock, getServerClock, subscribeClock } from "./clock";
-import { createPinElement } from "./pin-element";
+import { createLivePinElement, createPinElement } from "./pin-element";
 import {
   getServerWalkOrigin,
   getWalkOrigin,
@@ -35,6 +37,50 @@ function supportsWebGL2(): boolean {
   }
 }
 
+const EMPTY_POSTS: LivePost[] = [];
+
+function isLivePost(value: unknown): value is LivePost {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<LivePost>;
+  return (
+    typeof row.id === "string" &&
+    typeof row.shopId === "string" &&
+    typeof row.shopName === "string" &&
+    typeof row.expiresAt === "string" &&
+    typeof row.lat === "number" &&
+    typeof row.lng === "number"
+  );
+}
+
+function asLivePost(value: LivePost): LivePost {
+  const translated =
+    value.textTranslated && typeof value.textTranslated === "object" ? value.textTranslated : {};
+  return {
+    id: value.id,
+    shopId: value.shopId,
+    photoUrl: typeof value.photoUrl === "string" ? value.photoUrl : null,
+    textOriginal: typeof value.textOriginal === "string" ? value.textOriginal : null,
+    textTranslated: translated,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : value.expiresAt,
+    expiresAt: value.expiresAt,
+    shopName: value.shopName,
+    shopNameLocal: typeof value.shopNameLocal === "string" ? value.shopNameLocal : null,
+    lat: value.lat,
+    lng: value.lng,
+    category: typeof value.category === "string" ? value.category : "other",
+  };
+}
+
+function latestByShop(posts: readonly LivePost[], now: number): globalThis.Map<string, LivePost> {
+  const buckets = new globalThis.Map<string, LivePost>();
+  for (const post of posts) {
+    if (Date.parse(post.expiresAt) <= now) continue;
+    const prev = buckets.get(post.shopId);
+    if (!prev || post.expiresAt > prev.expiresAt) buckets.set(post.shopId, post);
+  }
+  return buckets;
+}
+
 function nearestShopMeters(point: LatLng, shops: readonly FixtureShop[]): number {
   let nearest = Number.POSITIVE_INFINITY;
   for (const shop of shops) {
@@ -47,17 +93,22 @@ function nearestShopMeters(point: LatLng, shops: readonly FixtureShop[]): number
 export function ProxMap({
   shops = FIXTURE_SHOPS,
   fixtures = true,
+  livePosts = EMPTY_POSTS,
 }: {
   shops?: FixtureShop[];
   fixtures?: boolean;
+  livePosts?: LivePost[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const openedPostRef = useRef(false);
   const nowMs = useSyncExternalStore(subscribeClock, getClock, getServerClock);
   const origin = useSyncExternalStore(subscribeWalkOrigin, getWalkOrigin, getServerWalkOrigin);
   const [webgl, setWebgl] = useState<boolean | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [posts, setPosts] = useState<LivePost[]>(livePosts);
   const [userPoint, setUserPoint] = useState<LatLng | null>(null);
   const [locMessage, setLocMessage] = useState(t("en", "loc.why"));
   const [locProblem, setLocProblem] = useState(false);
@@ -66,6 +117,71 @@ export function ProxMap({
   useEffect(() => {
     setWebgl(supportsWebGL2());
   }, []);
+
+  useEffect(() => {
+    setPosts(livePosts);
+  }, [livePosts]);
+
+  useEffect(() => {
+    if (fixtures) return;
+    let stopped = false;
+    let supabase: ReturnType<typeof createClient> | null = null;
+    let channel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null;
+
+    async function load() {
+      try {
+        const response = await fetch("/api/posts");
+        if (!response.ok) return;
+        const body = (await response.json()) as { posts?: unknown };
+        if (stopped || !Array.isArray(body.posts)) return;
+        setPosts(body.posts.filter(isLivePost).map(asLivePost));
+      } catch {
+        // The next poll retries. Realtime is optional.
+      }
+    }
+
+    const poll = window.setInterval(() => void load(), 60_000);
+    const drop = window.setInterval(() => {
+      const now = Date.now();
+      setPosts((current) => {
+        const next = current.filter((post) => Date.parse(post.expiresAt) > now);
+        return next.length === current.length ? current : next;
+      });
+    }, 15_000);
+
+    try {
+      supabase = createClient();
+      channel = supabase
+        .channel("prox-live-posts")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => {
+          void load();
+        })
+        .subscribe();
+    } catch {
+      supabase = null;
+      channel = null;
+    }
+
+    return () => {
+      stopped = true;
+      window.clearInterval(poll);
+      window.clearInterval(drop);
+      if (supabase && channel) void supabase.removeChannel(channel);
+    };
+  }, [fixtures]);
+
+  useEffect(() => {
+    if (fixtures || openedPostRef.current) return;
+    const id = new URLSearchParams(window.location.search).get("post");
+    if (!id) return;
+    const post = posts.find((item) => item.id === id && Date.parse(item.expiresAt) > Date.now());
+    if (!post) return;
+    setSelectedPostId(post.id);
+    setSelectedId(post.shopId);
+    if (!mapRef.current) return;
+    openedPostRef.current = true;
+    mapRef.current.flyTo({ center: [post.lng, post.lat], essential: true });
+  }, [fixtures, posts, webgl]);
 
   useEffect(() => {
     if (webgl !== true || !containerRef.current) return;
@@ -119,13 +235,33 @@ export function ProxMap({
     markersRef.current = [];
     const showLocal = map.getZoom() >= 17.5;
     if (!fixtures) {
+      const tick = nowMs || Date.now();
+      const byShop = latestByShop(posts, tick);
       for (const shop of shops) {
-        const element = document.createElement("button");
-        element.type = "button";
-        element.className = "prox-pin";
+        const post = byShop.get(shop.id);
+        const element = post
+          ? createLivePinElement(shop.name, post.expiresAt, tick)
+          : document.createElement("button");
+        if (!post) {
+          element.type = "button";
+          element.className = "prox-pin";
+          element.textContent = shop.name;
+        }
         element.dataset.shopId = shop.id;
-        element.textContent = shop.name;
+        element.dataset.selected = post
+          ? selectedPostId === post.id
+            ? "true"
+            : "false"
+          : selectedId === shop.id
+            ? "true"
+            : "false";
         element.addEventListener("click", () => {
+          if (post) {
+            setSelectedPostId((current) => (current === post.id ? null : post.id));
+            setSelectedId(shop.id);
+            return;
+          }
+          setSelectedPostId(null);
           setSelectedId((current) => (current === shop.id ? null : shop.id));
         });
         const marker = new Marker({ element, anchor: "center" })
@@ -155,7 +291,7 @@ export function ProxMap({
       for (const marker of markersRef.current) marker.remove();
       markersRef.current = [];
     };
-  }, [nowMs, selectedId, webgl, fixtures, shops]);
+  }, [nowMs, selectedId, selectedPostId, webgl, fixtures, shops, posts]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -217,18 +353,26 @@ export function ProxMap({
     );
   }
 
+  const tick = nowMs || Date.now();
+  const selectedLive = posts.find(
+    (post) => post.id === selectedPostId && Date.parse(post.expiresAt) > tick,
+  );
   const selectedShop: FixtureShop | undefined = shops.find((shop) => shop.id === selectedId);
   const selectedPost = selectedShop
     ? makeDemoPosts(nowMs || Date.now()).find((post) => post.shopSlug === selectedShop.slug)
     : undefined;
   const remaining = selectedPost && nowMs > 0 ? remainingMs(selectedPost.expires_at, nowMs) : 0;
   const showCard = Boolean(
-    selectedShop && (selectedPost ? phaseFor(remaining) !== "expired" : !fixtures),
+    !selectedLive && selectedShop && (selectedPost ? phaseFor(remaining) !== "expired" : !fixtures),
   );
   const minutes = selectedShop ? walkingMinutes(haversineMeters(origin, selectedShop)) : 1;
+  const liveRemaining = selectedLive ? Math.max(0, remainingMs(selectedLive.expiresAt, tick)) : 0;
+  const liveMeters = selectedLive && userPoint ? Math.round(haversineMeters(userPoint, selectedLive)) : null;
+  const liveLine =
+    selectedLive?.textTranslated.en || selectedLive?.textOriginal || "";
 
   return (
-    <div className="prox-map relative h-full w-full" data-card={showCard ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
+    <div className="prox-map relative h-full w-full" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
       <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
         <button
@@ -246,6 +390,38 @@ export function ProxMap({
           {locMessage}
         </p>
       </div>
+      {selectedLive ? (
+        <div className="absolute inset-x-3 bottom-16 z-20 max-h-[70%] overflow-y-auto rounded-lg bg-surface-1 p-4 shadow-sheet">
+          {selectedLive.photoUrl ? (
+            <img
+              src={selectedLive.photoUrl}
+              alt={selectedLive.shopName}
+              className="mb-3 aspect-[4/3] w-full rounded-md object-cover"
+            />
+          ) : null}
+          <p className="text-heading font-bold text-fg">{selectedLive.shopName}</p>
+          {selectedLive.shopNameLocal ? (
+            <p className="text-label text-fg-muted">{selectedLive.shopNameLocal}</p>
+          ) : null}
+          {liveLine ? <p className="mt-2 text-body text-fg">{liveLine}</p> : null}
+          <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+          {liveMeters !== null ? (
+            <p className="text-label text-fg-muted">
+              {t("en", "snap.meters", { n: String(liveMeters) })}
+              {" · "}
+              {t("en", "map.walk", { n: String(walkingMinutes(liveMeters)) })}
+            </p>
+          ) : null}
+          <a
+            className={"mt-3 " + linkClass}
+            href={walkingDirectionsUrl(selectedLive)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("en", "post.go")}
+          </a>
+        </div>
+      ) : null}
       {showCard && selectedShop ? (
         <div className="absolute inset-x-3 bottom-16 z-20 rounded-lg bg-surface-1 p-4 shadow-sheet">
           <p className="text-heading font-bold text-fg">{selectedShop.name}</p>

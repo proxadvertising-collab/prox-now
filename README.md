@@ -65,7 +65,7 @@ Routes in this scaffold:
 
 ## Snap pipeline
 
-`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby shop it is. Confirm the guess, pick from the list, or add the shop. The photo is not stored, and the snap does not publish a post.
+`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby shop it is. Confirm the guess, pick from the list, or add the shop. Posting that shop to the map is a separate step. The original photo is not stored.
 
 `META_API_KEY` is required for `/api/analyze`. The name is the only value in the repo. Without it the route returns `ai_not_configured`.
 
@@ -74,3 +74,11 @@ Routes in this scaffold:
 Shops on the map and in the photo matcher come from `public.shops` when `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set. Otherwise the app uses the local Soi 102 fixture and shows the demo banner.
 
 A signed-in person can add a shop from `/snap`. That calls `create_shop_from_snap`. The new row has `source = user` and can be claimed later. The photo is not stored.
+
+## Posts
+
+A signed-in person can post a confirmed, picked, or newly added shop. The pin stays up for 2 hours. Spark marks faces, and the server blurs them before anything is saved. Only that blurred JPEG is stored, in the public `post-photos` bucket. The original photo is not stored. EXIF, including GPS, is stripped and not stored.
+
+The map draws a countdown ring on shops that have a live post. `POST /api/posts` and the live pin query need `META_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `SUPABASE_SERVICE_ROLE_KEY` is not used.
+
+`supabase/migrations/0003_post_photos.sql` is a migration file only until it is applied.

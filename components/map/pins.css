@@ -159,6 +159,28 @@
   to { opacity: 1; }
 }
 
+.prox-pin[data-live="true"] .prox-pin__ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.prox-pin[data-live="true"] .prox-pin__dot,
+.prox-pin[data-live="true"][data-phase="fresh"] .prox-pin__dot,
+.prox-pin[data-live="true"][data-phase="aging"] .prox-pin__dot,
+.prox-pin[data-live="true"][data-phase="last"] .prox-pin__dot {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  animation: none;
+}
+
+.prox-pin[data-live="true"] .prox-pin__dot::after {
+  animation: none;
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .prox-pin__body {
     animation: prox-pin-fade 120ms var(--ease-standard) both;
