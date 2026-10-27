@@ -82,3 +82,25 @@ describe("core schema files", () => {
     expect(migration).toContain("new.created_at := now()");
   });
 });
+
+describe("user shop migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0002_user_shops.sql"), "utf8");
+
+  it("defines a definer function with a rate limit and a nearby-name dedupe", () => {
+    expect(sql.toLowerCase()).toContain("security definer");
+    expect(sql).toContain(
+      "revoke all on function public.create_shop_from_snap(text, text, text, double precision, double precision, text) from public, anon;",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.create_shop_from_snap(text, text, text, double precision, double precision, text) to authenticated;",
+    );
+    expect(sql).not.toMatch(/grant execute on function public\.create_shop_from_snap[\s\S]*\bto anon\b/);
+    expect(sql).toContain("rate_limited");
+    expect(sql).toContain("interval '24 hours'");
+    expect(sql).toContain("<= 40");
+    expect(sql).toContain("lower(shops.name)");
+    expect(sql).toContain("lower(shops.name_local)");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

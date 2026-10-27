@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
 const SECRET = "test-meta-key";
@@ -24,6 +24,11 @@ function imageRequest(bytes: Uint8Array, type = "image/jpeg", fields?: Record<st
 }
 
 describe("POST /api/analyze", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+  });
+
   it("returns 503 when the Meta key is missing and does not call fetch", async () => {
     vi.stubEnv("META_API_KEY", "");
     const fetchMock = vi.fn(async () => {

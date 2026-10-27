@@ -38,6 +38,8 @@ export type Shop = {
   is_demo: boolean;
   claimed: boolean;
   created_at: string;
+  created_by: string | null;
+  source: "seed" | "user";
 };
 
 /** Claim codes are not on this row. They live in shop_claim_codes, which clients cannot read. */

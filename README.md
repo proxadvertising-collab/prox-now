@@ -41,8 +41,8 @@ Routes in this scaffold:
 
 - `/login` signs in with Google or a 6-digit email code.
 - `/auth/callback` finishes the sign-in redirect.
-- `/map` shows the demo map from a local shop fixture. It does not query a shop table.
-- `/snap` matches a photo to a demo shop. It does not require a session.
+- `/map` shows shops from the database when the Supabase env vars are set, and the local fixture otherwise.
+- `/snap` matches a photo to a nearby shop. It does not require a session. Adding a shop does.
 - `/wallet` and `/inbox` send a signed-out visitor to `/login`.
 - `GET /api/health` returns `{ ok: true, time }`.
 - `GET /api/meta-ping` makes one server-side Meta API call.
@@ -65,8 +65,12 @@ Routes in this scaffold:
 
 ## Snap pipeline
 
-`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby demo shop it is. Confirm the guess, or pick from the list. The photo is not stored, and nothing is written to the database.
+`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby shop it is. Confirm the guess, pick from the list, or add the shop. The photo is not stored, and the snap does not publish a post.
 
 `META_API_KEY` is required for `/api/analyze`. The name is the only value in the repo. Without it the route returns `ai_not_configured`.
-- Shop photo matching: placeholder, not implemented in this scaffold.
-- Live map: MapLibre demo pins from `lib/fixtures`. No shop table is queried.
+
+## Shops
+
+Shops on the map and in the photo matcher come from `public.shops` when `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set. Otherwise the app uses the local Soi 102 fixture and shows the demo banner.
+
+A signed-in person can add a shop from `/snap`. That calls `create_shop_from_snap`. The new row has `source = user` and can be claimed later. The photo is not stored.

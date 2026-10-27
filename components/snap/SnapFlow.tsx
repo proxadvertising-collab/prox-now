@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DemoBanner } from "@/components/ui/DemoBanner";
-import { t } from "@/lib/copy";
+import { t, type CopyKey } from "@/lib/copy";
 import { resizeToJpeg } from "@/lib/image/resize";
+import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 
 type ShopCard = {
   id: string;
@@ -12,15 +13,46 @@ type ShopCard = {
   distanceM: number;
 };
 
+type SignLine = { original: string; translated: string };
+
 type AnalyzeBody = {
   decision?: "confirm" | "pick" | "pick-all";
-  result?: { shopId: string | null; confidence: number; category?: string };
+  result?: {
+    shopId: string | null;
+    confidence: number;
+    category?: string;
+    signText?: SignLine[];
+  };
   candidates?: ShopCard[];
   demo?: boolean;
   error?: string;
 };
 
-type Phase = "idle" | "reading" | "confirm" | "pick" | "success" | "error";
+type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "success" | "error";
+
+type Point = { lat: number; lng: number };
+
+type Draft = {
+  name: string;
+  nameLocal: string;
+  category: ShopCategory;
+  lat: number | null;
+  lng: number | null;
+  demo: boolean;
+};
+
+const DRAFT_KEY = "prox.snap.add";
+
+const CATEGORY_LABEL: Record<ShopCategory, CopyKey> = {
+  street_food: "cat.street_food",
+  drinks: "cat.drinks",
+  restaurant: "cat.restaurant",
+  fruit: "cat.fruit",
+  laundry: "cat.laundry",
+  home_services: "cat.home_services",
+  barber: "cat.barber",
+  other: "cat.other",
+};
 
 const primary =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
@@ -28,13 +60,16 @@ const primary =
 const secondary =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg no-underline touch-manipulation";
 
-function locate(): Promise<{ lat: number; lng: number } | null> {
+const field =
+  "min-h-12 w-full rounded-md bg-surface-2 px-3 text-base text-fg";
+
+function locate(): Promise<Point | null> {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (point: { lat: number; lng: number } | null) => {
+    const finish = (point: Point | null) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
@@ -49,11 +84,30 @@ function locate(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
+function writeDraft(draft: Draft) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Private mode can block storage. The form still works for this visit.
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Storage can be blocked. Leaving the page still resets the form.
+  }
+}
+
 export function SnapFlow() {
   const inputRef = useRef<HTMLInputElement>(null);
   const runRef = useRef(0);
   const fileRef = useRef<File | null>(null);
   const startedRef = useRef(0);
+  const pointRef = useRef<Point | null>(null);
+  const signRef = useRef<SignLine[]>([]);
+  const categoryRef = useRef("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -63,6 +117,14 @@ export function SnapFlow() {
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
   const [guessId, setGuessId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ShopCard | null>(null);
+  const [added, setAdded] = useState(false);
+  const [point, setPoint] = useState<Point | null>(null);
+  const [name, setName] = useState("");
+  const [nameLocal, setNameLocal] = useState("");
+  const [category, setCategory] = useState<ShopCategory>("other");
+  const [addError, setAddError] = useState("");
+  const [showLogin, setShowLogin] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -78,9 +140,80 @@ export function SnapFlow() {
     return () => window.clearInterval(id);
   }, [phase]);
 
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(DRAFT_KEY);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as Partial<Draft>;
+      if (!draft || typeof draft.name !== "string") return;
+      const here =
+        typeof draft.lat === "number" && typeof draft.lng === "number"
+          ? { lat: draft.lat, lng: draft.lng }
+          : null;
+      pointRef.current = here;
+      setPoint(here);
+      setName(draft.name);
+      setNameLocal(typeof draft.nameLocal === "string" ? draft.nameLocal : "");
+      setCategory(
+        SHOP_CATEGORIES.includes(draft.category as ShopCategory)
+          ? (draft.category as ShopCategory)
+          : "other",
+      );
+      setDemo(Boolean(draft.demo) || !here);
+      if (!startedRef.current) startedRef.current = Date.now();
+      setPhase("add");
+    } catch {
+      clearDraft();
+    }
+  }, []);
+
+  function rememberPoint(next: Point | null) {
+    pointRef.current = next;
+    setPoint(next);
+  }
+
+  function draftFrom(next: Partial<Draft> = {}): Draft {
+    const here = pointRef.current;
+    return {
+      name: next.name ?? name,
+      nameLocal: next.nameLocal ?? nameLocal,
+      category: next.category ?? category,
+      lat: next.lat !== undefined ? next.lat : here?.lat ?? null,
+      lng: next.lng !== undefined ? next.lng : here?.lng ?? null,
+      demo: next.demo !== undefined ? next.demo : !here,
+    };
+  }
+
+  function openAdd(signText: SignLine[], matcherCategory: string) {
+    const filled = prefillShop({ signText, category: matcherCategory });
+    const here = pointRef.current;
+    setName(filled.name);
+    setNameLocal(filled.nameLocal ?? "");
+    setCategory(filled.category);
+    setAddError("");
+    setShowLogin(false);
+    setAdded(false);
+    setPhase("add");
+    writeDraft({
+      name: filled.name,
+      nameLocal: filled.nameLocal ?? "",
+      category: filled.category,
+      lat: here?.lat ?? null,
+      lng: here?.lng ?? null,
+      demo: !here,
+    });
+  }
+
   function reset() {
     runRef.current += 1;
     fileRef.current = null;
+    rememberPoint(null);
+    clearDraft();
     setPhase("idle");
     setPreview(null);
     setElapsed(0);
@@ -89,6 +222,12 @@ export function SnapFlow() {
     setCandidates([]);
     setGuessId(null);
     setChosen(null);
+    setAdded(false);
+    setName("");
+    setNameLocal("");
+    setCategory("other");
+    setAddError("");
+    setShowLogin(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -97,18 +236,20 @@ export function SnapFlow() {
     setPhase("reading");
     setError("");
     setElapsed(0);
+    setAdded(false);
     startedRef.current = Date.now();
     try {
-      const point = await locate();
+      const located = await locate();
       if (run !== runRef.current) return;
-      if (!point) setDemo(true);
+      rememberPoint(located);
+      setDemo(!located);
       const jpeg = await resizeToJpeg(file);
       if (run !== runRef.current) return;
       const form = new FormData();
       form.set("image", jpeg, "snap.jpg");
-      if (point) {
-        form.set("lat", String(point.lat));
-        form.set("lng", String(point.lng));
+      if (located) {
+        form.set("lat", String(located.lat));
+        form.set("lng", String(located.lng));
       }
       const response = await fetch("/api/analyze", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as AnalyzeBody | null;
@@ -124,10 +265,16 @@ export function SnapFlow() {
         return;
       }
       const shops = body.candidates ?? [];
+      signRef.current = body.result.signText ?? [];
+      categoryRef.current = body.result.category ?? "";
       setCandidates(shops);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
       const guess = shops.find((shop) => shop.id === body.result?.shopId) ?? null;
+      if (body.decision === "pick-all") {
+        openAdd(signRef.current, categoryRef.current);
+        return;
+      }
       if (body.decision === "confirm" && guess) {
         setGuessId(guess.id);
         setChosen(guess);
@@ -147,6 +294,7 @@ export function SnapFlow() {
   function onFile(file: File | undefined) {
     if (!file) return;
     if (preview) URL.revokeObjectURL(preview);
+    clearDraft();
     fileRef.current = file;
     setPreview(URL.createObjectURL(file));
     void analyse(file);
@@ -154,8 +302,75 @@ export function SnapFlow() {
 
   function choose(shop: ShopCard | null) {
     setChosen(shop);
+    setAdded(false);
     setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
     setPhase("success");
+  }
+
+  async function saveShop() {
+    const here = pointRef.current;
+    if (!here) return;
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setAddError(t("en", "add.badName"));
+      return;
+    }
+    setSaving(true);
+    setAddError("");
+    setShowLogin(false);
+    writeDraft(draftFrom({ name: trimmed, nameLocal: nameLocal.trim(), category, demo: false }));
+    try {
+      const response = await fetch("/api/shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmed,
+          nameLocal: nameLocal.trim() || null,
+          category,
+          lat: here.lat,
+          lng: here.lng,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        shop?: { id?: string; name?: string; nameLocal?: string | null };
+      } | null;
+      if (response.status === 401) {
+        setAddError(t("en", "add.signin"));
+        setShowLogin(true);
+        return;
+      }
+      if (response.status === 429 || body?.error === "rate_limited") {
+        setAddError(t("en", "add.rate"));
+        return;
+      }
+      if (body?.error === "bad_location") {
+        setAddError(t("en", "add.badLoc"));
+        return;
+      }
+      if (body?.error === "bad_name" || body?.error === "bad_input") {
+        setAddError(t("en", "add.badName"));
+        return;
+      }
+      if (!response.ok || !body?.shop?.name) {
+        setAddError(t("en", "add.failed"));
+        return;
+      }
+      clearDraft();
+      setChosen({
+        id: String(body.shop.id ?? ""),
+        name: String(body.shop.name),
+        nameLocal: body.shop.nameLocal ?? null,
+        distanceM: 0,
+      });
+      setAdded(true);
+      setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
+      setPhase("success");
+    } catch {
+      setAddError(t("en", "add.failed"));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const guess = candidates.find((shop) => shop.id === guessId) ?? chosen;
@@ -238,10 +453,93 @@ export function SnapFlow() {
               </li>
             ))}
           </ul>
-          <button type="button" className={secondary} onClick={() => choose(null)}>
+          <button type="button" className={secondary} onClick={() => openAdd(signRef.current, categoryRef.current)}>
             {t("en", "pick.none")}
           </button>
         </div>
+      ) : null}
+
+      {phase === "add" ? (
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveShop();
+          }}
+        >
+          <h2 className="text-heading font-bold text-fg">{t("en", "add.title")}</h2>
+          <label className="flex flex-col gap-1 text-label text-fg" htmlFor="shop-name">
+            {t("en", "add.name")}
+            <input
+              id="shop-name"
+              className={field}
+              value={name}
+              maxLength={80}
+              onChange={(event) => {
+                const value = event.target.value;
+                setName(value);
+                writeDraft(draftFrom({ name: value }));
+              }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-label text-fg" htmlFor="shop-local">
+            {t("en", "add.nameLocal")}
+            <input
+              id="shop-local"
+              className={field}
+              value={nameLocal}
+              maxLength={80}
+              onChange={(event) => {
+                const value = event.target.value;
+                setNameLocal(value);
+                writeDraft(draftFrom({ nameLocal: value }));
+              }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-label text-fg" htmlFor="shop-category">
+            {t("en", "add.category")}
+            <select
+              id="shop-category"
+              className={field}
+              value={category}
+              onChange={(event) => {
+                const value = event.target.value as ShopCategory;
+                setCategory(value);
+                writeDraft(draftFrom({ category: value }));
+              }}
+            >
+              {SHOP_CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {t("en", CATEGORY_LABEL[item])}
+                </option>
+              ))}
+            </select>
+          </label>
+          {point ? (
+            <p className="text-label text-fg-muted">
+              {t("en", "add.using")} · {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
+            </p>
+          ) : (
+            <p className="text-body text-fg">{t("en", "add.needLoc")}</p>
+          )}
+          {addError ? (
+            <p role="alert" className="min-h-6 text-body text-danger">
+              {addError}
+            </p>
+          ) : null}
+          <button type="submit" className={primary} disabled={!point || saving || name.trim().length < 2}>
+            {t("en", "add.save")}
+          </button>
+          {showLogin ? (
+            <a
+              className={secondary}
+              href="/login?next=/snap"
+              onClick={() => writeDraft(draftFrom())}
+            >
+              {t("en", "auth.signIn")}
+            </a>
+          ) : null}
+        </form>
       ) : null}
 
       {phase === "success" ? (
@@ -249,6 +547,7 @@ export function SnapFlow() {
           <p className="text-heading font-bold text-fg">
             {chosen ? t("en", "success.pin", { name: chosen.name }) : t("en", "pick.skipped")}
           </p>
+          {added ? <p className="text-body text-fg">{t("en", "success.added")}</p> : null}
           <p className="text-label text-fg-muted">{t("en", "success.time", { t: String(totalSeconds) })}</p>
           <p className="text-body text-fg">{t("en", "success.demo")}</p>
           <button type="button" className={primary} onClick={reset}>

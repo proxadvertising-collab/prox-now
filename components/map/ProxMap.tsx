@@ -35,16 +35,22 @@ function supportsWebGL2(): boolean {
   }
 }
 
-function nearestShopMeters(point: LatLng): number {
+function nearestShopMeters(point: LatLng, shops: readonly FixtureShop[]): number {
   let nearest = Number.POSITIVE_INFINITY;
-  for (const shop of FIXTURE_SHOPS) {
+  for (const shop of shops) {
     const meters = haversineMeters(point, shop);
     if (meters < nearest) nearest = meters;
   }
   return nearest;
 }
 
-export function ProxMap() {
+export function ProxMap({
+  shops = FIXTURE_SHOPS,
+  fixtures = true,
+}: {
+  shops?: FixtureShop[];
+  fixtures?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -108,31 +114,48 @@ export function ProxMap() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || nowMs === 0) return;
+    if (!map || (fixtures && nowMs === 0)) return;
     for (const marker of markersRef.current) marker.remove();
     markersRef.current = [];
     const showLocal = map.getZoom() >= 17.5;
-    for (const post of makeDemoPosts(nowMs)) {
-      const shop = shopBySlug(post.shopSlug);
-      if (!shop) continue;
-      if (phaseFor(remainingMs(post.expires_at, nowMs)) === "expired") continue;
-      const element = createPinElement(post, shop, nowMs);
-      element.dataset.selected = element.dataset.shopId === selectedId ? "true" : "false";
-      const local = element.querySelector(".prox-pin__local");
-      if (local instanceof HTMLElement) local.hidden = !showLocal;
-      element.addEventListener("click", () => {
-        setSelectedId((current) => (current === shop.id ? null : shop.id));
-      });
-      const marker = new Marker({ element, anchor: "center" })
-        .setLngLat([shop.lng, shop.lat])
-        .addTo(map);
-      markersRef.current.push(marker);
+    if (!fixtures) {
+      for (const shop of shops) {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.className = "prox-pin";
+        element.dataset.shopId = shop.id;
+        element.textContent = shop.name;
+        element.addEventListener("click", () => {
+          setSelectedId((current) => (current === shop.id ? null : shop.id));
+        });
+        const marker = new Marker({ element, anchor: "center" })
+          .setLngLat([shop.lng, shop.lat])
+          .addTo(map);
+        markersRef.current.push(marker);
+      }
+    } else {
+      for (const post of makeDemoPosts(nowMs)) {
+        const shop = shopBySlug(post.shopSlug);
+        if (!shop) continue;
+        if (phaseFor(remainingMs(post.expires_at, nowMs)) === "expired") continue;
+        const element = createPinElement(post, shop, nowMs);
+        element.dataset.selected = element.dataset.shopId === selectedId ? "true" : "false";
+        const local = element.querySelector(".prox-pin__local");
+        if (local instanceof HTMLElement) local.hidden = !showLocal;
+        element.addEventListener("click", () => {
+          setSelectedId((current) => (current === shop.id ? null : shop.id));
+        });
+        const marker = new Marker({ element, anchor: "center" })
+          .setLngLat([shop.lng, shop.lat])
+          .addTo(map);
+        markersRef.current.push(marker);
+      }
     }
     return () => {
       for (const marker of markersRef.current) marker.remove();
       markersRef.current = [];
     };
-  }, [nowMs, selectedId, webgl]);
+  }, [nowMs, selectedId, webgl, fixtures, shops]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -160,7 +183,7 @@ export function ProxMap() {
       (position) => {
         const point = { lat: position.coords.latitude, lng: position.coords.longitude };
         setLocBusy(false);
-        if (nearestShopMeters(point) > FAR_METERS) {
+        if (nearestShopMeters(point, shops) > FAR_METERS) {
           setLocProblem(false);
           setLocMessage(t("en", "loc.far"));
           return;
@@ -194,12 +217,14 @@ export function ProxMap() {
     );
   }
 
-  const selectedShop: FixtureShop | undefined = FIXTURE_SHOPS.find((shop) => shop.id === selectedId);
+  const selectedShop: FixtureShop | undefined = shops.find((shop) => shop.id === selectedId);
   const selectedPost = selectedShop
     ? makeDemoPosts(nowMs || Date.now()).find((post) => post.shopSlug === selectedShop.slug)
     : undefined;
   const remaining = selectedPost && nowMs > 0 ? remainingMs(selectedPost.expires_at, nowMs) : 0;
-  const showCard = Boolean(selectedShop && selectedPost && phaseFor(remaining) !== "expired");
+  const showCard = Boolean(
+    selectedShop && (selectedPost ? phaseFor(remaining) !== "expired" : !fixtures),
+  );
   const minutes = selectedShop ? walkingMinutes(haversineMeters(origin, selectedShop)) : 1;
 
   return (
@@ -221,15 +246,17 @@ export function ProxMap() {
           {locMessage}
         </p>
       </div>
-      {showCard && selectedShop && selectedPost ? (
+      {showCard && selectedShop ? (
         <div className="absolute inset-x-3 bottom-16 z-20 rounded-lg bg-surface-1 p-4 shadow-sheet">
           <p className="text-heading font-bold text-fg">{selectedShop.name}</p>
           {selectedShop.nameLocal ? (
             <p className="text-label text-fg-muted">{selectedShop.nameLocal}</p>
           ) : null}
-          <p className="mt-2 text-body text-fg">
-            {t("en", "timer.left", { t: formatRemaining(remaining) })}
-          </p>
+          {selectedPost ? (
+            <p className="mt-2 text-body text-fg">
+              {t("en", "timer.left", { t: formatRemaining(remaining) })}
+            </p>
+          ) : null}
           <p className="text-label text-fg-muted">{t("en", "map.walk", { n: String(minutes) })}</p>
           <a
             className={"mt-3 " + linkClass}

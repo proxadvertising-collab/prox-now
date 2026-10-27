@@ -1,13 +1,14 @@
-import { FIXTURE_SHOPS } from "../../../lib/fixtures/shops";
 import {
   buildMatcherPrompt,
   decide,
   emptyMatcherResult,
   parseMatcherResult,
-  selectCandidates,
   type MatcherCandidate,
 } from "../../../lib/ai/matcher";
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
+import type { LatLng } from "../../../lib/geo";
+import { getShopsNear, hasShopEnv, type NearbyShopRow } from "../../../lib/shops/source";
+import { createClient } from "../../../lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // Cache Components requires the Node.js runtime and rejects the runtime segment config.
@@ -16,6 +17,17 @@ export const maxDuration = 60;
 const MAX_BYTES = 3 * 1024 * 1024;
 const AREA_LABEL = "Soi 102, Hua Hin, Thailand";
 const TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+async function queryNearby(origin: LatLng): Promise<NearbyShopRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("nearby_shops", {
+    p_lat: origin.lat,
+    p_lng: origin.lng,
+    p_radius_m: 600,
+  });
+  if (error) throw new Error("nearby");
+  return (data ?? []) as NearbyShopRow[];
+}
 
 function bad(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
@@ -64,7 +76,7 @@ export async function POST(request: Request) {
   if (typeof lng === "number" && (lng < -180 || lng > 180)) return bad("bad_location");
 
   const point = typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
-  const selected = selectCandidates(point, FIXTURE_SHOPS);
+  const selected = await getShopsNear(point, hasShopEnv() ? queryNearby : undefined);
   const ids = selected.candidates.map((shop) => shop.id);
   const prompt = buildMatcherPrompt({
     areaLabel: AREA_LABEL,
