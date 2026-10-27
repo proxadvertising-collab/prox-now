@@ -104,3 +104,32 @@ describe("user shop migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("post photos migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0003_post_photos.sql"), "utf8");
+
+  it("defines the bucket, own-folder insert, and create_post grants", () => {
+    expect(sql).toContain("post-photos");
+    expect(sql).toContain("on conflict (id) do nothing");
+    expect(sql).toContain("614400");
+    expect(sql).toContain("image/jpeg");
+    expect(sql).toContain("(storage.foldername(name))[1] = (select auth.uid())::text");
+    expect(sql.toLowerCase()).not.toContain("for update");
+    expect(sql.toLowerCase()).not.toContain("for delete");
+    expect(sql).toContain("posts_shop_status_expires_idx");
+    expect(sql).toContain("posts_author_created_at_idx");
+    expect(sql.toLowerCase()).toContain("security definer");
+    expect(sql).toContain("rate_limited");
+    expect(sql).toContain("already_live");
+    expect(sql).toContain("interval '24 hours'");
+    expect(sql).toContain(
+      "revoke all on function public.create_post(uuid, text, text, jsonb) from public, anon;",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.create_post(uuid, text, text, jsonb) to authenticated;",
+    );
+    expect(sql).not.toMatch(/grant execute on function public\.create_post[\s\S]*\bto anon\b/);
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
