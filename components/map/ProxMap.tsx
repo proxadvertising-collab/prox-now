@@ -113,6 +113,7 @@ function asLivePost(value: LivePost): LivePost {
     category: typeof value.category === "string" ? value.category : "other",
     facts: asFacts(value.facts),
     mine: value.mine === true,
+    seed: value.seed === true,
   };
 }
 
@@ -299,7 +300,7 @@ export function ProxMap({
       for (const shop of shops) {
         const post = byShop.get(shop.id);
         const element = post
-          ? createLivePinElement(shop.name, post.expiresAt, tick)
+          ? createLivePinElement(shop.name, post.expiresAt, tick, post.seed)
           : document.createElement("button");
         if (!post) {
           element.type = "button";
@@ -480,7 +481,16 @@ export function ProxMap({
           ) : liveLine ? (
             <p className="mt-2 text-body text-fg">{liveLine}</p>
           ) : null}
-          <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+          {selectedLive.seed ? (
+            <p className="mt-2 flex items-center gap-2 text-body text-fg">
+              <span className="inline-flex rounded-full bg-accent px-2 py-0.5 text-caption font-extrabold text-accent-ink">
+                {t("en", "demo.pill")}
+              </span>
+              {t("en", "demo.live")}
+            </p>
+          ) : (
+            <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+          )}
           {liveMeters !== null ? (
             <p className="text-label text-fg-muted">
               {t("en", "snap.meters", { n: String(liveMeters) })}

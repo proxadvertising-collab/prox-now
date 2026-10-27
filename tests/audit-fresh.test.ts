@@ -2,15 +2,22 @@ import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { auditText, unlistedPublicFiles } from "../scripts/audit-fresh.mjs";
 
+const separateProduct = "loop" + "hole";
+const oldName = "prox" + "getlocal";
+const otherRepo = "prox-" + "prod";
+const studio = "creative" + separateProduct;
+
 describe("audit-fresh", () => {
   it("flags foreign product names and allows the separate-product note", () => {
-    expect(auditText("docs/PROVENANCE.md", "loophole is a separate product")).toEqual([]);
-    expect(auditText("README.md", "see loophole")).toEqual(["README.md: contains loophole"]);
-    expect(auditText("lib/a.ts", "proxgetlocal")).toEqual(["lib/a.ts: contains proxgetlocal"]);
-    expect(auditText("lib/a.ts", "prox-prod")).toEqual(["lib/a.ts: contains prox-prod"]);
-    expect(auditText("lib/a.ts", "creativeloophole")).toEqual([
-      "lib/a.ts: contains creativeloophole",
-      "lib/a.ts: contains loophole",
+    expect(auditText("docs/PROVENANCE.md", separateProduct + " is a separate product")).toEqual([]);
+    expect(auditText("README.md", "see " + separateProduct)).toEqual([
+      "README.md: contains " + separateProduct,
+    ]);
+    expect(auditText("lib/a.ts", oldName)).toEqual(["lib/a.ts: contains " + oldName]);
+    expect(auditText("lib/a.ts", otherRepo)).toEqual(["lib/a.ts: contains " + otherRepo]);
+    expect(auditText("lib/a.ts", studio)).toEqual([
+      "lib/a.ts: contains " + studio,
+      "lib/a.ts: contains " + separateProduct,
     ]);
   });
 

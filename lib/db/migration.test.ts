@@ -237,3 +237,25 @@ describe("loop migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("demo zone migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0007_demo_zone.sql"), "utf8");
+
+  it("falls back to the Soi 102 point when no shop is marked demo", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("function public.demo_zone()");
+    expect(sql).toContain("security invoker");
+    expect(sql).toContain("grant execute on function public.demo_zone() to public, anon, authenticated");
+    expect(sql).toContain("coalesce(avg(shops.lat), 12.5684)");
+    expect(sql).toContain("coalesce(avg(shops.lng), 99.9577)");
+    expect(sql).toContain("16.5::double precision as zoom");
+    expect(sql).toContain("where shops.is_demo");
+    expect(sql).toContain("is_seed boolean not null default false");
+    expect(sql).toContain("timestamptz '2026-11-12 00:00+00'");
+    expect(sql.split("p.is_seed = false").length - 1).toBe(4);
+    expect(sql).toContain("function public.expired_undecided()");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+    expect(sql).not.toContain("demo_reset");
+  });
+});

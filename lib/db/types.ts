@@ -59,6 +59,7 @@ export type Post = {
   text_translated: Record<string, string>;
   status: PostStatus;
   is_demo: boolean;
+  is_seed: boolean;
   created_at: string;
   expires_at: string;
   decided_at: string | null;

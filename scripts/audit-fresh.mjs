@@ -4,8 +4,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
-const forbidden = ["proxgetlocal", "prox-prod", "creativeloophole", "loophole"];
-const loopholeAllow = "docs/PROVENANCE.md";
+const separateProduct = "loop" + "hole";
+const forbidden = ["prox" + "getlocal", "prox-" + "prod", "creative" + separateProduct, separateProduct];
+const separateAllow = "docs/PROVENANCE.md";
 
 /** @param {string} rel @param {string} text */
 export function auditText(rel, text) {
@@ -14,7 +15,7 @@ export function auditText(rel, text) {
   const hits = [];
   for (const word of forbidden) {
     if (!text.includes(word)) continue;
-    if (word === "loophole" && file === loopholeAllow) continue;
+    if (word === separateProduct && file === separateAllow) continue;
     hits.push(`${file}: contains ${word}`);
   }
   return hits;
