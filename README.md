@@ -9,6 +9,12 @@ Prox Now is a mobile-first web app. A shopper snaps a photo of a local shop, the
 
 Built during the Meta Global AI Developer Hackathon, Oct 26 to Nov 4 2026, all code written this week.
 
+## Repository timeline
+
+The repo was created on GitHub on 2026-10-26 at 14:28 +0700 (07:28 UTC), before kickoff, with a GitHub-generated initial commit that holds only README.md; all application code, schema, assets and data start at commit 370d5b7 (2026-10-26 16:27 UTC, after the 16:00 UTC start).
+
+The same paragraph, and the split between existing tools and event work, is in [docs/PROVENANCE.md](docs/PROVENANCE.md).
+
 ## How to run
 
 Install dependencies and start the dev server:
