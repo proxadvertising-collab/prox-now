@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { blurFaces } from "../../../lib/image/blur";
 import { DELETE, POST } from "./route";
 
 const { getUser, maybeSingle, upload, remove, rpc } = vi.hoisted(() => ({
@@ -75,6 +76,7 @@ async function postImage(bytes: Buffer, fields?: Record<string, string>) {
   form.set("shopId", fields?.shopId ?? SHOP);
   form.set("lat", fields?.lat ?? "12.5684");
   form.set("lng", fields?.lng ?? "99.9577");
+  if (fields?.showFaces) form.set("showFaces", fields.showFaces);
   return POST(
     new Request("http://localhost/api/posts", {
       method: "POST",
@@ -164,6 +166,80 @@ describe("POST /api/posts", () => {
     const center = (40 * width + 40) * channels;
     const delta = Math.abs(before.data[center] - after[center]) + Math.abs(before.data[center + 2] - after[center + 2]);
     expect(delta).toBeGreaterThan(20);
+    expect(body.facesShown).toBe(0);
+  });
+
+  async function pixelDelta(left: Buffer, right: Buffer, x: number, y: number) {
+    const base = await sharp(left).raw().toBuffer({ resolveWithObject: true });
+    const next = await sharp(right).raw().toBuffer();
+    const index = (y * base.info.width + x) * base.info.channels;
+    return Math.abs(base.data[index] - next[index]) + Math.abs(base.data[index + 2] - next[index + 2]);
+  }
+
+  it("keeps every detected face blurred when no face is requested", async () => {
+    const left = [0.05, 0.15, 0.3, 0.85];
+    const right = [0.7, 0.15, 0.95, 0.85];
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([left, right]))));
+    const original = await checkerJpeg();
+    const response = await postImage(original);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.facesShown).toBe(0);
+    expect(body.facesBlurred).toBe(2);
+    const uploaded = upload.mock.calls[0]?.[1] as Buffer;
+    const full = await blurFaces(original, [left, right]);
+    expect(await pixelDelta(uploaded, full, 14, 40)).toBeLessThan(8);
+    expect(await pixelDelta(uploaded, full, 66, 40)).toBeLessThan(8);
+  });
+
+  it("leaves a matched face unblurred and ignores a box that matches nothing", async () => {
+    const left = [0.05, 0.15, 0.3, 0.85];
+    const right = [0.7, 0.15, 0.95, 0.85];
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([left, right]))));
+    const original = await checkerJpeg();
+    const matched = await postImage(original, { showFaces: JSON.stringify([left]) });
+    expect(matched.status).toBe(200);
+    expect((await matched.json()).facesShown).toBe(1);
+    const uploaded = upload.mock.calls[0]?.[1] as Buffer;
+    const full = await blurFaces(original, [left, right]);
+    expect(await pixelDelta(uploaded, full, 14, 40)).toBeGreaterThan(20);
+    expect(await pixelDelta(uploaded, full, 66, 40)).toBeLessThan(8);
+
+    upload.mockClear();
+    const missed = await postImage(original, { showFaces: JSON.stringify([[0, 0, 0.08, 0.08]]) });
+    expect((await missed.json()).facesShown).toBe(0);
+    const ignored = upload.mock.calls[0]?.[1] as Buffer;
+    expect(await pixelDelta(ignored, full, 14, 40)).toBeLessThan(8);
+    expect(await pixelDelta(ignored, full, 66, 40)).toBeLessThan(8);
+  });
+
+  it("caps shown faces at two", async () => {
+    const faces = [
+      [0.02, 0.05, 0.18, 0.28],
+      [0.4, 0.05, 0.58, 0.28],
+      [0.78, 0.7, 0.96, 0.95],
+    ];
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText(faces))));
+    const original = await checkerJpeg();
+    const response = await postImage(original, { showFaces: JSON.stringify(faces) });
+    const body = await response.json();
+    expect(body.facesShown).toBe(2);
+    expect(body.facesBlurred).toBe(1);
+    const uploaded = upload.mock.calls[0]?.[1] as Buffer;
+    const onlyThird = await blurFaces(original, [faces[2]]);
+    const none = await blurFaces(original, []);
+    expect(await pixelDelta(uploaded, onlyThird, 70, 66)).toBeLessThan(12);
+    expect(await pixelDelta(uploaded, none, 70, 66)).toBeGreaterThan(20);
+  });
+
+  it("fails closed when the face read fails even if showFaces is set", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("spark down");
+    }));
+    const response = await postImage(await checkerJpeg(), { showFaces: JSON.stringify([[0.1, 0.1, 0.4, 0.4]]) });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "blur_unavailable" });
+    expect(upload).not.toHaveBeenCalled();
   });
 
   it("maps rate_limited to 429 and removes the upload", async () => {

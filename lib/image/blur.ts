@@ -25,6 +25,29 @@ function unionBox(a: NormBox, b: NormBox): NormBox {
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 }
 
+export function matchShownFaces(
+  detected: number[][],
+  requested: number[][],
+): { blur: NormBox[]; shown: number } {
+  const faces = normalizeBoxes(detected);
+  const asks = normalizeBoxes(requested).slice(0, 2);
+  const used = new Set<number>();
+  for (const ask of asks) {
+    let best = -1;
+    let bestScore = 0;
+    for (let index = 0; index < faces.length; index += 1) {
+      if (used.has(index)) continue;
+      const score = iou(faces[index], ask);
+      if (score >= 0.4 && score > bestScore) {
+        best = index;
+        bestScore = score;
+      }
+    }
+    if (best >= 0) used.add(best);
+  }
+  return { blur: faces.filter((_, index) => !used.has(index)), shown: used.size };
+}
+
 export function normalizeBoxes(boxes: number[][]): NormBox[] {
   const clean: NormBox[] = [];
   for (const box of boxes) {

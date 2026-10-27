@@ -2,7 +2,7 @@ import { connection, NextResponse } from "next/server";
 import { buildMatcherPrompt, parseMatcherResult } from "../../../lib/ai/matcher";
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
 import { haversineMeters } from "../../../lib/geo";
-import { blurFaces, normalizeBoxes } from "../../../lib/image/blur";
+import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
@@ -17,6 +17,17 @@ const AREA_LABEL = "Soi 102, Hua Hin, Thailand";
 
 function bad(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
+}
+
+function readShowFaces(value: FormDataEntryValue | null): number[][] {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2000) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((box): box is number[] => Array.isArray(box)).slice(0, 8);
+  } catch {
+    return [];
+  }
 }
 
 function blurUnavailable() {
@@ -129,13 +140,15 @@ export async function POST(request: Request) {
   }
   const reported = (raw as { faces: unknown[] }).faces;
   const result = parseMatcherResult(raw, [shopId]);
-  const boxes = normalizeBoxes(reported.filter((box): box is number[] => Array.isArray(box)));
+  const detected = reported.filter((box): box is number[] => Array.isArray(box));
+  const boxes = normalizeBoxes(detected);
   if (reported.length > 0 && boxes.length === 0) return blurUnavailable();
   if (result.qualityScore <= 2) {
     return NextResponse.json({ error: "photo_unusable" }, { status: 422 });
   }
+  const split = matchShownFaces(detected, readShowFaces(form.get("showFaces")));
 
-  const blurred = await blurFaces(bytes, boxes);
+  const blurred = await blurFaces(bytes, split.blur);
   const path = userId + "/" + crypto.randomUUID() + ".jpg";
   const uploaded = await supabase.storage.from("post-photos").upload(path, blurred, {
     contentType: "image/jpeg",
@@ -202,7 +215,8 @@ export async function POST(request: Request) {
       createdAt: row.created_at ?? null,
       expiresAt: row.expires_at ?? null,
     },
-    facesBlurred: boxes.length,
+    facesBlurred: split.blur.length,
+    facesShown: split.shown,
   });
 }
 
