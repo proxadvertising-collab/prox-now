@@ -46,6 +46,7 @@ npm run icons
 Routes in this scaffold:
 
 - `/login` signs in with Google or a 6-digit email code.
+- `/judge` signs in as the shopper or the shop owner with one tap. Email and password are the fallback.
 - `/auth/callback` finishes the sign-in redirect.
 - `/map` shows shops from the database when the Supabase env vars are set, and the local fixture otherwise.
 - `/snap` matches a photo to a nearby shop. It does not require a session. Adding a shop does.
@@ -61,8 +62,12 @@ Routes in this scaffold:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `DEMO_EXPLORER_EMAIL`
+- `DEMO_EXPLORER_PASSWORD`
+- `DEMO_OWNER_EMAIL`
+- `DEMO_OWNER_PASSWORD`
 
-`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold.
+`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold. The `DEMO_*` values stay on the server. They are not in client code.
 
 ## Where Meta models are used
 

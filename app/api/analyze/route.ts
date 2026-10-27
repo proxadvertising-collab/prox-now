@@ -7,6 +7,7 @@ import {
 } from "../../../lib/ai/matcher";
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
 import type { LatLng } from "../../../lib/geo";
+import { allowSnap, clientIp } from "../../../lib/rate/window";
 import { getShopsNear, hasShopEnv, type NearbyShopRow } from "../../../lib/shops/source";
 import { createClient } from "../../../lib/supabase/server";
 import { NextResponse } from "next/server";
@@ -31,6 +32,17 @@ async function queryNearby(origin: LatLng): Promise<NearbyShopRow[]> {
 
 function bad(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
+}
+
+async function signedInUserId(): Promise<string | null> {
+  if (!hasShopEnv()) return null;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function readCoord(value: FormDataEntryValue | null): number | null | "bad" {
@@ -86,6 +98,9 @@ export async function POST(request: Request) {
   const mime = type === "image/jpg" ? "image/jpeg" : type;
   const bytes = Buffer.from(await image.arrayBuffer());
   const imageDataUrl = "data:" + mime + ";base64," + bytes.toString("base64");
+  if (!allowSnap(clientIp(request), await signedInUserId(), Date.now())) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+  }
 
   try {
     const spark = await callSpark({ prompt, imageDataUrl });

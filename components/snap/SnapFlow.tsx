@@ -377,6 +377,11 @@ export function SnapFlow() {
         setPhase("error");
         return;
       }
+      if (response.status === 429 || body?.error === "rate_limited") {
+        setError(t("en", "snap.rate"));
+        setPhase("error");
+        return;
+      }
       if (!response.ok || !body?.decision || !body.result) {
         setError(t("en", "err.net"));
         setPhase("error");

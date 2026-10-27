@@ -259,3 +259,22 @@ describe("demo zone migration", () => {
     expect(sql).not.toContain("demo_reset");
   });
 });
+
+describe("demo accounts migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0008_demo_accounts.sql"), "utf8");
+
+  it("lets a person read only their own demo row", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create table if not exists public.demo_accounts");
+    expect(sql).toContain("user_id uuid primary key references auth.users (id) on delete cascade");
+    expect(sql).toContain("check (role in ('explorer', 'owner'))");
+    expect(sql).toContain("alter table public.demo_accounts enable row level security");
+    expect(sql).toContain("demo_accounts_select_own");
+    expect(sql).toContain("user_id = (select auth.uid())");
+    expect(sql).toContain("grant select on table public.demo_accounts to authenticated");
+    expect(sql).not.toContain("grant insert");
+    expect(sql).not.toContain("grant update");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
