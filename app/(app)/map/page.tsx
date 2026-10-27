@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { MapView } from "@/components/map/MapView";
+import { PlaceStats } from "@/components/map/PlaceStats";
 import { ShopList } from "@/components/map/ShopList";
 import { DemoBanner } from "@/components/ui/DemoBanner";
 import { t } from "@/lib/copy";
@@ -37,6 +38,7 @@ function MapChrome({
         className="px-4 pb-[calc(var(--nav-h)+var(--safe-bottom)+1.5rem)] pt-4 md:pb-8"
         aria-labelledby="shops-near"
       >
+        <PlaceStats />
         <h1 id="shops-near" className="text-heading font-bold text-fg">
           {t("en", "map.near")}
         </h1>
