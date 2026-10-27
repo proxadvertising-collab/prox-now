@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
+import { CouponBadge } from "@/components/map/CouponBadge";
 import { MapView } from "@/components/map/MapView";
 import { PlaceStats } from "@/components/map/PlaceStats";
 import { ShopList } from "@/components/map/ShopList";
@@ -30,8 +31,9 @@ function MapChrome({
     <div className="flex flex-col">
       <div className="flex h-[calc(100dvh-var(--safe-top)-var(--nav-h)-var(--safe-bottom))] flex-col overflow-hidden md:h-[calc(100dvh-var(--safe-top)-2.75rem)]">
         {fixtures ? <DemoBanner /> : null}
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
           <MapView shops={shops} fixtures={fixtures} livePosts={fixtures ? NO_LIVE_POSTS : livePosts} />
+          <CouponBadge />
         </div>
       </div>
       <section
