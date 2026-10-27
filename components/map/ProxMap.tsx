@@ -159,6 +159,7 @@ export function ProxMap({
   const [locProblem, setLocProblem] = useState(false);
   const [locBusy, setLocBusy] = useState(false);
   const [locStatus, setLocStatus] = useState<LocateResult["status"] | null>(null);
+  const [claimNote, setClaimNote] = useState("");
   const [sheetLang, setSheetLang] = useState<"en" | "th">("en");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
@@ -555,6 +556,29 @@ export function ProxMap({
           >
             {t("en", "post.go")}
           </a>
+          {!fixtures ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex min-h-11 items-center text-label font-semibold text-fg"
+              onClick={() => {
+                setClaimNote("");
+                void fetch("/api/owner/claim", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ shopId: selectedShop.id }),
+                })
+                  .then(async (response) => {
+                    const body = (await response.json().catch(() => null)) as { status?: string } | null;
+                    if (response.ok && body?.status === "pending") setClaimNote(t("en", "loop.waiting"));
+                    else if (response.ok && body?.status === "verified") setClaimNote(t("en", "loop.owner"));
+                  })
+                  .catch(() => undefined);
+              }}
+            >
+              {t("en", "loop.claim")}
+            </button>
+          ) : null}
+          {claimNote ? <p className="text-label text-fg">{claimNote}</p> : null}
         </div>
       ) : null}
     </div>
