@@ -295,3 +295,26 @@ describe("demo accounts migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("demo window migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0009_demo_window.sql"), "utf8");
+
+  it("rejects a non-owner, a real shop, and a seed post, and repeats only the explorer coupon", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("function public.demo_end_window(p_post_id uuid)");
+    expect(sql).toContain("raise exception 'not_owner'");
+    expect(sql).toContain("raise exception 'not_demo_shop'");
+    expect(sql).toContain("raise exception 'seed_post'");
+    expect(sql).toContain("set expires_at = now()");
+    expect(sql).toContain("grant execute on function public.demo_end_window(uuid) to authenticated");
+    expect(sql).toContain("where demo_repeat = false");
+    expect(sql).toContain("demo_accounts.role = 'explorer'");
+    expect(sql).toContain("and shops.is_demo");
+    expect(sql).toContain("'liveNow'");
+    expect(sql).toContain("and s.is_demo");
+    expect(sql).toContain("and p.is_seed = false");
+    expect(sql).toContain("and p.expires_at > now()");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

@@ -10,12 +10,13 @@ export async function GET() {
   if (result.error) return ownerFailure(result.error);
   const payload = (result.data ?? {}) as {
     cards?: Array<Record<string, unknown>>;
+    liveNow?: Array<Record<string, unknown>>;
     keptToday?: number;
     passedToday?: number;
   };
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const now = Date.now();
-  const cards = (payload.cards ?? []).map((card) => {
+  const mapCard = (card: Record<string, unknown>) => {
     const expiresAt = typeof card.expiresAt === "string" ? card.expiresAt : "";
     const path = typeof card.photoPath === "string" ? card.photoPath : null;
     return {
@@ -29,9 +30,10 @@ export async function GET() {
       expiresAt,
       daysLeft: expiresAt ? daysLeft(expiresAt, now) : 0,
     };
-  });
+  };
   return NextResponse.json({
-    cards,
+    cards: (payload.cards ?? []).map(mapCard),
+    liveNow: (payload.liveNow ?? []).map(mapCard),
     keptToday: payload.keptToday ?? 0,
     passedToday: payload.passedToday ?? 0,
   });

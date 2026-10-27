@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { DemoBanner } from "@/components/ui/DemoBanner";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
+import { DEMO_ZONE_FALLBACK, nearestDemoShop } from "@/lib/demo/zone";
 import { locate, type LocateResult } from "@/lib/geo/locate";
+import { createClient } from "@/lib/supabase/client";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
@@ -135,6 +137,7 @@ export function SnapFlow() {
   const [elapsed, setElapsed] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [demo, setDemo] = useState(false);
+  const [demoShopName, setDemoShopName] = useState("");
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
   const [guessId, setGuessId] = useState<string | null>(null);
@@ -347,6 +350,33 @@ export function SnapFlow() {
     setDemo(true);
   }
 
+  async function demoSnapPoint(): Promise<{ lat: number; lng: number; name: string } | null> {
+    try {
+      const supabase = createClient();
+      const account = await supabase.from("demo_accounts").select("role").limit(1);
+      if (account.error || (account.data?.length ?? 0) === 0) return null;
+      const zoneResult = await supabase.rpc("demo_zone");
+      const row = Array.isArray(zoneResult.data) ? zoneResult.data[0] : null;
+      const from =
+        row && typeof row.lat === "number" && typeof row.lng === "number"
+          ? { lat: row.lat, lng: row.lng }
+          : { lat: DEMO_ZONE_FALLBACK.lat, lng: DEMO_ZONE_FALLBACK.lng };
+      const shops = await supabase.from("shops").select("id, name, lat, lng, is_demo").eq("is_demo", true);
+      const points = (shops.data ?? []).map((shop) => ({
+        id: String(shop.id),
+        name: typeof shop.name === "string" ? shop.name : "",
+        lat: Number(shop.lat),
+        lng: Number(shop.lng),
+        isDemo: true,
+      }));
+      const nearest = nearestDemoShop(points, from);
+      if (!nearest) return { lat: from.lat, lng: from.lng, name: "" };
+      return { lat: nearest.lat, lng: nearest.lng, name: nearest.name };
+    } catch {
+      return null;
+    }
+  }
+
   async function analyse(file: File) {
     const run = ++runRef.current;
     setPhase("reading");
@@ -355,12 +385,24 @@ export function SnapFlow() {
     setAdded(false);
     startedRef.current = Date.now();
     try {
-      const located = await locate();
+      const demoPoint = await demoSnapPoint();
       if (run !== runRef.current) return;
-      const here = located.status === "ok" ? located.point : null;
-      rememberPoint(here);
-      setLocStatus(located.status);
-      setDemo(!here);
+      let here: Point | null = null;
+      if (demoPoint) {
+        here = { lat: demoPoint.lat, lng: demoPoint.lng };
+        rememberPoint(here);
+        setLocStatus("ok");
+        setDemo(true);
+        setDemoShopName(demoPoint.name);
+      } else {
+        const located = await locate();
+        if (run !== runRef.current) return;
+        here = located.status === "ok" ? located.point : null;
+        rememberPoint(here);
+        setLocStatus(located.status);
+        setDemo(!here);
+        setDemoShopName("");
+      }
       const jpeg = await resizeToJpeg(file);
       if (run !== runRef.current) return;
       const form = new FormData();
@@ -633,6 +675,9 @@ export function SnapFlow() {
     <div className="flex flex-col gap-4">
       <h1 className="text-title font-bold text-fg">{t("en", "nav.snap")}</h1>
       {demo ? <DemoBanner /> : null}
+      {demo && demoShopName ? (
+        <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

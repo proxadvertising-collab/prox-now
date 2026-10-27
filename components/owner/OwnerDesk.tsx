@@ -22,6 +22,7 @@ const danger =
 export function OwnerDesk() {
   const [shops, setShops] = useState<ShopRow[] | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
+  const [liveNow, setLiveNow] = useState<Card[]>([]);
   const [counts, setCounts] = useState({ keptToday: 0, passedToday: 0 });
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -44,11 +45,13 @@ export function OwnerDesk() {
     const homeBody = (await home.json().catch(() => null)) as { shops?: ShopRow[] } | null;
     const inboxBody = (await inbox.json().catch(() => null)) as {
       cards?: Card[];
+      liveNow?: Card[];
       keptToday?: number;
       passedToday?: number;
     } | null;
     setShops(homeBody?.shops ?? []);
     setCards(inboxBody?.cards ?? []);
+    setLiveNow(inboxBody?.liveNow ?? []);
     setCounts({ keptToday: inboxBody?.keptToday ?? 0, passedToday: inboxBody?.passedToday ?? 0 });
   }
 
@@ -64,6 +67,30 @@ export function OwnerDesk() {
 
   function buzz() {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(12);
+  }
+
+  async function decideNow(id: string) {
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const response = await fetch("/api/owner/demo-end", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(t("en", "loop.fail"));
+        return;
+      }
+      buzz();
+      await load();
+    } catch {
+      setError(t("en", "loop.fail"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function act(kind: "keep" | "pass", id: string) {
@@ -111,6 +138,19 @@ export function OwnerDesk() {
       <h1 className="text-title font-bold text-fg">{t("en", "loop.owner")}</h1>
       {note ? <p className="text-body text-fg motion-safe:animate-pulse">{note}</p> : null}
       {error ? <p role="alert" className="text-body text-danger">{error}</p> : null}
+      {liveNow.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-heading font-bold text-fg">{t("en", "loop.liveNow")}</h2>
+          {liveNow.map((item) => (
+            <div key={item.id} className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
+              <p className="text-body font-semibold text-fg">{item.shopName}</p>
+              <button type="button" className={primary} disabled={busy} onClick={() => void decideNow(item.id)}>
+                {t("en", "loop.decide")}
+              </button>
+            </div>
+          ))}
+        </section>
+      ) : null}
       {!card ? (
         <div className="flex flex-col gap-2">
           <p className="text-heading font-bold text-fg">{t("en", "loop.caught")}</p>
