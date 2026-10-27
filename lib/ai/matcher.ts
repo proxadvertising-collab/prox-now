@@ -14,6 +14,26 @@ export type SignText = {
   translated: string;
 };
 
+export type CrowdLevel = "empty" | "few" | "busy" | "queue";
+export type OpenStatus = "open" | "closed" | "unknown";
+export type PlaceSignal = "fresh_batch" | "promo" | "sold_out" | "event" | "music" | "new_item";
+
+export type PlaceItem = {
+  name: string;
+  price: number | null;
+  currency: string | null;
+};
+
+export type PlaceFacts = {
+  caption: string | null;
+  items: PlaceItem[];
+  crowd: CrowdLevel | null;
+  openStatus: OpenStatus;
+  signals: PlaceSignal[];
+  signLanguage: string | null;
+  captions: { en: string | null; th: string | null };
+};
+
 export type MatcherResult = {
   shopId: string | null;
   confidence: number;
@@ -24,6 +44,7 @@ export type MatcherResult = {
   category: string;
   safeToPost: boolean;
   safeReason: string;
+  facts: PlaceFacts | null;
 };
 
 export type Decision = "confirm" | "pick" | "pick-all";
@@ -45,8 +66,9 @@ Method (do it silently): 1) Read all visible text (Thai, English, Chinese, phone
 Confidence guide: 0.9+ name text clearly matches; 0.6-0.89 type/visual match without readable name; <0.5 guess.
 
 Output ONLY this JSON (no markdown fences, no prose):
-{"shop_id":"sNN or null","confidence":0.0,"sign_text":[{"thai":"original text","english":"translation"}],"quality_score":0,"quality_reason":"one line","faces":[[x1,y1,x2,y2]],"category":"","safe_to_post":true,"safe_reason":""}
+{"shop_id":"sNN or null","confidence":0.0,"sign_text":[{"thai":"original text","english":"translation"}],"quality_score":0,"quality_reason":"one line","faces":[[x1,y1,x2,y2]],"category":"","safe_to_post":true,"safe_reason":"","facts":{"caption":null,"items":[{"name":"","price":null,"currency":null}],"crowd":null,"open_status":"unknown","signals":[],"sign_language":null,"captions":{"en":null,"th":null}}}
 Rules: sign_text lists the 1-6 most important text items (shop name, menu items, prices) with Thai-to-English translation (english may equal the text if already English). quality_score is 0-10 for how useful the photo is as a public map photo (sharp, well-framed, readable, well lit). faces = normalized [x1,y1,x2,y2] boxes (0-1, origin top-left) for every human face visible including partial/small/stylized-photo faces, else []. safe_to_post=false if clear identifiable faces of real people, minors, license plates, nudity, ID/cards, or private info are visible; illustrated cartoon faces on a sign are fine.
+Facts are about the PLACE and the MOMENT only. Never identify anyone and never describe a person's appearance beyond crowd level. Leave a facts field null when unsure. Keep a price only when it is clearly readable on a sign or board. caption is at most 140 characters of what is shown or sold, with no people. items has at most 8 names. crowd is empty, few, busy, queue, or null. open_status is open, closed, or unknown. signals has at most 5 of fresh_batch, promo, sold_out, event, music, new_item. sign_language is a BCP-47 tag or null. captions.en and captions.th are the caption in those languages, or null.
 Extra rules: (a) If the sign's name text is clearly readable but equals no candidate, shop_id=null and put the name you read in sign_text. (b) If the image is a screenshot, photo of a screen, or not a shop/stall/menu, shop_id=null, quality_score<=2. (c) If the image is too blurry/dark to read, shop_id=null and say why in quality_reason. (d) "confidence" is your confidence in shop_id; when shop_id is null set confidence to 0. (e) Real photographs of people's faces count in faces; printed drawings, mascots or cartoons on signs do not (mention in safe_reason). Keep sign_text to at most 6 short items.`;
 
 export function emptyMatcherResult(): MatcherResult {
@@ -60,6 +82,7 @@ export function emptyMatcherResult(): MatcherResult {
     category: "",
     safeToPost: false,
     safeReason: "",
+    facts: null,
   };
 }
 
@@ -178,6 +201,77 @@ export function parseMatcherResult(
     category,
     safeToPost,
     safeReason,
+    facts: parseFacts(record.facts),
+  };
+}
+
+const CROWD = new Set<CrowdLevel>(["empty", "few", "busy", "queue"]);
+const OPEN = new Set<OpenStatus>(["open", "closed", "unknown"]);
+const SIGNALS = new Set<PlaceSignal>(["fresh_batch", "promo", "sold_out", "event", "music", "new_item"]);
+
+function clip(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim().slice(0, max);
+  return text.length > 0 ? text : null;
+}
+
+function parseFacts(value: unknown): PlaceFacts | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const items: PlaceItem[] = [];
+  const rawItems = record.items;
+  if (Array.isArray(rawItems)) {
+    for (const item of rawItems) {
+      if (items.length >= 8) break;
+      const row = asRecord(item);
+      if (!row) continue;
+      const name = clip(row.name, 80);
+      if (!name) continue;
+      let price: number | null = null;
+      if (typeof row.price === "number" && Number.isFinite(row.price) && row.price >= 0 && row.price <= 1_000_000) {
+        price = row.price;
+      }
+      const currency = typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency) ? row.currency : null;
+      items.push({ name, price, currency });
+    }
+  }
+
+  const crowdRaw = record.crowd;
+  const crowd = typeof crowdRaw === "string" && CROWD.has(crowdRaw as CrowdLevel) ? (crowdRaw as CrowdLevel) : null;
+  const openRaw = record.open_status ?? record.openStatus;
+  const openStatus =
+    typeof openRaw === "string" && OPEN.has(openRaw as OpenStatus) ? (openRaw as OpenStatus) : "unknown";
+
+  const signals: PlaceSignal[] = [];
+  if (Array.isArray(record.signals)) {
+    for (const signal of record.signals) {
+      if (signals.length >= 5) break;
+      if (typeof signal !== "string" || !SIGNALS.has(signal as PlaceSignal)) continue;
+      const typed = signal as PlaceSignal;
+      if (!signals.includes(typed)) signals.push(typed);
+    }
+  }
+
+  const languageRaw = record.sign_language ?? record.signLanguage;
+  const signLanguage =
+    typeof languageRaw === "string" && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/.test(languageRaw.trim())
+      ? languageRaw.trim().slice(0, 35)
+      : null;
+
+  const captionsRaw = asRecord(record.captions);
+
+  return {
+    caption: clip(record.caption, 140),
+    items,
+    crowd,
+    openStatus,
+    signals,
+    signLanguage,
+    captions: {
+      en: clip(captionsRaw?.en, 140),
+      th: clip(captionsRaw?.th, 140),
+    },
   };
 }
 

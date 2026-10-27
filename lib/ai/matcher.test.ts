@@ -76,6 +76,59 @@ describe("matcher", () => {
     expect(outside.confidence).toBe(0);
     expect(parseMatcherResult("nope")).toEqual(emptyMatcherResult());
     expect(parseMatcherResult({ shop_id: "null", confidence: 0.4 }).confidence).toBe(0);
+    expect(parseMatcherResult({ shop_id: null }).facts).toBeNull();
+  });
+
+  it("keeps valid place facts and drops partial, garbage, and oversized values", () => {
+    const valid = parseMatcherResult({
+      facts: {
+        caption: "  Noodles on the stove  ",
+        items: [
+          { name: " Noodle ", price: 40, currency: "THB" },
+          { name: "Tea", price: -1, currency: "usd" },
+          { name: " ", price: 10, currency: "THB" },
+        ],
+        crowd: "busy",
+        open_status: "open",
+        signals: ["promo", "promo", "nope", "music"],
+        sign_language: "th",
+        captions: { en: "Noodles", th: "ก๋วยเตี๋ยว" },
+      },
+    });
+    expect(valid.facts).toEqual({
+      caption: "Noodles on the stove",
+      items: [
+        { name: "Noodle", price: 40, currency: "THB" },
+        { name: "Tea", price: null, currency: null },
+      ],
+      crowd: "busy",
+      openStatus: "open",
+      signals: ["promo", "music"],
+      signLanguage: "th",
+      captions: { en: "Noodles", th: "ก๋วยเตี๋ยว" },
+    });
+
+    const partial = parseMatcherResult({ facts: { caption: "Soup" } });
+    expect(partial.facts?.caption).toBe("Soup");
+    expect(partial.facts?.items).toEqual([]);
+    expect(partial.facts?.openStatus).toBe("unknown");
+    expect(partial.facts?.crowd).toBeNull();
+
+    expect(parseMatcherResult({ facts: "nope" }).facts).toBeNull();
+    expect(parseMatcherResult({ facts: ["x"] }).facts).toBeNull();
+
+    const long = "x".repeat(200);
+    const oversized = parseMatcherResult({
+      facts: {
+        caption: long,
+        items: Array.from({ length: 12 }, (_item, index) => ({ name: "Item " + index, price: 1_000_001, currency: "THB" })),
+        signals: ["fresh_batch", "promo", "sold_out", "event", "music", "new_item", "promo"],
+      },
+    });
+    expect(oversized.facts?.caption).toHaveLength(140);
+    expect(oversized.facts?.items).toHaveLength(8);
+    expect(oversized.facts?.items[0]?.price).toBeNull();
+    expect(oversized.facts?.signals).toHaveLength(5);
   });
 
   it("decides confirm, pick, and pick-all at 0.8", () => {
