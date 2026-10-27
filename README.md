@@ -82,3 +82,13 @@ A signed-in person can post a confirmed, picked, or newly added shop. The pin st
 The map draws a countdown ring on shops that have a live post. `POST /api/posts` and the live pin query need `META_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `SUPABASE_SERVICE_ROLE_KEY` is not used.
 
 `supabase/migrations/0003_post_photos.sql` is a migration file only until it is applied.
+
+## Places
+
+Prox Now adds a live layer and seeds places that map data is missing. It does not replace any map.
+
+`GET /api/places/export` is a public GeoJSON FeatureCollection of shops people added. Each feature is a point with the shop name, a local name when one was saved, the category, a country and address hint when present, a public phone when present, and a `prox-now` source record. Confidence is 0.6 because a person reported the place. The list is capped at 5000 and can be filtered with `country` and `since`.
+
+The export does not include who added the shop, email addresses, or any user id. Demo shops and seed shops are left out. `GET /api/places/stats` counts places, countries, posts, and how many posts are still live.
+
+A new shop stores a country from the `x-vercel-ip-country` header when that header is present, the browser timezone when it is a real IANA zone, and a currency only when the country is in the tested table. Missing values stay empty. They are not filled in with a Thailand default. `supabase/migrations/0004_shop_worldwide_fields.sql` is a migration file only until it is applied. The export and the stats query need `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
