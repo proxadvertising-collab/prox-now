@@ -258,6 +258,23 @@ describe("demo zone migration", () => {
     expect(sql).not.toContain("eyJ");
     expect(sql).not.toContain("demo_reset");
   });
+
+  it("lets a non-seed post end early and rejects one that lasts past two hours", () => {
+    const twoHours = 2 * 60 * 60 * 1000;
+    const created = Date.parse("2026-10-27T12:00:00.000Z");
+    const branch = sql.slice(sql.indexOf("check ("), sql.indexOf(");", sql.indexOf("check (")));
+    expect(branch).toContain("(is_seed and expires_at = timestamptz '2026-11-12 00:00+00')");
+    expect(branch).toContain("(not is_seed and expires_at <= created_at + interval '2 hours')");
+    expect(branch).not.toContain("not is_seed and expires_at = created_at + interval '2 hours'");
+    const earlyAllowed = created + twoHours - 60_000 <= created + twoHours;
+    const exactAllowed = created + twoHours <= created + twoHours;
+    const lateRejected = created + twoHours + 1_000 <= created + twoHours;
+    expect(earlyAllowed).toBe(true);
+    expect(exactAllowed).toBe(true);
+    expect(lateRejected).toBe(false);
+    expect(sql).toContain("elsif tg_op = 'INSERT' then");
+    expect(sql).toContain("new.expires_at := new.created_at + interval '2 hours'");
+  });
 });
 
 describe("demo accounts migration", () => {

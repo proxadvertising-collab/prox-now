@@ -17,7 +17,7 @@ alter table public.posts
   add constraint posts_expires_at_matches_created_at
   check (
     (is_seed and expires_at = timestamptz '2026-11-12 00:00+00')
-    or (not is_seed and expires_at = created_at + interval '2 hours')
+    or (not is_seed and expires_at <= created_at + interval '2 hours')
   );
 
 create or replace function public.posts_set_expiry()
