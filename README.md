@@ -83,6 +83,14 @@ The map draws a countdown ring on shops that have a live post. `POST /api/posts`
 
 `supabase/migrations/0003_post_photos.sql` is a migration file only until it is applied.
 
+## Faces
+
+Every face is blurred unless the person posting taps "That's me". That choice is explicit. The screen says they are showing their own face and that everyone else stays blurred. A second face can be shown only when that person agrees, and a post can show at most two faces. The person cannot unblur anyone else.
+
+The server reads faces again on the uploaded photo. It keeps a face visible only when the requested box overlaps a face it found, with an overlap of at least 0.4. Any other box stays blurred. If the face read fails, nothing is published. The original photo is never stored. Only the blurred JPEG is kept. The saved post records how many faces were shown, not where they were.
+
+After a successful post, the success screen has a button to save the original on the phone. It opens the phone share sheet when the browser can share a file, and otherwise downloads `prox-now-original.jpg`. iPhone and Android web pages cannot always save to the camera roll silently, so we ask the person to tap Save. Leaving that screen drops the original from memory. The shop only ever receives the edited photo.
+
 ## What we read from a photo
 
 One Spark call reads facts about the place and the moment. Missing or malformed facts are dropped. They are not invented.
