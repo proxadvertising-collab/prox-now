@@ -83,6 +83,21 @@ The map draws a countdown ring on shops that have a live post. `POST /api/posts`
 
 `supabase/migrations/0003_post_photos.sql` is a migration file only until it is applied.
 
+## What we read from a photo
+
+One Spark call reads facts about the place and the moment. Missing or malformed facts are dropped. They are not invented.
+
+- A caption of what is shown or sold, at most 140 characters, with no people. English and Thai captions are kept when the model can write them. The sheet shows the viewer's language, then English, then the original sign text.
+- Up to eight item names. A price and an ISO currency stay only when the number is clearly readable.
+- Crowd level: empty, a few people, busy, or a queue.
+- Whether the place looks open, closed, or unknown.
+- Up to five signals: a fresh batch, a promo, sold out, an event, music, or a new item.
+- The language of the sign, as a BCP-47 tag, when it is clear. If it differs from the viewer's language, the sheet says it was translated.
+
+The model never identifies anyone and never describes a person's appearance beyond crowd level. The original photo is never stored. Only the blurred JPEG is kept.
+
+`supabase/migrations/0005_post_facts.sql` is a migration file only until the captain writes apply. Until that file is applied, a post still saves and the facts are left unsaved.
+
 ## Places
 
 Prox Now adds a live layer and seeds places that map data is missing. It does not replace any map.
