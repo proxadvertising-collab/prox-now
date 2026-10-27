@@ -1,3 +1,4 @@
+import { parseMatcherResult, type PlaceFacts } from "../ai/matcher";
 import { hasShopEnv } from "../shops/source";
 
 export type LivePost = {
@@ -13,6 +14,8 @@ export type LivePost = {
   lat: number;
   lng: number;
   category: string;
+  facts: PlaceFacts | null;
+  mine: boolean;
 };
 
 export type LivePostRow = {
@@ -24,6 +27,8 @@ export type LivePostRow = {
   created_at: string;
   expires_at: string;
   status?: string;
+  author_id?: string | null;
+  facts?: unknown;
   shops:
     | {
         name?: string;
@@ -67,7 +72,12 @@ export function photoPublicUrl(supabaseUrl: string, photoPath: string | null): s
   return base + "/storage/v1/object/public/post-photos/" + photoPath.replace(/^\/+/, "");
 }
 
-export function mapLiveRows(rows: readonly LivePostRow[], supabaseUrl: string, now = Date.now()): LivePost[] {
+export function mapLiveRows(
+  rows: readonly LivePostRow[],
+  supabaseUrl: string,
+  now = Date.now(),
+  viewerId: string | null = null,
+): LivePost[] {
   const posts: LivePost[] = [];
   for (const row of rows) {
     if (Date.parse(row.expires_at) <= now) continue;
@@ -92,6 +102,8 @@ export function mapLiveRows(rows: readonly LivePostRow[], supabaseUrl: string, n
       lat: shop.lat,
       lng: shop.lng,
       category: shop.category ?? "other",
+      facts: parseMatcherResult({ facts: row.facts }).facts,
+      mine: Boolean(viewerId && row.author_id && row.author_id === viewerId),
     });
   }
   return posts;
@@ -103,7 +115,7 @@ async function defaultQuery(): Promise<LivePostRow[] | null> {
   const { data, error } = await supabase
     .from("posts")
     .select(
-      "id, shop_id, photo_path, text_original, text_translated, created_at, expires_at, shops(name, name_local, lat, lng, category)",
+      "id, shop_id, photo_path, text_original, text_translated, created_at, expires_at, facts, author_id, shops(name, name_local, lat, lng, category)",
     )
     .eq("status", "live")
     .gt("expires_at", new Date().toISOString());
@@ -111,12 +123,15 @@ async function defaultQuery(): Promise<LivePostRow[] | null> {
   return (data ?? []) as LivePostRow[];
 }
 
-export async function getLivePosts(query?: () => Promise<LivePostRow[] | null>): Promise<LivePost[]> {
+export async function getLivePosts(
+  query?: () => Promise<LivePostRow[] | null>,
+  viewerId?: string | null,
+): Promise<LivePost[]> {
   const run = query ?? (hasShopEnv() ? defaultQuery : async () => []);
   try {
     const rows = await run();
     if (!rows || rows.length === 0) return [];
-    return mapLiveRows(rows, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+    return mapLiveRows(rows, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", Date.now(), viewerId ?? null);
   } catch {
     return [];
   }

@@ -6,6 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
+import { pickLanguage } from "@/lib/i18n/viewer";
+import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
 import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
@@ -54,6 +56,45 @@ function isLivePost(value: unknown): value is LivePost {
   );
 }
 
+function asFacts(value: LivePost["facts"] | undefined): LivePost["facts"] {
+  if (!value || typeof value !== "object") return null;
+  const items = Array.isArray(value.items)
+    ? value.items
+        .filter((item) => item && typeof item.name === "string" && item.name.trim().length > 0)
+        .slice(0, 8)
+        .map((item) => ({
+          name: item.name,
+          price: typeof item.price === "number" && Number.isFinite(item.price) ? item.price : null,
+          currency: typeof item.currency === "string" ? item.currency : null,
+        }))
+    : [];
+  const crowd =
+    value.crowd === "empty" || value.crowd === "few" || value.crowd === "busy" || value.crowd === "queue"
+      ? value.crowd
+      : null;
+  const openStatus =
+    value.openStatus === "open" || value.openStatus === "closed" || value.openStatus === "unknown"
+      ? value.openStatus
+      : "unknown";
+  const known = ["fresh_batch", "promo", "sold_out", "event", "music", "new_item"] as const;
+  const signals = Array.isArray(value.signals)
+    ? value.signals.filter((signal) => (known as readonly string[]).includes(signal)).slice(0, 5)
+    : [];
+  const captions = value.captions && typeof value.captions === "object" ? value.captions : { en: null, th: null };
+  return {
+    caption: typeof value.caption === "string" ? value.caption : null,
+    items,
+    crowd,
+    openStatus,
+    signals,
+    signLanguage: typeof value.signLanguage === "string" ? value.signLanguage : null,
+    captions: {
+      en: typeof captions.en === "string" ? captions.en : null,
+      th: typeof captions.th === "string" ? captions.th : null,
+    },
+  };
+}
+
 function asLivePost(value: LivePost): LivePost {
   const translated =
     value.textTranslated && typeof value.textTranslated === "object" ? value.textTranslated : {};
@@ -70,6 +111,8 @@ function asLivePost(value: LivePost): LivePost {
     lat: value.lat,
     lng: value.lng,
     category: typeof value.category === "string" ? value.category : "other",
+    facts: asFacts(value.facts),
+    mine: value.mine === true,
   };
 }
 
@@ -116,10 +159,22 @@ export function ProxMap({
   const [locProblem, setLocProblem] = useState(false);
   const [locBusy, setLocBusy] = useState(false);
   const [locStatus, setLocStatus] = useState<LocateResult["status"] | null>(null);
+  const [sheetLang, setSheetLang] = useState<"en" | "th">("en");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteNote, setDeleteNote] = useState<string | null>(null);
 
   useEffect(() => {
     setWebgl(supportsWebGL2());
   }, []);
+
+  useEffect(() => {
+    const picked = pickLanguage(typeof navigator === "undefined" ? null : navigator.languages);
+    setSheetLang(picked === "th" ? "th" : "en");
+  }, []);
+
+  useEffect(() => {
+    setDeleteNote(null);
+  }, [selectedPostId]);
 
   useEffect(() => {
     setPosts(livePosts);
@@ -419,7 +474,11 @@ export function ProxMap({
           {selectedLive.shopNameLocal ? (
             <p className="text-label text-fg-muted">{selectedLive.shopNameLocal}</p>
           ) : null}
-          {liveLine ? <p className="mt-2 text-body text-fg">{liveLine}</p> : null}
+          {selectedLive.facts ? (
+            <LiveFacts post={selectedLive} lang={sheetLang} />
+          ) : liveLine ? (
+            <p className="mt-2 text-body text-fg">{liveLine}</p>
+          ) : null}
           <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
           {liveMeters !== null ? (
             <p className="text-label text-fg-muted">
@@ -436,6 +495,44 @@ export function ProxMap({
           >
             {t("en", "post.go")}
           </a>
+          {selectedLive.mine ? (
+            <button
+              type="button"
+              className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg disabled:opacity-60"
+              disabled={deleteBusy}
+              onClick={() => {
+                const id = selectedLive.id;
+                setDeleteBusy(true);
+                setDeleteNote(null);
+                void fetch("/api/posts", {
+                  method: "DELETE",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ id }),
+                })
+                  .then(async (response) => {
+                    if (!response.ok) {
+                      setDeleteNote(t(sheetLang, "facts.deleteFail"));
+                      return;
+                    }
+                    setPosts((current) => current.filter((post) => post.id !== id));
+                    setSelectedPostId(null);
+                  })
+                  .catch(() => {
+                    setDeleteNote(t(sheetLang, "facts.deleteFail"));
+                  })
+                  .finally(() => {
+                    setDeleteBusy(false);
+                  });
+              }}
+            >
+              {t(sheetLang, "facts.delete")}
+            </button>
+          ) : null}
+          {deleteNote ? (
+            <p role="alert" className="mt-2 text-label text-fg">
+              {deleteNote}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {showCard && selectedShop ? (

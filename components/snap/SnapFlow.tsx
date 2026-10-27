@@ -748,15 +748,18 @@ export function SnapFlow() {
               {t("en", "snap.cta")}
             </button>
           ) : (
-            <button
-              type="button"
-              className={primary}
-              disabled={posting}
-              aria-busy={posting}
-              onClick={() => void publish()}
-            >
-              {t("en", "post.cta")}
-            </button>
+            <>
+              <p className="text-body text-fg">{t("en", "post.honest")}</p>
+              <button
+                type="button"
+                className={primary}
+                disabled={posting}
+                aria-busy={posting}
+                onClick={() => void publish()}
+              >
+                {t("en", "post.cta")}
+              </button>
+            </>
           )}
           {postError && !photoMissing ? (
             <button type="button" className={secondary} disabled={posting} onClick={() => void publish()}>
