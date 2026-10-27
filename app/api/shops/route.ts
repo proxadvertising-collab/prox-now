@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { currencyForCountry, parseCountryHeader, parseTimezone } from "../../../lib/places/world";
+import { currencyForCountry, parseCountryHeader, parseTimezone, timezoneFromPoint } from "../../../lib/places/world";
 import { SHOP_CATEGORIES, type ShopCategory } from "../../../lib/snap/prefill";
 import { createClient } from "../../../lib/supabase/server";
 
@@ -71,9 +71,11 @@ export async function POST(request: Request) {
   const input = readShopInput(payload);
   if (!input) return bad("bad_input");
   const country = parseCountryHeader(request.headers.get("x-vercel-ip-country"));
-  const timezone = parseTimezone(
+  const fromPoint = timezoneFromPoint(input.lat, input.lng);
+  const fromBrowser = parseTimezone(
     payload && typeof payload === "object" ? (payload as Record<string, unknown>).timezone : null,
   );
+  const timezone = fromPoint ?? fromBrowser;
   const currency = currencyForCountry(country);
 
   let supabase;

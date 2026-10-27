@@ -1,3 +1,5 @@
+import tzLookup from "tz-lookup";
+
 /** ISO 3166-1 alpha-2 to ISO 4217. Unknown countries stay null. Never a fallback currency. */
 export const COUNTRY_CURRENCY: Record<string, string> = {
   AE: "AED",
@@ -75,6 +77,16 @@ export function parseTimezone(value: unknown): string | null {
   const zone = value.trim();
   if (!zone || zone.length > 64) return null;
   return zones().has(zone) ? zone : null;
+}
+
+export function timezoneFromPoint(lat: number, lng: number): string | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  try {
+    return parseTimezone(tzLookup(lat, lng));
+  } catch {
+    return null;
+  }
 }
 
 export function currencyForCountry(country: string | null): string | null {

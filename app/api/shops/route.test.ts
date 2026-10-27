@@ -70,7 +70,7 @@ describe("POST /api/shops", () => {
         p_name: "Mala House",
         p_lat: 12.5684,
         p_country_code: null,
-        p_timezone: null,
+        p_timezone: "Asia/Bangkok",
         p_currency: null,
       }),
     );
@@ -102,8 +102,40 @@ describe("POST /api/shops", () => {
       "create_shop_from_snap",
       expect.objectContaining({
         p_country_code: "US",
-        p_timezone: "America/New_York",
+        p_timezone: "Asia/Bangkok",
         p_currency: "USD",
+      }),
+    );
+  });
+
+  it("uses the browser zone when the point has no IANA zone", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    rpc.mockResolvedValue({
+      data: {
+        id: "shop-1",
+        slug: "ocean-shop",
+        name: "Mala House",
+        name_local: null,
+        category: "street_food",
+        lat: 0,
+        lng: -40,
+      },
+      error: null,
+    });
+    const response = await POST(
+      new Request("http://localhost/api/shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...good, lat: 0, lng: -40, timezone: "America/New_York" }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith(
+      "create_shop_from_snap",
+      expect.objectContaining({
+        p_lat: 0,
+        p_lng: -40,
+        p_timezone: "America/New_York",
       }),
     );
   });
