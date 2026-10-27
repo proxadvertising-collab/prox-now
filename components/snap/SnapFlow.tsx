@@ -426,6 +426,7 @@ export function SnapFlow() {
           category,
           lat: here.lat,
           lng: here.lng,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
       const body = (await response.json().catch(() => null)) as {

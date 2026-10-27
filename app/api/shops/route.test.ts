@@ -66,7 +66,45 @@ describe("POST /api/shops", () => {
     expect(body.shop.id).toBe("shop-1");
     expect(rpc).toHaveBeenCalledWith(
       "create_shop_from_snap",
-      expect.objectContaining({ p_name: "Mala House", p_lat: 12.5684 }),
+      expect.objectContaining({
+        p_name: "Mala House",
+        p_lat: 12.5684,
+        p_country_code: null,
+        p_timezone: null,
+        p_currency: null,
+      }),
+    );
+  });
+
+  it("passes the edge country, a valid timezone, and the mapped currency", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    rpc.mockResolvedValue({
+      data: {
+        id: "shop-1",
+        slug: "mala-house-abc123",
+        name: "Mala House",
+        name_local: null,
+        category: "street_food",
+        lat: 12.5684,
+        lng: 99.9577,
+      },
+      error: null,
+    });
+    const response = await POST(
+      new Request("http://localhost/api/shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-vercel-ip-country": "us" },
+        body: JSON.stringify({ ...good, timezone: "America/New_York" }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith(
+      "create_shop_from_snap",
+      expect.objectContaining({
+        p_country_code: "US",
+        p_timezone: "America/New_York",
+        p_currency: "USD",
+      }),
     );
   });
 

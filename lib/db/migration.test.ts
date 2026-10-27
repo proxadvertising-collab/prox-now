@@ -133,3 +133,39 @@ describe("post photos migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("worldwide shop fields migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0004_shop_worldwide_fields.sql"), "utf8");
+
+  it("drops Thailand defaults and passes country, timezone, and currency through", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("alter column country_code drop default");
+    expect(sql).toContain("alter column country_code drop not null");
+    expect(sql).toContain("alter column timezone drop default");
+    expect(sql).toContain("alter column currency drop default");
+    expect(sql).toContain("p_country_code");
+    expect(sql).toContain("p_timezone");
+    expect(sql).toContain("p_currency");
+    expect(sql).toContain(
+      "drop function if exists public.create_shop_from_snap(text, text, text, double precision, double precision, text);",
+    );
+    expect(sql).toContain(
+      "revoke all on function public.create_shop_from_snap(text, text, text, double precision, double precision, text, text, text, text) from public, anon;",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.create_shop_from_snap(text, text, text, double precision, double precision, text, text, text, text) to authenticated;",
+    );
+    const shopGrant = sql
+      .split("\n")
+      .find((line) => line.startsWith("grant execute on function public.create_shop_from_snap"));
+    expect(shopGrant).toBeTruthy();
+    expect(shopGrant).not.toContain("anon");
+    expect(sql).toContain("place_seed_stats");
+    expect(sql).toContain("grant execute on function public.place_seed_stats() to anon, authenticated;");
+    expect(sql).not.toContain("Asia/Bangkok");
+    expect(sql).not.toContain("'TH'");
+    expect(sql).not.toContain("'THB'");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});
