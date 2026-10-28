@@ -78,3 +78,52 @@ export type Coupon = {
   expires_at: string;
   created_at: string;
 };
+
+export type ShopBookStatus = "live" | "hidden";
+
+export type BookPageKind = "storefront" | "logo" | "hours" | "menu" | "qr" | "other";
+
+export type BookPageStatus = "live" | "removed";
+
+/** Mirrors shop_books. Clients cannot write this table. */
+export type ShopBook = {
+  shop_id: string;
+  status: ShopBookStatus;
+  tagline: string | null;
+  theme: Record<string, unknown>;
+  hours: Record<string, unknown>;
+  source_language: string | null;
+  built_by_model: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Mirrors shop_book_pages. image_path is the blurred JPEG, never the original. */
+export type ShopBookPage = {
+  id: string;
+  shop_id: string;
+  kind: BookPageKind;
+  position: number;
+  image_path: string;
+  width: number | null;
+  height: number | null;
+  status: BookPageStatus;
+  contributed_by: string | null;
+  batch_id: string | null;
+  language: string | null;
+  extracted: Record<string, unknown>;
+  ai_meta: Record<string, unknown>;
+  created_at: string;
+  removed_at: string | null;
+  removed_by: string | null;
+};
+
+/** Mirrors shop_book_translations. Prices inside extracted are copied, not translated. */
+export type ShopBookTranslation = {
+  page_id: string;
+  lang: string;
+  extracted: Record<string, unknown>;
+  source_hash: string;
+  model: string | null;
+  created_at: string;
+};
