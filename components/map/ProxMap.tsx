@@ -11,16 +11,17 @@ import { pickLanguage } from "@/lib/i18n/viewer";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
-import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
-import { haversineMeters, walkingDirectionsUrl, walkingMinutes, type LatLng } from "@/lib/geo";
+import { phaseFor, remainingMs } from "@/lib/freshness";
+import { haversineMeters, type LatLng } from "@/lib/geo";
 import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
-import { clampPhotoIndex, photoCounter, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
+import { newestLivePost, pinSheetContent } from "@/lib/map/pin-sheet";
+import { sheetCloseUsesHistory } from "@/lib/map/sheet";
 import { PlaceSheet } from "./PlaceSheet";
 import type { LivePost } from "@/lib/posts/source";
 import { createClient } from "@/lib/supabase/client";
 import { getClock, getServerClock, subscribeClock } from "./clock";
-import { createLivePinElement, createPinElement } from "./pin-element";
+import { createLivePinElement, createPinElement, createPlacePin } from "./pin-element";
 import {
   getServerWalkOrigin,
   getWalkOrigin,
@@ -34,6 +35,8 @@ const FAR_METERS = 5_000;
 
 const linkClass =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline";
+const secondaryLink =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg no-underline";
 
 function supportsWebGL2(): boolean {
   try {
@@ -144,14 +147,18 @@ export function ProxMap({
   fixtures = true,
   demoSession = false,
   livePosts = EMPTY_POSTS,
+  focus = null,
 }: {
   shops?: FixtureShop[];
   fixtures?: boolean;
   demoSession?: boolean;
   livePosts?: LivePost[];
+  focus?: LatLng | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
+  const focusRef = useRef<LatLng | null>(focus);
+  focusRef.current = focus;
   const markersRef = useRef<Marker[]>([]);
   const openedPostRef = useRef(false);
   const nowMs = useSyncExternalStore(subscribeClock, getClock, getServerClock);
@@ -169,8 +176,6 @@ export function ProxMap({
   const [sheetLang, setSheetLang] = useState<"en" | "th">("en");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const scrollerRef = useRef<HTMLDivElement>(null);
   const historyOn = useRef(false);
   const onArrow = useRef<(key: string) => void>(() => undefined);
   const sheetOpen = selectedPostId !== null || selectedId !== null;
@@ -186,7 +191,6 @@ export function ProxMap({
 
   useEffect(() => {
     setDeleteNote(null);
-    setPhotoIndex(0);
   }, [selectedPostId]);
 
   useEffect(() => {
@@ -240,13 +244,6 @@ export function ProxMap({
       map?.off("click", onMapClick);
     };
   }, [sheetOpen]);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el || el.clientWidth <= 0) return;
-    const left = photoIndex * el.clientWidth;
-    if (Math.abs(el.scrollLeft - left) > 2) el.scrollTo({ left, behavior: "smooth" });
-  }, [photoIndex]);
 
   useEffect(() => {
     setPosts(livePosts);
@@ -331,6 +328,8 @@ export function ProxMap({
     map.touchPitch.disable();
     map.addControl(new AttributionControl({ compact: true }), "bottom-left");
     map.on("load", () => {
+      const point = focusRef.current;
+      if (point) map.flyTo({ center: [point.lng, point.lat], zoom: 16, essential: true });
       if (demoSession) {
         void (async () => {
           let lat = DEMO_ZONE_FALLBACK.lat;
@@ -380,6 +379,12 @@ export function ProxMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !focus) return;
+    map.flyTo({ center: [focus.lng, focus.lat], zoom: 16, essential: true });
+  }, [focus]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || (fixtures && nowMs === 0)) return;
     for (const marker of markersRef.current) marker.remove();
     markersRef.current = [];
@@ -391,12 +396,7 @@ export function ProxMap({
         const post = byShop.get(shop.id);
         const element = post
           ? createLivePinElement(shop.name, post.expiresAt, tick, post.seed)
-          : document.createElement("button");
-        if (!post) {
-          element.type = "button";
-          element.className = "prox-pin";
-          element.textContent = shop.name;
-        }
+          : createPlacePin(shop.name);
         element.dataset.shopId = shop.id;
         element.dataset.selected = post
           ? selectedPostId === post.id
@@ -405,7 +405,8 @@ export function ProxMap({
           : selectedId === shop.id
             ? "true"
             : "false";
-        element.addEventListener("click", () => {
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
           if (post) {
             setSelectedPostId((current) => (current === post.id ? null : post.id));
             setSelectedId(shop.id);
@@ -428,7 +429,8 @@ export function ProxMap({
         element.dataset.selected = element.dataset.shopId === selectedId ? "true" : "false";
         const local = element.querySelector(".prox-pin__local");
         if (local instanceof HTMLElement) local.hidden = !showLocal;
-        element.addEventListener("click", () => {
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
           setSelectedId((current) => (current === shop.id ? null : shop.id));
         });
         const marker = new Marker({ element, anchor: "center" })
@@ -512,29 +514,38 @@ export function ProxMap({
   }
 
   const tick = nowMs || Date.now();
-  const selectedLive = posts.find(
-    (post) => post.id === selectedPostId && Date.parse(post.expiresAt) > tick,
-  );
   const selectedShop: FixtureShop | undefined = shops.find((shop) => shop.id === selectedId);
-  const selectedPost = selectedShop
-    ? makeDemoPosts(nowMs || Date.now()).find((post) => post.shopSlug === selectedShop.slug)
-    : undefined;
-  const remaining = selectedPost && nowMs > 0 ? remainingMs(selectedPost.expires_at, nowMs) : 0;
-  const showCard = Boolean(
-    !selectedLive && selectedShop && (selectedPost ? phaseFor(remaining) !== "expired" : !fixtures),
-  );
-  const minutes = selectedShop ? walkingMinutes(haversineMeters(origin, selectedShop)) : 1;
-  const liveMeters = selectedLive && userPoint ? Math.round(haversineMeters(userPoint, selectedLive)) : null;
-  const liveLine =
-    selectedLive?.textTranslated.en || selectedLive?.textOriginal || "";
-  const photos = selectedLive ? sheetPhotos(posts, selectedLive.shopId, tick) : [];
-  const photoAt = clampPhotoIndex(photoIndex, photos.length);
-  const visible = photos[photoAt] ?? selectedLive;
-  onArrow.current = (key: string) => {
-    if (photos.length < 2) return;
-    if (key === "ArrowRight") setPhotoIndex((index) => clampPhotoIndex(index + 1, photos.length));
-    if (key === "ArrowLeft") setPhotoIndex((index) => clampPhotoIndex(index - 1, photos.length));
-  };
+  const demoPost =
+    fixtures && selectedShop
+      ? makeDemoPosts(tick).find(
+          (post) => post.shopSlug === selectedShop.slug && phaseFor(remainingMs(post.expires_at, tick)) !== "expired",
+        )
+      : undefined;
+  const sheetPosts = selectedShop
+    ? fixtures
+      ? demoPost
+        ? [
+            {
+              id: demoPost.id,
+              photoUrl: null,
+              createdAt: new Date(tick).toISOString(),
+              expiresAt: demoPost.expires_at,
+              seed: false,
+            },
+          ]
+        : []
+      : posts.filter((post) => post.shopId === selectedShop.id)
+    : [];
+  const sheet = selectedShop
+    ? pinSheetContent({
+        shop: selectedShop,
+        posts: sheetPosts,
+        now: tick,
+        origin: userPoint ?? origin,
+      })
+    : null;
+  const focusPost = newestLivePost(sheetPosts, tick);
+  const liveFocus = focusPost ? posts.find((post) => post.id === focusPost.id) ?? null : null;
   const closeSheet = () => {
     if (sheetCloseUsesHistory(false, historyOn.current)) {
       historyOn.current = false;
@@ -548,7 +559,7 @@ export function ProxMap({
   const showLocationHelp = needsExternalBrowser(userAgent, locStatus) || locStatus === "denied";
 
   return (
-    <div tabIndex={-1} className="prox-map relative h-full w-full outline-none" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
+    <div tabIndex={-1} className="prox-map relative h-full w-full outline-none" data-card={sheet ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
       <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
         {!fixtures &&
@@ -604,117 +615,72 @@ export function ProxMap({
           <LocationHelp status={locStatus} onTryAgain={() => void useMyLocation()} />
         ) : null}
       </div>
-      {selectedLive && visible ? (
+      {sheet && selectedShop ? (
         <PlaceSheet onClose={closeSheet}>
-          {photos.length > 1 ? (
-            <div className="relative mb-3">
-              <div
-                ref={scrollerRef}
-                className="flex snap-x snap-mandatory overflow-x-auto"
-                onScroll={(event) => {
-                  const el = event.currentTarget;
-                  if (el.clientWidth <= 0) return;
-                  setPhotoIndex(clampPhotoIndex(Math.round(el.scrollLeft / el.clientWidth), photos.length));
-                }}
-              >
-                {photos.map((photo, index) =>
-                  photo.photoUrl ? (
-                    <img
-                      key={photo.id}
-                      src={photo.photoUrl}
-                      alt={photo.shopName}
-                      loading={index === 0 ? "eager" : "lazy"}
-                      className="aspect-[4/3] w-full shrink-0 snap-center object-cover"
-                    />
-                  ) : (
-                    <div key={photo.id} className="aspect-[4/3] w-full shrink-0 snap-center bg-surface-2" />
-                  ),
-                )}
-              </div>
-              <p className="mt-2 text-center text-label text-fg">{photoCounter(photoAt, photos.length)}</p>
-              <div className="mt-1 flex items-center justify-center gap-2">
-                {photos.map((photo, index) => (
-                  <button
-                    key={photo.id}
-                    type="button"
-                    aria-label={photoCounter(index, photos.length)}
-                    aria-current={index === photoAt ? "true" : undefined}
-                    className={"inline-flex min-h-11 min-w-11 items-center justify-center"}
-                    onClick={() => setPhotoIndex(index)}
-                  >
-                    <span className={"h-2 w-2 rounded-full " + (index === photoAt ? "bg-accent" : "bg-border")} />
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="absolute left-1 top-1/3 hidden min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 text-fg md:inline-flex"
-                aria-label={t("en", "sheet.prev")}
-                onClick={() => setPhotoIndex((index) => clampPhotoIndex(index - 1, photos.length))}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                className="absolute right-1 top-1/3 hidden min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 text-fg md:inline-flex"
-                aria-label={t("en", "sheet.next")}
-                onClick={() => setPhotoIndex((index) => clampPhotoIndex(index + 1, photos.length))}
-              >
-                ›
-              </button>
-            </div>
-          ) : visible.photoUrl ? (
-            <img
-              src={visible.photoUrl}
-              alt={visible.shopName}
-              className="mb-3 aspect-[4/3] w-full rounded-md object-cover"
-            />
+          {sheet.photoUrl ? (
+            <img src={sheet.photoUrl} alt={sheet.name} className="mb-3 aspect-[4/3] w-full rounded-md object-cover" />
           ) : null}
-          <p className="text-heading font-bold text-fg">{visible.shopName}</p>
-          {visible.shopNameLocal ? (
-            <p className="text-label text-fg-muted">{visible.shopNameLocal}</p>
+          <p className="text-heading font-bold text-fg">{sheet.name}</p>
+          {sheet.nameLocal ? <p className="text-label text-fg-muted">{sheet.nameLocal}</p> : null}
+          {sheet.freshness.kind === "live" ? (
+            <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: sheet.freshness.label })}</p>
           ) : null}
-          {visible.facts ? (
-            <LiveFacts post={visible} lang={sheetLang} />
-          ) : visible.id === selectedLive.id && liveLine ? (
-            <p className="mt-2 text-body text-fg">{liveLine}</p>
-          ) : visible.textTranslated.en || visible.textOriginal ? (
-            <p className="mt-2 text-body text-fg">{visible.textTranslated.en || visible.textOriginal}</p>
-          ) : null}
-          {visible.seed ? (
+          {sheet.freshness.kind === "seed" ? (
             <p className="mt-2 flex items-center gap-2 text-body text-fg">
               <span className="inline-flex rounded-full bg-accent px-2 py-0.5 text-caption font-extrabold text-accent-ink">
                 {t("en", "demo.pill")}
               </span>
               {t("en", "demo.live")}
             </p>
-          ) : (
-            <p className="mt-2 text-body text-fg">
-              {t("en", "timer.left", { t: formatRemaining(Math.max(0, remainingMs(visible.expiresAt, tick))) })}
-            </p>
-          )}
-          {liveMeters !== null ? (
-            <p className="text-label text-fg-muted">
-              {t("en", "snap.meters", { n: String(liveMeters) })}
-              {" · "}
-              {t("en", "map.walk", { n: String(walkingMinutes(liveMeters)) })}
-            </p>
           ) : null}
-          <a
-            className={"mt-3 " + linkClass}
-            href={walkingDirectionsUrl(selectedLive)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <p className="text-label text-fg-muted">{t("en", "map.walk", { n: String(sheet.walkMinutes) })}</p>
+          {liveFocus?.facts ? <LiveFacts post={liveFocus} lang={sheetLang} /> : null}
+          <a className={"mt-3 " + linkClass} href={sheet.goNowHref} target="_blank" rel="noopener noreferrer">
             {t("en", "post.go")}
           </a>
-          {visible.mine ? (
+          <a className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
+            {t("en", "sheet.openBook")}
+          </a>
+          <a
+            className={
+              sheet.prompt === "first"
+                ? "mt-3 " + linkClass
+                : "mt-2 inline-flex min-h-11 items-center text-label font-semibold text-fg"
+            }
+            href={sheet.cameraHref}
+          >
+            {sheet.prompt === "first" ? t("en", "sheet.first", { name: sheet.name }) : t("en", "sheet.addYours")}
+          </a>
+          {!fixtures ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex min-h-11 items-center text-label font-semibold text-fg"
+              onClick={() => {
+                setClaimNote("");
+                void fetch("/api/owner/claim", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ shopId: selectedShop.id }),
+                })
+                  .then(async (response) => {
+                    const body = (await response.json().catch(() => null)) as { status?: string } | null;
+                    if (response.ok && body?.status === "pending") setClaimNote(t("en", "loop.waiting"));
+                    else if (response.ok && body?.status === "verified") setClaimNote(t("en", "loop.owner"));
+                  })
+                  .catch(() => undefined);
+              }}
+            >
+              {t("en", "loop.claim")}
+            </button>
+          ) : null}
+          {claimNote ? <p className="text-label text-fg">{claimNote}</p> : null}
+          {liveFocus?.mine ? (
             <button
               type="button"
               className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg disabled:opacity-60"
               disabled={deleteBusy}
               onClick={() => {
-                const id = visible.id;
+                const id = liveFocus.id;
                 setDeleteBusy(true);
                 setDeleteNote(null);
                 void fetch("/api/posts", {
@@ -746,51 +712,6 @@ export function ProxMap({
               {deleteNote}
             </p>
           ) : null}
-        </PlaceSheet>
-      ) : null}
-      {showCard && selectedShop ? (
-        <PlaceSheet onClose={closeSheet}>
-          <p className="text-heading font-bold text-fg">{selectedShop.name}</p>
-          {selectedShop.nameLocal ? (
-            <p className="text-label text-fg-muted">{selectedShop.nameLocal}</p>
-          ) : null}
-          {selectedPost ? (
-            <p className="mt-2 text-body text-fg">
-              {t("en", "timer.left", { t: formatRemaining(remaining) })}
-            </p>
-          ) : null}
-          <p className="text-label text-fg-muted">{t("en", "map.walk", { n: String(minutes) })}</p>
-          <a
-            className={"mt-3 " + linkClass}
-            href={walkingDirectionsUrl(selectedShop)}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t("en", "post.go")}
-          </a>
-          {!fixtures ? (
-            <button
-              type="button"
-              className="mt-2 inline-flex min-h-11 items-center text-label font-semibold text-fg"
-              onClick={() => {
-                setClaimNote("");
-                void fetch("/api/owner/claim", {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ shopId: selectedShop.id }),
-                })
-                  .then(async (response) => {
-                    const body = (await response.json().catch(() => null)) as { status?: string } | null;
-                    if (response.ok && body?.status === "pending") setClaimNote(t("en", "loop.waiting"));
-                    else if (response.ok && body?.status === "verified") setClaimNote(t("en", "loop.owner"));
-                  })
-                  .catch(() => undefined);
-              }}
-            >
-              {t("en", "loop.claim")}
-            </button>
-          ) : null}
-          {claimNote ? <p className="text-label text-fg">{claimNote}</p> : null}
         </PlaceSheet>
       ) : null}
     </div>
