@@ -16,6 +16,7 @@ import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
 import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
+import { snapShopHref } from "@/lib/snap/target";
 import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
 
 type ShopCard = {
@@ -141,7 +142,7 @@ function clearPostDraft() {
   }
 }
 
-export function SnapFlow() {
+export function SnapFlow({ preselected = null }: { preselected?: { id: string; name: string } | null }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const onFileRef = useRef<(file: File | undefined) => void>(() => undefined);
   const runRef = useRef(0);
@@ -626,6 +627,19 @@ export function SnapFlow() {
     setFriendAgrees(false);
     setScene(null);
     setPreview(URL.createObjectURL(file));
+    if (preselected) {
+      const shop = { id: preselected.id, name: preselected.name, nameLocal: null, distanceM: 0 };
+      setChosen(shop);
+      setAdded(false);
+      setPostError("");
+      void (async () => {
+        const located = await locate();
+        if (located.status === "ok") rememberPoint(located.point);
+        writePostDraft(shop);
+        setPhase("offer");
+      })();
+      return;
+    }
     void analyse(file);
   }
   onFileRef.current = onFile;
@@ -882,17 +896,22 @@ export function SnapFlow() {
   return (
     <div className="flex flex-col gap-4">
       {phase === "idle" ? (
-        <label className={primary + " min-h-16 cursor-pointer"}>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(event) => onFile(event.target.files?.[0])}
-          />
-          {t("en", "snap.take")}
-        </label>
+        <div className="flex flex-col gap-3">
+          {preselected ? (
+            <p className="text-heading font-bold text-fg">{t("en", "snap.forShop", { name: preselected.name })}</p>
+          ) : null}
+          <label className={primary + " min-h-16 cursor-pointer"}>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(event) => onFile(event.target.files?.[0])}
+            />
+            {t("en", "snap.take")}
+          </label>
+        </div>
       ) : (
         <>
           <input
@@ -1201,6 +1220,9 @@ export function SnapFlow() {
           ) : null}
           <a className={secondary} href={"/map?post=" + encodeURIComponent(posted.id)}>
             {t("en", "post.see")}
+          </a>
+          <a className={primary} href={snapShopHref(chosen.id, chosen.name)}>
+            {t("en", "snap.keepSeeding", { name: chosen.name })}
           </a>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}

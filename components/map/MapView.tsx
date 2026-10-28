@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { FixtureShop } from "@/lib/fixtures/shops";
+import type { LatLng } from "@/lib/geo";
 import type { LivePost } from "@/lib/posts/source";
 
 const EMPTY_POSTS: LivePost[] = [];
@@ -20,15 +21,17 @@ export function MapView({
   fixtures = true,
   livePosts = EMPTY_POSTS,
   demoSession = false,
+  focus = null,
 }: {
   shops?: FixtureShop[];
   fixtures?: boolean;
   livePosts?: LivePost[];
   demoSession?: boolean;
+  focus?: LatLng | null;
 }) {
   return (
     <div className="h-full min-h-0 w-full bg-bg">
-      <ProxMap shops={shops} fixtures={fixtures} livePosts={livePosts} demoSession={demoSession} />
+      <ProxMap shops={shops} fixtures={fixtures} livePosts={livePosts} demoSession={demoSession} focus={focus} />
     </div>
   );
 }
