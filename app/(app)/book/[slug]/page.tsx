@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { t } from "@/lib/copy";
+import { bookBuildHref } from "@/lib/book/builder";
 import { presentBook } from "@/lib/book/present";
-import { snapShopHref } from "@/lib/snap/target";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,6 +27,12 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{t("en", "sheet.openBook")}</h1>
         <p className="text-body text-fg">{t("en", "book.empty")}</p>
+        <a
+          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
+          href={bookBuildHref(key)}
+        >
+          {t("en", "book.build")}
+        </a>
       </div>
     );
   }
@@ -38,7 +44,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
     const result = lookup ? await supabase.rpc("book_public", { p_slug: lookup }) : { data: null };
     const view = presentBook(result.data, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
     const name = view?.name ?? shop?.name ?? key;
-    const camera = snapShopHref(view?.id ?? shop?.id ?? key, name);
+    const build = bookBuildHref(view?.slug ?? shop?.slug ?? key);
 
     if (!view || view.pages.length === 0) {
       return (
@@ -47,9 +53,9 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
           <p className="text-body text-fg">{t("en", "book.empty")}</p>
           <a
             className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
-            href={camera}
+            href={build}
           >
-            {t("en", "sheet.first", { name })}
+            {t("en", "book.build")}
           </a>
         </div>
       );
@@ -83,6 +89,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
               ) : (
                 <div className="aspect-[4/3] w-full rounded-lg bg-surface-2" />
               )}
+              {page.credit ? <p className="mt-1 text-label text-fg-muted">{t("en", "book.credit", { name: page.credit })}</p> : null}
             </li>
           ))}
         </ul>

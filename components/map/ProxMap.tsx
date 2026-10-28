@@ -176,6 +176,7 @@ export function ProxMap({
   const [sheetLang, setSheetLang] = useState<"en" | "th">("en");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
+  const [bookMissing, setBookMissing] = useState<string[] | null>(null);
   const historyOn = useRef(false);
   const onArrow = useRef<(key: string) => void>(() => undefined);
   const sheetOpen = selectedPostId !== null || selectedId !== null;
@@ -192,6 +193,31 @@ export function ProxMap({
   useEffect(() => {
     setDeleteNote(null);
   }, [selectedPostId]);
+
+  useEffect(() => {
+    if (fixtures || !selectedId) {
+      setBookMissing(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supabase = createClient();
+        const result = await supabase.rpc("book_missing", { p_shop_id: selectedId });
+        if (cancelled) return;
+        if (result.error || !Array.isArray(result.data)) {
+          setBookMissing(null);
+          return;
+        }
+        setBookMissing(result.data.filter((item: unknown) => typeof item === "string"));
+      } catch {
+        if (!cancelled) setBookMissing(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtures, selectedId]);
 
   useEffect(() => {
     if (!sheetOpen) {
@@ -542,6 +568,7 @@ export function ProxMap({
         posts: sheetPosts,
         now: tick,
         origin: userPoint ?? origin,
+        missing: bookMissing,
       })
     : null;
   const focusPost = newestLivePost(sheetPosts, tick);
@@ -641,6 +668,11 @@ export function ProxMap({
           <a className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
             {t("en", "sheet.openBook")}
           </a>
+          {sheet.showBuild ? (
+            <a className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
+              {t("en", "book.build")}
+            </a>
+          ) : null}
           <a
             className={
               sheet.prompt === "first"

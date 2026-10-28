@@ -177,6 +177,10 @@ export async function POST(request: Request) {
   const shop = shopOf(shopResult.data);
   if (!shop) return json({ error: "not_found" }, 404);
 
+  const hiddenCheck = await service.from("shop_books").select("status").eq("shop_id", shop.id).maybeSingle();
+  const hiddenRow = asRecord(hiddenCheck.data);
+  if (hiddenRow?.status === "hidden") return json({ error: "book_hidden" }, 409);
+
   const pageResult = await service
     .from("shop_book_pages")
     .select("kind, status")
@@ -368,5 +372,5 @@ export async function POST(request: Request) {
   if (upstream || !read) {
     return json({ error: "upstream", pages, missing, ai: aiPayload(null, faceCalls) }, 502);
   }
-  return json({ pages, missing, ai: aiPayload(read, faceCalls) });
+  return json({ pages, missing, hours: savedHours, theme, ai: aiPayload(read, faceCalls) });
 }
