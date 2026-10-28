@@ -2,6 +2,7 @@ import { t } from "@/lib/copy";
 import type { DemoPost } from "@/lib/fixtures/demo-posts";
 import type { FixtureShop } from "@/lib/fixtures/shops";
 import { formatRemaining, phaseFor, remainingMs, ringOffset } from "@/lib/freshness";
+import { pinBadgeText } from "@/lib/map/sheet";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -101,6 +102,7 @@ export function createLivePinElement(
   expiresAt: string,
   nowMs: number,
   seed = false,
+  stackCount = 1,
 ): HTMLButtonElement {
   const remaining = Math.max(0, remainingMs(expiresAt, nowMs));
   const phase = seed ? "fresh" : phaseFor(remaining);
@@ -143,6 +145,13 @@ export function createLivePinElement(
   dot.textContent = shopName.slice(0, 1);
 
   body.append(svg, dot);
+  const badge = pinBadgeText(stackCount);
+  if (badge) {
+    const count = document.createElement("span");
+    count.className = "prox-pin__count";
+    count.textContent = badge;
+    body.append(count);
+  }
   if (seed) {
     const pill = document.createElement("span");
     pill.className = "prox-pin__pill";

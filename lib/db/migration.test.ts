@@ -378,3 +378,40 @@ describe("shop book migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("stack posts migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0012_stack_posts.sql"), "utf8");
+
+  it("allows ten live photos, a 40-post day, and a separate book bucket", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create or replace function public.create_post(");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("coalesce(is_seed, false) = false");
+    expect(sql).toContain(">= 40");
+    expect(sql).toContain(">= 10");
+    expect(sql).toContain("raise exception 'shop_full'");
+    expect(sql).toContain("raise exception 'rate_limited'");
+    expect(sql).not.toMatch(/raise exception 'already_live'/);
+    expect(sql).toContain(
+      "revoke all on function public.create_post(uuid, text, text, jsonb, jsonb) from public, anon;",
+    );
+    expect(sql).toContain(
+      "grant execute on function public.create_post(uuid, text, text, jsonb, jsonb) to authenticated;",
+    );
+    const postGrant = sql
+      .split("\n")
+      .find((line) => line.startsWith("grant execute on function public.create_post"));
+    expect(postGrant).toBeTruthy();
+    expect(postGrant).not.toContain("anon");
+    expect(sql).toContain("check (bucket in ('snap', 'judge', 'book'))");
+    expect(sql).toContain("p_bucket not in ('snap', 'judge', 'book')");
+    expect(sql).toContain("raise exception 'bad_bucket'");
+    expect(sql).toContain("v_limit := 20");
+    expect(sql).toContain("v_limit := 60");
+    expect(sql).toContain("v_limit := 120");
+    expect(sql).toContain("grant execute on function public.take_rate_limit(text, text[]) to anon, authenticated");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("eyJ");
+  });
+});

@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { contrastRatio, MIN_CONTRAST, SURFACE } from "../../../../lib/book/palette";
-import { SNAP_USER_LIMIT, allowSnap, resetRateWindows } from "../../../../lib/rate/window";
+import { BOOK_USER_LIMIT, SNAP_USER_LIMIT, allowBook, allowSnap, resetRateWindows } from "../../../../lib/rate/window";
 import { POST } from "./route";
 
 const SECRET = "test-meta-key";
@@ -225,15 +225,24 @@ describe("POST /api/book/pages", () => {
     expect(state.uploads).toHaveLength(0);
   });
 
-  it("rate limits with the snap bucket and does not call Meta", async () => {
-    for (let hit = 0; hit < SNAP_USER_LIMIT; hit += 1) {
-      expect(await allowSnap("203.0.113.8", USER)).toBe(true);
+  it("rate limits book uploads on their own bucket and does not call Meta", async () => {
+    for (let hit = 0; hit < BOOK_USER_LIMIT; hit += 1) {
+      expect(await allowBook("203.0.113.8", USER)).toBe(true);
     }
     const response = await postPages();
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: "rate_limited" });
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
     expect(state.uploads).toHaveLength(0);
+  });
+
+  it("still accepts a book page when the snap bucket is full", async () => {
+    for (let hit = 0; hit < SNAP_USER_LIMIT; hit += 1) {
+      expect(await allowSnap("203.0.113.8", USER)).toBe(true);
+    }
+    const response = await postPages();
+    expect(response.status).toBe(200);
+    expect(vi.mocked(fetch)).toHaveBeenCalled();
   });
 
   it("rejects a bad image, an oversized file, a second logo, and a 13th menu page", async () => {

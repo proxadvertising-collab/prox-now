@@ -257,6 +257,42 @@ describe("POST /api/posts", () => {
     expect(remove).toHaveBeenCalledTimes(1);
   });
 
+  it("maps shop_full to 409 and removes the upload", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([]))));
+    rpc.mockResolvedValue({ data: null, error: { message: "shop_full" } });
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "shop_full" });
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("still maps an old already_live error to 409", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([]))));
+    rpc.mockResolvedValue({ data: null, error: { message: "already_live" } });
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "already_live" });
+  });
+
+  it("posts a second photo when create_post accepts it", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sparkResponse(modelText([]))));
+    const first = await postImage(await checkerJpeg());
+    expect(first.status).toBe(200);
+    rpc.mockResolvedValue({
+      data: {
+        id: "44444444-4444-4444-8444-444444444444",
+        shop_id: SHOP,
+        created_at: "2026-10-26T02:05:00.000Z",
+        expires_at: "2026-10-26T04:05:00.000Z",
+      },
+      error: null,
+    });
+    const second = await postImage(await checkerJpeg());
+    expect(second.status).toBe(200);
+    expect((await second.json()).post.id).toBe("44444444-4444-4444-8444-444444444444");
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
   it("saves validated facts from the same Spark call", async () => {
     vi.stubGlobal(
       "fetch",

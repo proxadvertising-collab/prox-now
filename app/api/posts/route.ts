@@ -195,6 +195,9 @@ export async function POST(request: Request) {
     if (message.includes("rate_limited")) {
       return NextResponse.json({ error: "rate_limited" }, { status: 429 });
     }
+    if (message.includes("shop_full")) {
+      return NextResponse.json({ error: "shop_full" }, { status: 409 });
+    }
     if (message.includes("already_live")) {
       return NextResponse.json({ error: "already_live" }, { status: 409 });
     }

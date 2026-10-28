@@ -3,6 +3,8 @@ type Hit = { start: number; count: number };
 export const HOUR_MS = 3_600_000;
 export const SNAP_USER_LIMIT = 20;
 export const SNAP_IP_LIMIT = 60;
+export const BOOK_USER_LIMIT = 60;
+export const BOOK_IP_LIMIT = 120;
 
 export function take(
   store: Map<string, Hit>,
@@ -27,8 +29,9 @@ export function take(
 
 export const snapHits = new Map<string, Hit>();
 export const judgeHits = new Map<string, Hit>();
+export const bookHits = new Map<string, Hit>();
 
-export type RateBucket = "snap" | "judge";
+export type RateBucket = "snap" | "judge" | "book";
 
 export type RateRead = (
   bucket: RateBucket,
@@ -38,6 +41,7 @@ export type RateRead = (
 export function resetRateWindows(): void {
   snapHits.clear();
   judgeHits.clear();
+  bookHits.clear();
 }
 
 export function clientIp(request: Request): string {
@@ -49,16 +53,34 @@ export function clientIp(request: Request): string {
   return "unknown";
 }
 
-function limitsFor(subjects: readonly string[]): { key: string; limit: number }[] {
-  return subjects.map((key) => ({
-    key,
-    limit: key.startsWith("user:") ? SNAP_USER_LIMIT : SNAP_IP_LIMIT,
-  }));
+function storeFor(bucket: RateBucket): Map<string, Hit> {
+  if (bucket === "book") return bookHits;
+  if (bucket === "judge") return judgeHits;
+  return snapHits;
+}
+
+function limitsFor(bucket: RateBucket, subjects: readonly string[]): { key: string; limit: number }[] {
+  return subjects.map((key) => {
+    const user = key.startsWith("user:");
+    if (bucket === "book") return { key, limit: user ? BOOK_USER_LIMIT : BOOK_IP_LIMIT };
+    return { key, limit: user ? SNAP_USER_LIMIT : SNAP_IP_LIMIT };
+  });
 }
 
 function missingRateFunction(message: string): boolean {
   const text = message.toLowerCase();
   return text.includes("take_rate_limit") || text.includes("schema cache") || text.includes("42883");
+}
+
+// A database that has not applied 0012 rejects the book bucket. null means
+// "count this hour in this process" so uploads keep working until apply.
+export function databaseRateAnswer(errorMessage: string | null, data: unknown): boolean | null {
+  if (errorMessage) {
+    const text = errorMessage.toLowerCase();
+    if (missingRateFunction(text) || text.includes("bad_bucket")) return null;
+    return false;
+  }
+  return data === true;
 }
 
 export async function takeFromDatabase(
@@ -73,11 +95,8 @@ export async function takeFromDatabase(
       p_bucket: bucket,
       p_subjects: [...subjects],
     });
-    if (error) {
-      if (missingRateFunction(String(error.message ?? ""))) return null;
-      return false;
-    }
-    return data === true;
+    if (error) return databaseRateAnswer(String(error.message ?? ""), null);
+    return databaseRateAnswer(null, data);
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     return null;
@@ -92,8 +111,7 @@ export async function consumeRate(
 ): Promise<boolean> {
   const stored = await read(bucket, subjects);
   if (stored !== null) return stored;
-  const store = bucket === "snap" ? snapHits : judgeHits;
-  return take(store, limitsFor(subjects), now);
+  return take(storeFor(bucket), limitsFor(bucket, subjects), now);
 }
 
 export async function allowSnap(
@@ -106,6 +124,18 @@ export async function allowSnap(
   if (userId) subjects.push("user:" + userId);
   subjects.push("ip:" + ip);
   return consumeRate("snap", subjects, now, read);
+}
+
+export async function allowBook(
+  ip: string,
+  userId: string | null,
+  now = Date.now(),
+  read: RateRead = takeFromDatabase,
+): Promise<boolean> {
+  const subjects: string[] = [];
+  if (userId) subjects.push("user:" + userId);
+  subjects.push("ip:" + ip);
+  return consumeRate("book", subjects, now, read);
 }
 
 export async function allowJudge(

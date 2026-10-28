@@ -8,7 +8,7 @@ import { bookMissing } from "../../../../lib/book/missing";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, FaceCheckFailed, readBook, type BookPass } from "../../../../lib/book/read";
 import { extractedOf, type PageRead } from "../../../../lib/book/schema";
-import { allowSnap, clientIp } from "../../../../lib/rate/window";
+import { allowBook, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
 import { createClient } from "../../../../lib/supabase/server";
 import { NextResponse } from "next/server";
@@ -205,7 +205,7 @@ export async function POST(request: Request) {
     return json({ error: "bad_image" }, 400);
   }
 
-  if (!(await allowSnap(clientIp(request), userId))) {
+  if (!(await allowBook(clientIp(request), userId))) {
     return json({ error: "rate_limited" }, 429);
   }
 

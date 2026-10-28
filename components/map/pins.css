@@ -84,6 +84,22 @@
   outline-offset: 2px;
 }
 
+.prox-pin__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
 .prox-pin__pill {
   position: absolute;
   top: -12px;
@@ -196,6 +212,14 @@
   opacity: 0;
 }
 
+.prox-stack__track {
+  transition: transform 240ms var(--ease-standard);
+}
+
+.prox-stack__track--still {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .prox-pin__body {
     animation: prox-pin-fade 120ms var(--ease-standard) both;
@@ -204,5 +228,9 @@
   .prox-pin__dot,
   .prox-pin__dot::after {
     animation: none;
+  }
+
+  .prox-stack__track {
+    transition: none;
   }
 }
