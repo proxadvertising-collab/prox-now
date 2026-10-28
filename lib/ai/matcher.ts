@@ -34,6 +34,8 @@ export type PlaceFacts = {
   captions: { en: string | null; th: string | null };
 };
 
+export type PlaceKind = "business" | "public" | "none";
+
 export type MatcherResult = {
   shopId: string | null;
   confidence: number;
@@ -45,6 +47,10 @@ export type MatcherResult = {
   safeToPost: boolean;
   safeReason: string;
   facts: PlaceFacts | null;
+  placeName: string | null;
+  placeNameLocal: string | null;
+  placeKind: PlaceKind | null;
+  placeConfidence: number;
 };
 
 export type Decision = "confirm" | "pick" | "pick-all";
@@ -66,10 +72,11 @@ Method (do it silently): 1) Read all visible text (Thai, English, Chinese, phone
 Confidence guide: 0.9+ name text clearly matches; 0.6-0.89 type/visual match without readable name; <0.5 guess.
 
 Output ONLY this JSON (no markdown fences, no prose):
-{"shop_id":"sNN or null","confidence":0.0,"sign_text":[{"thai":"original text","english":"translation"}],"quality_score":0,"quality_reason":"one line","faces":[[x1,y1,x2,y2]],"category":"","safe_to_post":true,"safe_reason":"","facts":{"caption":null,"items":[{"name":"","price":null,"currency":null}],"crowd":null,"open_status":"unknown","signals":[],"sign_language":null,"captions":{"en":null,"th":null}}}
+{"shop_id":"sNN or null","confidence":0.0,"sign_text":[{"thai":"original text","english":"translation"}],"quality_score":0,"quality_reason":"one line","faces":[[x1,y1,x2,y2]],"category":"","safe_to_post":true,"safe_reason":"","facts":{"caption":null,"items":[{"name":"","price":null,"currency":null}],"crowd":null,"open_status":"unknown","signals":[],"sign_language":null,"captions":{"en":null,"th":null}},"place_name":null,"place_name_local":null,"place_kind":"none","place_confidence":0}
 Rules: sign_text lists the 1-6 most important text items (shop name, menu items, prices) with Thai-to-English translation (english may equal the text if already English). quality_score is 0-10 for how useful the photo is as a public map photo (sharp, well-framed, readable, well lit). faces = normalized [x1,y1,x2,y2] boxes (0-1, origin top-left) for every human face visible including partial/small/stylized-photo faces, else []. safe_to_post=false if clear identifiable faces of real people, minors, license plates, nudity, ID/cards, or private info are visible; illustrated cartoon faces on a sign are fine.
 Facts are about the PLACE and the MOMENT only. Never identify anyone and never describe a person's appearance beyond crowd level. Leave a facts field null when unsure. Keep a price only when it is clearly readable on a sign or board. caption is at most 140 characters of what is shown or sold, with no people. items has at most 8 names. crowd is empty, few, busy, queue, or null. open_status is open, closed, or unknown. signals has at most 5 of fresh_batch, promo, sold_out, event, music, new_item. sign_language is a BCP-47 tag or null. captions.en and captions.th are the caption in those languages, or null.
-Extra rules: (a) If the sign's name text is clearly readable but equals no candidate, shop_id=null and put the name you read in sign_text. (b) If the image is a screenshot, photo of a screen, or not a shop/stall/menu, shop_id=null, quality_score<=2. (c) If the image is too blurry/dark to read, shop_id=null and say why in quality_reason. (d) "confidence" is your confidence in shop_id; when shop_id is null set confidence to 0. (e) Real photographs of people's faces count in faces; printed drawings, mascots or cartoons on signs do not (mention in safe_reason). Keep sign_text to at most 6 short items.`;
+Extra rules: (a) If the sign's name text is clearly readable but equals no candidate, shop_id=null and put the name you read in sign_text. (b) If the image is a screenshot, photo of a screen, or not a shop/stall/menu, shop_id=null, quality_score<=2. (c) If the image is too blurry/dark to read, shop_id=null and say why in quality_reason. (d) "confidence" is your confidence in shop_id; when shop_id is null set confidence to 0. (e) Real photographs of people's faces count in faces; printed drawings, mascots or cartoons on signs do not (mention in safe_reason). Keep sign_text to at most 6 short items.
+Also set place_name to the business name on the sign or storefront, or null. place_name_local is that name in the sign's script, or null. place_kind is business, public, or none. place_confidence is 0 to 1 for how clearly place_name was read. public means a park, beach, landmark, or other public place with no business. none means there is no shop, stall, storefront, or public place, such as a desk, an animal, or a sunset. A shop that is not in the candidate list is still business: shop_id stays null, and the name goes in place_name, place_confidence, and sign_text.`;
 
 export function emptyMatcherResult(): MatcherResult {
   return {
@@ -83,6 +90,10 @@ export function emptyMatcherResult(): MatcherResult {
     safeToPost: false,
     safeReason: "",
     facts: null,
+    placeName: null,
+    placeNameLocal: null,
+    placeKind: null,
+    placeConfidence: 0,
   };
 }
 
@@ -190,6 +201,7 @@ export function parseMatcherResult(
         : "";
   const rawSafe = record.safe_to_post ?? record.safeToPost;
   const safeToPost = rawSafe === true;
+  const place = readPlaceFields(record);
 
   return {
     shopId,
@@ -202,7 +214,30 @@ export function parseMatcherResult(
     safeToPost,
     safeReason,
     facts: parseFacts(record.facts),
+    placeName: place.name,
+    placeNameLocal: place.local,
+    placeKind: place.kind,
+    placeConfidence: place.confidence,
   };
+}
+
+const PLACE_KINDS = new Set<PlaceKind>(["business", "public", "none"]);
+
+function readPlaceFields(record: Record<string, unknown>): {
+  name: string | null;
+  local: string | null;
+  kind: PlaceKind | null;
+  confidence: number;
+} {
+  const name = clip(record.place_name ?? record.placeName, 80);
+  const local = clip(record.place_name_local ?? record.placeNameLocal, 80);
+  const kindRaw = record.place_kind ?? record.placeKind;
+  const kind = typeof kindRaw === "string" && PLACE_KINDS.has(kindRaw as PlaceKind) ? (kindRaw as PlaceKind) : null;
+  let confidence = 0;
+  const raw = record.place_confidence ?? record.placeConfidence;
+  if (typeof raw === "number" && Number.isFinite(raw)) confidence = clamp(raw, 0, 1);
+  if (!name) confidence = kind === "public" ? confidence : 0;
+  return { name, local, kind, confidence };
 }
 
 const CROWD = new Set<CrowdLevel>(["empty", "few", "busy", "queue"]);

@@ -61,6 +61,9 @@ describe("POST /api/analyze", () => {
 
     expect(response.status).toBe(200);
     expect(body.decision).toBe("confirm");
+    expect(body.noMatch).toBeNull();
+    expect(body.picker.length).toBeLessThanOrEqual(5);
+    expect(body.picker.every((shop: { distanceM: number }) => shop.distanceM <= 300)).toBe(true);
     expect(body.result.shopId).toBe("mala-mafia");
     expect(body.result.confidence).toBe(0.92);
     expect(JSON.stringify(body).includes(SECRET)).toBe(false);
@@ -102,6 +105,9 @@ describe("POST /api/analyze", () => {
 
     expect(response.status).toBe(200);
     expect(body.decision).toBe("pick-all");
+    expect(body.noMatch).toBe("which_shop");
+    expect(body.picker.length).toBeGreaterThan(0);
+    expect(body.picker.length).toBeLessThanOrEqual(5);
     expect(body.result.shopId).toBeNull();
     expect(body.result.confidence).toBe(0);
   });
@@ -119,6 +125,7 @@ describe("POST /api/analyze", () => {
     const body = await response.json();
 
     expect(body.decision).toBe("pick-all");
+    expect(body.noMatch).toBe("which_shop");
     expect(body.result.shopId).toBeNull();
     expect(body.result.confidence).toBe(0);
   });
@@ -136,5 +143,119 @@ describe("POST /api/analyze", () => {
     expect(response.status).toBe(400);
     expect(body).toEqual({ error: "too_large" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still reads a new shop sign when no known shop is near", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        '{"shop_id":null,"confidence":0,"sign_text":[{"thai":"ดอน","english":"Dawn Cafe"}],"quality_score":8,"quality_reason":"sharp sign","faces":[],"category":"drinks","safe_to_post":true,"safe_reason":"","place_name":"Dawn Cafe","place_name_local":"ดอน","place_kind":"business","place_confidence":0.9}',
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(imageRequest(new Uint8Array([4, 5]), "image/jpeg", { lat: "0", lng: "0" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.decision).toBe("pick-all");
+    expect(body.noMatch).toBe("add_shop");
+    expect(body.picker).toEqual([]);
+    expect(body.candidates).toEqual([]);
+    expect(body.place).toEqual({
+      name: "Dawn Cafe",
+      nameLocal: "ดอน",
+      category: "drinks",
+      confidence: 0.9,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns away a photo that is not a shop or a public place", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":6,"quality_reason":"a bird on a desk","faces":[],"category":"","safe_to_post":true,"safe_reason":"","place_name":null,"place_kind":"none","place_confidence":0}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([4]), "image/jpeg", { lat: "0", lng: "0" }));
+    const body = await response.json();
+
+    expect(body.noMatch).toBe("not_a_place");
+    expect(body.place).toBeNull();
+    expect(body.picker).toEqual([]);
+  });
+
+  it("says a public place is not ready to add", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":7,"quality_reason":"beach","faces":[],"category":"","safe_to_post":true,"safe_reason":"","place_name":null,"place_kind":"public","place_confidence":0.8}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([3]), "image/jpeg", { lat: "0", lng: "0" }));
+    const body = await response.json();
+
+    expect(body.noMatch).toBe("public_place");
+    expect(body.place).toBeNull();
+  });
+
+  it("offers the nearest shops when the photo does not match one of them", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":6,"quality_reason":"a plate of food, no shop name","faces":[],"category":"food","safe_to_post":true,"safe_reason":""}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([6])));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.decision).toBe("pick-all");
+    expect(body.noMatch).toBe("which_shop");
+    expect(body.picker).toHaveLength(5);
+    expect(body.picker.every((shop: { distanceM: number }) => shop.distanceM <= 300)).toBe(true);
+    for (let index = 1; index < body.picker.length; index += 1) {
+      const previous = body.picker[index - 1] as { id: string; distanceM: number };
+      const current = body.picker[index] as { id: string; distanceM: number };
+      const ordered =
+        previous.distanceM < current.distanceM ||
+        (previous.distanceM === current.distanceM && previous.id <= current.id);
+      expect(ordered).toBe(true);
+    }
+    expect(body.picker[0]).toEqual(
+      expect.objectContaining({ id: expect.any(String), name: expect.any(String), distanceM: expect.any(Number) }),
+    );
+  });
+
+  it("asks for a retake only when the photo itself is unreadable", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":1,"quality_reason":"too blurry and dark","faces":[],"category":"","safe_to_post":true,"safe_reason":""}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([6, 6])));
+    const body = await response.json();
+
+    expect(body.noMatch).toBe("retake");
+    expect(body.picker).toEqual([]);
+    expect(body.decision).toBe("pick-all");
   });
 });

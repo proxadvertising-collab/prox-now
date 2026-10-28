@@ -11,7 +11,8 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
-import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
+import { SAME_PLACE_M } from "@/lib/snap/place";
+import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
 import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
@@ -26,8 +27,20 @@ type ShopCard = {
 
 type SignLine = { original: string; translated: string };
 
+type NoMatch = "which_shop" | "add_shop" | "not_a_place" | "public_place" | "retake";
+
+type ProposedPlace = {
+  name: string;
+  nameLocal: string | null;
+  category: ShopCategory;
+  confidence: number;
+};
+
 type AnalyzeBody = {
   decision?: "confirm" | "pick" | "pick-all";
+  noMatch?: NoMatch | null;
+  picker?: ShopCard[];
+  place?: ProposedPlace | null;
   result?: {
     shopId: string | null;
     confidence: number;
@@ -41,7 +54,7 @@ type AnalyzeBody = {
   scene?: SceneReport;
 };
 
-type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "error";
+type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "away" | "retake" | "error";
 
 type Point = { lat: number; lng: number };
 
@@ -136,8 +149,6 @@ export function SnapFlow() {
   const blobsRef = useRef<string[]>([]);
   const startedRef = useRef(0);
   const pointRef = useRef<Point | null>(null);
-  const signRef = useRef<SignLine[]>([]);
-  const categoryRef = useRef("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -146,6 +157,11 @@ export function SnapFlow() {
   const [demoShopName, setDemoShopName] = useState("");
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
+  const [picker, setPicker] = useState<ShopCard[]>([]);
+  const [askWhich, setAskWhich] = useState(false);
+  const [proposed, setProposed] = useState<ProposedPlace | null>(null);
+  const [awayKind, setAwayKind] = useState<"not" | "public">("not");
+  const [alreadyHere, setAlreadyHere] = useState(false);
   const [guessId, setGuessId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ShopCard | null>(null);
   const [added, setAdded] = useState(false);
@@ -335,25 +351,51 @@ export function SnapFlow() {
     clearDraft();
   }
 
-  function openAdd(signText: SignLine[], matcherCategory: string) {
+  function showAway(kind: "not" | "public" = "not") {
+    fileRef.current = null;
+    forgetOriginal();
+    clearDraft();
     clearPostDraft();
-    const filled = prefillShop({ signText, category: matcherCategory });
-    const here = pointRef.current;
-    setName(filled.name);
-    setNameLocal(filled.nameLocal ?? "");
-    setCategory(filled.category);
+    setChosen(null);
+    setCandidates([]);
+    setPicker([]);
+    setAskWhich(false);
+    setProposed(null);
+    setAwayKind(kind);
+    setAlreadyHere(false);
+    setGuessId(null);
+    setPreview(null);
+    setPhase("away");
+  }
+
+  function openProposed(place: ProposedPlace) {
+    const local = place.nameLocal ?? "";
+    const nextCategory = SHOP_CATEGORIES.includes(place.category) ? place.category : "other";
+    setName(place.name);
+    setNameLocal(local);
+    setCategory(nextCategory);
+    setProposed(place);
     setAddError("");
     setShowLogin(false);
-    setAdded(false);
+    setAlreadyHere(false);
     setPhase("add");
     writeDraft({
-      name: filled.name,
-      nameLocal: filled.nameLocal ?? "",
-      category: filled.category,
-      lat: here?.lat ?? null,
-      lng: here?.lng ?? null,
-      demo: !here,
+      name: place.name,
+      nameLocal: local,
+      category: nextCategory,
+      lat: pointRef.current?.lat ?? null,
+      lng: pointRef.current?.lng ?? null,
+      demo: false,
     });
+  }
+
+  function showRetake() {
+    fileRef.current = null;
+    forgetOriginal();
+    clearPostDraft();
+    setChosen(null);
+    setAskWhich(false);
+    setPhase("retake");
   }
 
   function reset() {
@@ -368,6 +410,11 @@ export function SnapFlow() {
     setDemo(false);
     setError("");
     setCandidates([]);
+    setPicker([]);
+    setAskWhich(false);
+    setProposed(null);
+    setAwayKind("not");
+    setAlreadyHere(false);
     setGuessId(null);
     setChosen(null);
     setAdded(false);
@@ -501,27 +548,65 @@ export function SnapFlow() {
             ])
           : null,
       );
-      signRef.current = body.result.signText ?? [];
-      categoryRef.current = body.result.category ?? "";
       setFaceBoxes(cleanFaceBoxes(body.result.faces));
       setShown([]);
       setFriendAgrees(false);
       setCandidates(shops);
+      const choices = body.picker ?? [];
+      setPicker(choices);
+      const place = body.place && body.place.name ? body.place : null;
+      setProposed(place);
+      setAlreadyHere(false);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
       const guess = shops.find((shop) => shop.id === body.result?.shopId) ?? null;
-      if (body.decision === "pick-all") {
-        openAdd(signRef.current, categoryRef.current);
+      if (body.noMatch === "retake") {
+        showRetake();
+        return;
+      }
+      if (body.noMatch === "public_place") {
+        showAway("public");
+        return;
+      }
+      if (body.noMatch === "not_a_place") {
+        showAway("not");
+        return;
+      }
+      if (body.noMatch === "add_shop" && place) {
+        openProposed(place);
+        return;
+      }
+      if (body.noMatch === "which_shop") {
+        if (choices.length === 0) {
+          if (place) openProposed(place);
+          else showAway("not");
+          return;
+        }
+        setAskWhich(true);
+        setGuessId(null);
+        setChosen(null);
+        setPhase("pick");
         return;
       }
       if (body.decision === "confirm" && guess) {
+        setAskWhich(false);
         setGuessId(guess.id);
         setChosen(guess);
         setPhase("confirm");
         return;
       }
-      setGuessId(body.decision === "pick" ? guess?.id ?? null : null);
+      if (place && choices.length === 0) {
+        openProposed(place);
+        return;
+      }
+      if (choices.length === 0 && shops.length === 0) {
+        showAway("not");
+        return;
+      }
+      setAskWhich(true);
+      setGuessId(null);
       setChosen(null);
+      if (choices.length === 0) setPicker(shops.slice(0, 5));
       setPhase("pick");
     } catch {
       if (run !== runRef.current) return;
@@ -569,22 +654,68 @@ export function SnapFlow() {
     setShowLogin(false);
     writeDraft(draftFrom({ name: trimmed, nameLocal: nameLocal.trim(), category, demo: false }));
     try {
-      const response = await fetch("/api/shops", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          nameLocal: nameLocal.trim() || null,
-          category,
-          lat: here.lat,
-          lng: here.lng,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      });
+      const photo = fileRef.current;
+      const response = photo
+        ? await fetch("/api/shops", {
+            method: "POST",
+            body: await (async () => {
+              const jpeg = await resizeToJpeg(photo);
+              const form = new FormData();
+              form.set("name", trimmed);
+              form.set("nameLocal", nameLocal.trim());
+              form.set("category", category);
+              form.set("lat", String(here.lat));
+              form.set("lng", String(here.lng));
+              form.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+              form.set("image", jpeg, "snap.jpg");
+              return form;
+            })(),
+          })
+        : await fetch("/api/shops", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: trimmed,
+              nameLocal: nameLocal.trim() || null,
+              category,
+              lat: here.lat,
+              lng: here.lng,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }),
+          });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        shops?: ShopCard[];
         shop?: { id?: string; name?: string; nameLocal?: string | null };
       } | null;
+      if (body?.error === "shop_exists" && body.shops && body.shops.length > 0) {
+        setPicker(body.shops);
+        setAskWhich(true);
+        setAlreadyHere(true);
+        setChosen(null);
+        setPhase("pick");
+        return;
+      }
+      if (body?.error === "not_a_place") {
+        showAway("not");
+        return;
+      }
+      if (body?.error === "public_place") {
+        showAway("public");
+        return;
+      }
+      if (body?.error === "photo_unusable") {
+        showRetake();
+        return;
+      }
+      if (body?.error === "ai_not_configured") {
+        setAddError(t("en", "err.ai"));
+        return;
+      }
+      if (body?.error === "ai_resting") {
+        setAddError(t("en", "err.resting"));
+        return;
+      }
       if (response.status === 401) {
         setAddError(t("en", "add.signin"));
         setShowLogin(true);
@@ -777,7 +908,9 @@ export function SnapFlow() {
           {demo && demoShopName ? (
             <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
           ) : null}
-          {behindOn && scene && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
+          {behindOn && scene && phase !== "reading" && phase !== "error" && phase !== "away" && phase !== "retake" ? (
+            <ScenePanel scene={scene} />
+          ) : null}
         </>
       )}
 
@@ -812,7 +945,19 @@ export function SnapFlow() {
           <button type="button" className={primary} onClick={() => choose(guess)}>
             {t("en", "confirm.yes")}
           </button>
-          <button type="button" className={secondary} onClick={() => setPhase("pick")}>
+          <button
+            type="button"
+            className={secondary}
+            onClick={() => {
+              if (picker.length === 0) {
+                showAway();
+                return;
+              }
+              setAskWhich(false);
+              setGuessId(null);
+              setPhase("pick");
+            }}
+          >
             {t("en", "confirm.no")}
           </button>
         </div>
@@ -820,16 +965,16 @@ export function SnapFlow() {
 
       {phase === "pick" ? (
         <div className="flex flex-col gap-3">
-          <p className="text-heading font-bold text-fg">{t("en", "confirm.q")}</p>
+          <p className="text-heading font-bold text-fg">{t("en", askWhich ? "snap.which" : "confirm.q")}</p>
+          {alreadyHere ? <p className="text-body text-fg">{t("en", "snap.already")}</p> : null}
+          {askWhich ? <p className="text-body text-fg">{t("en", "snap.unsure")}</p> : null}
           <ul className="flex flex-col gap-2">
-            {candidates.map((shop) => (
+            {picker.map((shop) => (
               <li key={shop.id}>
                 <button type="button" className={secondary + " items-start text-left"} onClick={() => choose(shop)}>
                   <span className="flex w-full flex-col">
-                    {shop.id === guessId ? (
-                      <span className="text-caption font-semibold text-accent">{t("en", "pick.best")}</span>
-                    ) : null}
                     <span>{shop.name}</span>
+                    {shop.nameLocal ? <span className="text-caption text-fg-muted">{shop.nameLocal}</span> : null}
                     <span className="text-caption text-fg-muted">
                       {t("en", "snap.meters", { n: String(shop.distanceM) })}
                     </span>
@@ -838,8 +983,35 @@ export function SnapFlow() {
               </li>
             ))}
           </ul>
-          <button type="button" className={secondary} onClick={() => openAdd(signRef.current, categoryRef.current)}>
-            {t("en", "pick.none")}
+          {picker.every((shop) => shop.distanceM > SAME_PLACE_M) ? (
+            <button type="button" className={secondary} onClick={() => (proposed ? openProposed(proposed) : showAway("not"))}>
+              {t("en", "snap.addDifferent")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {phase === "away" ? (
+        <div className="flex flex-col gap-3">
+          <p role="status" className="text-heading font-bold text-fg">
+            {t("en", awayKind === "public" ? "snap.publicSoon" : "snap.noneNear")}
+          </p>
+          <p className="text-body text-fg">
+            {t("en", awayKind === "public" ? "snap.noneNear" : "snap.placesOnly")}
+          </p>
+          <button type="button" className={secondary} onClick={reset}>
+            {t("en", "success.again")}
+          </button>
+        </div>
+      ) : null}
+
+      {phase === "retake" ? (
+        <div className="flex flex-col gap-3">
+          <p role="status" className="text-body text-fg">
+            {t("en", "post.unusable")}
+          </p>
+          <button type="button" className={primary} onClick={() => inputRef.current?.click()}>
+            {t("en", "snap.take")}
           </button>
         </div>
       ) : null}
@@ -852,7 +1024,7 @@ export function SnapFlow() {
             void saveShop();
           }}
         >
-          <h2 className="text-heading font-bold text-fg">{t("en", "add.title")}</h2>
+          <h2 className="text-heading font-bold text-fg">{t("en", "snap.addNew", { name: name.trim() || "…" })}</h2>
           <label className="flex flex-col gap-1 text-label text-fg" htmlFor="shop-name">
             {t("en", "add.name")}
             <input
@@ -916,7 +1088,7 @@ export function SnapFlow() {
             </p>
           ) : null}
           <button type="submit" className={primary} disabled={!point || saving || name.trim().length < 2}>
-            {t("en", "add.save")}
+            {t("en", "snap.addHere")}
           </button>
           {showLogin ? (
             <a
