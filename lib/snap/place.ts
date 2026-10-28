@@ -15,8 +15,6 @@ export const POST_RADIUS_M = 300;
 export const SAME_PLACE_M = 25;
 export const PICKER_CAP = 5;
 export const PLACE_NAME_CONFIDENCE = 0.6;
-export const NEW_SHOP_LIMIT = 3;
-export const NEW_SHOP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type SnapNext = "which_shop" | "add_shop" | "not_a_place" | "public_place" | "retake";
 
@@ -189,19 +187,4 @@ export function blockingShops<T extends GateShop>(shops: readonly T[], name: str
     .slice()
     .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id));
   return named.slice(0, PICKER_CAP);
-}
-
-export function underShopCreateLimit(
-  createdAt: readonly string[],
-  now: number,
-  limit = NEW_SHOP_LIMIT,
-  windowMs = NEW_SHOP_WINDOW_MS,
-): boolean {
-  const cutoff = now - windowMs;
-  let count = 0;
-  for (const iso of createdAt) {
-    const time = Date.parse(iso);
-    if (Number.isFinite(time) && time > cutoff) count += 1;
-  }
-  return count < limit;
 }

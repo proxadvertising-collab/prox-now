@@ -1,23 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-const { getUser, rpc, shopTimes } = vi.hoisted(() => ({
+const { getUser, rpc } = vi.hoisted(() => ({
   getUser: vi.fn(),
   rpc: vi.fn(),
-  shopTimes: vi.fn(),
 }));
 
 vi.mock("../../../lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser },
     rpc,
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          gte: () => shopTimes(),
-        }),
-      }),
-    }),
   }),
 }));
 
@@ -50,8 +42,6 @@ describe("POST /api/shops", () => {
   beforeEach(() => {
     getUser.mockReset();
     rpc.mockReset();
-    shopTimes.mockReset();
-    shopTimes.mockResolvedValue({ data: [], error: null });
     mockCreate({ data: null, error: null });
   });
 
@@ -170,19 +160,6 @@ describe("POST /api/shops", () => {
     const response = await post({ ...good, name: "A" });
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "bad_input" });
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("stops a fourth new shop inside 24 hours", async () => {
-    getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
-    const now = Date.now();
-    shopTimes.mockResolvedValue({
-      data: [1, 2, 3].map((hours) => ({ created_at: new Date(now - hours * 3_600_000).toISOString() })),
-      error: null,
-    });
-    const response = await post(good);
-    expect(response.status).toBe(429);
-    expect(await response.json()).toEqual({ error: "rate_limited" });
     expect(rpc).not.toHaveBeenCalled();
   });
 
