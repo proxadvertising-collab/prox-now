@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { t, type CopyKey } from "@/lib/copy";
+import { snapRoute, stageSnapFile } from "@/lib/snap/handoff";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
 
@@ -71,6 +72,48 @@ function Glyph({ name }: { name: SlotIcon }) {
   );
 }
 
+function SnapCapture({
+  pathname,
+  className,
+  current,
+  raised,
+  style,
+}: {
+  pathname: string;
+  className: string;
+  current: boolean;
+  raised?: boolean;
+  style?: { bottom: string };
+}) {
+  const router = useRouter();
+  return (
+    <label className={className} aria-current={current ? "page" : undefined} style={style}>
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const file = input.files?.[0];
+          input.value = "";
+          if (!file) return;
+          stageSnapFile(file);
+          const next = snapRoute(pathname);
+          if (next) router.push(next);
+        }}
+      />
+      <Glyph name="snap" />
+      <span className="text-caption font-semibold leading-none">{t("en", "nav.snap")}</span>
+      {raised ? (
+        current ? <span className="absolute bottom-2 h-[3px] w-[3px] rounded-full bg-accent-ink" /> : null
+      ) : (
+        <span className={"h-[3px] w-[3px] rounded-full " + (current ? "bg-accent" : "bg-transparent")} />
+      )}
+    </label>
+  );
+}
+
 function ItemLink({
   href,
   label,
@@ -111,6 +154,16 @@ export function BottomNav() {
       <nav className="hidden min-h-11 items-center gap-2 border-b border-surface-2 bg-transparent px-4 md:flex" aria-label="Primary">
         {SLOTS.map((slot) => {
           const current = isCurrent(pathname, slot.href);
+          if (slot.icon === "snap") {
+            return (
+              <SnapCapture
+                key={slot.href}
+                pathname={pathname}
+                current={current}
+                className={rowLink + " cursor-pointer " + (current ? "text-accent" : "text-fg-muted")}
+              />
+            );
+          }
           return (
             <ItemLink
               key={slot.href}
@@ -144,18 +197,13 @@ export function BottomNav() {
               />
             );
           })}
-          <Link
-            href="/snap"
+          <SnapCapture
+            pathname={pathname}
+            raised
+            current={isCurrent(pathname, "/snap")}
             style={{ bottom: "calc(100% - 16px)" }}
-            aria-current={isCurrent(pathname, "/snap") ? "page" : undefined}
-            className="absolute left-1/2 z-10 flex h-[72px] w-[72px] -translate-x-1/2 flex-col items-center justify-center gap-0.5 rounded-full bg-accent text-accent-ink shadow-glow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
-          >
-            <Glyph name="snap" />
-            <span className="text-caption font-semibold leading-none">{t("en", "nav.snap")}</span>
-            {isCurrent(pathname, "/snap") ? (
-              <span className="absolute bottom-2 h-[3px] w-[3px] rounded-full bg-accent-ink" />
-            ) : null}
-          </Link>
+            className="absolute left-1/2 z-10 flex h-[72px] w-[72px] -translate-x-1/2 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-full bg-accent text-accent-ink shadow-glow focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent-ink"
+          />
         </div>
       </nav>
     </>

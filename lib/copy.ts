@@ -199,6 +199,11 @@ const en = {
   "map.walk": "{n} min walk",
   "map.webgl": "This browser can't draw the map. Use the list below.",
   "map.you": "You are here",
+  "sheet.close": "Close",
+  "sheet.prev": "Previous photo",
+  "sheet.next": "Next photo",
+  "snap.take": "Take photo",
+  "you.behind": "Show how the AI works",
 } as const;
 
 const th: { [K in keyof typeof en]: string } = {
@@ -402,6 +407,11 @@ const th: { [K in keyof typeof en]: string } = {
   "map.walk": "เดิน {n} นาที",
   "map.webgl": "เบราว์เซอร์นี้วาดแผนที่ไม่ได้ ใช้รายการด้านล่าง",
   "map.you": "คุณอยู่ที่นี่",
+  "sheet.close": "ปิด",
+  "sheet.prev": "รูปก่อนหน้า",
+  "sheet.next": "รูปถัดไป",
+  "snap.take": "ถ่ายรูป",
+  "you.behind": "แสดงว่าเอไอทำงานอย่างไร",
 };
 
 export const copy = { en, th };
