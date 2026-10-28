@@ -1,6 +1,7 @@
 import { selectCandidates, type MatchShop } from "../ai/matcher";
 import { DEMO_CENTER, FIXTURE_SHOPS, type FixtureShop } from "../fixtures/shops";
 import { haversineMeters, type LatLng } from "../geo";
+import { MATCH_RADIUS_M } from "../snap/place";
 
 export type ShopNear = {
   id: string;
@@ -49,7 +50,7 @@ function fixtureNear(point: LatLng | null): { candidates: ShopNear[]; demo: bool
     lat: shop.lat,
     lng: shop.lng,
   }));
-  const selected = selectCandidates(point, shops, { radiusM: 600, max: 10 });
+  const selected = selectCandidates(point, shops, { radiusM: MATCH_RADIUS_M, max: 10 });
   const byId = new Map(FIXTURE_SHOPS.map((shop) => [shop.id, shop]));
   return {
     demo: selected.demo,

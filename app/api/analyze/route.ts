@@ -3,13 +3,21 @@ import {
   decide,
   emptyMatcherResult,
   parseMatcherResult,
+  type Decision,
   type MatcherCandidate,
+  type MatcherResult,
 } from "../../../lib/ai/matcher";
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
 import type { LatLng } from "../../../lib/geo";
 import { allowSnap, clientIp } from "../../../lib/rate/window";
 import { getShopsNear, hasShopEnv, type NearbyShopRow } from "../../../lib/shops/source";
-import { buildScene } from "../../../lib/snap/scene";
+import {
+  MATCH_RADIUS_M,
+  classifyNoMatch,
+  nearbyCandidates,
+  pickerCandidates,
+} from "../../../lib/snap/place";
+import { buildScene, type SceneReport } from "../../../lib/snap/scene";
 import { createClient } from "../../../lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -25,7 +33,7 @@ async function queryNearby(origin: LatLng): Promise<NearbyShopRow[]> {
   const { data, error } = await supabase.rpc("nearby_shops", {
     p_lat: origin.lat,
     p_lng: origin.lng,
-    p_radius_m: 600,
+    p_radius_m: MATCH_RADIUS_M,
   });
   if (error) throw new Error("nearby");
   return (data ?? []) as NearbyShopRow[];
@@ -55,15 +63,51 @@ function readCoord(value: FormDataEntryValue | null): number | null | "bad" {
 }
 
 function orderCandidates(
-  candidates: MatcherCandidate[],
+  candidates: readonly MatcherCandidate[],
   shopId: string | null,
 ): MatcherCandidate[] {
-  if (!shopId) return candidates;
+  if (!shopId) return candidates.slice();
   const index = candidates.findIndex((shop) => shop.id === shopId);
-  if (index <= 0) return candidates;
+  if (index <= 0) return candidates.slice();
   const next = candidates.slice();
   const [guess] = next.splice(index, 1);
   return [guess, ...next];
+}
+
+function toCard(shop: MatcherCandidate) {
+  return {
+    id: shop.id,
+    name: shop.name,
+    nameLocal: shop.nameLocal ?? null,
+    distanceM: shop.distanceM,
+  };
+}
+
+function pack(input: {
+  decision: Decision;
+  result: MatcherResult;
+  shops: readonly MatcherCandidate[];
+  demo: boolean;
+  ms: number;
+  scene: SceneReport;
+}) {
+  const offered = pickerCandidates(input.shops).map(toCard);
+  const noMatch = classifyNoMatch({
+    nearbyCount: offered.length,
+    confident: input.decision === "confirm",
+    qualityScore: input.result.qualityScore,
+    qualityReason: input.result.qualityReason,
+  });
+  return {
+    decision: input.decision,
+    noMatch,
+    result: input.result,
+    candidates: input.shops.map(toCard),
+    picker: noMatch === "which_shop" || noMatch === null ? offered : [],
+    demo: input.demo,
+    ms: input.ms,
+    scene: input.scene,
+  };
 }
 
 export async function POST(request: Request) {
@@ -91,10 +135,35 @@ export async function POST(request: Request) {
   const shopStarted = Date.now();
   const selected = await getShopsNear(point, hasShopEnv() ? queryNearby : undefined);
   const shopsMs = Date.now() - shopStarted;
-  const ids = selected.candidates.map((shop) => shop.id);
+  const forUser = nearbyCandidates({
+    candidates: selected.candidates,
+    demo: selected.demo,
+    hasFix: point !== null,
+  });
+  if (forUser.length === 0) {
+    const result = emptyMatcherResult();
+    return NextResponse.json(
+      pack({
+        decision: "pick-all",
+        result,
+        shops: [],
+        demo: false,
+        ms: 0,
+        scene: buildScene({
+          model: null,
+          result,
+          raw: null,
+          shopName: null,
+          steps: [{ step: "shops", ms: shopsMs }],
+        }),
+      }),
+    );
+  }
+
+  const ids = forUser.map((shop) => shop.id);
   const prompt = buildMatcherPrompt({
     areaLabel: AREA_LABEL,
-    candidates: selected.candidates,
+    candidates: forUser,
   });
 
   const mime = type === "image/jpg" ? "image/jpeg" : type;
@@ -108,57 +177,52 @@ export async function POST(request: Request) {
     const spark = await callSpark({ prompt, imageDataUrl });
     const result = parseMatcherResult(spark.raw, ids);
     const decision = decide(result);
-    const candidates = orderCandidates(selected.candidates, result.shopId).map((shop) => ({
-      id: shop.id,
-      name: shop.name,
-      nameLocal: shop.nameLocal,
-      distanceM: shop.distanceM,
-    }));
+    const ordered = orderCandidates(forUser, result.shopId);
     const scene = buildScene({
       model: spark.model,
       result,
       raw: spark.raw,
-      shopName: candidates.find((shop) => shop.id === result.shopId)?.name ?? null,
+      shopName: ordered.find((shop) => shop.id === result.shopId)?.name ?? null,
       steps: [
         { step: "shops", ms: shopsMs },
         { step: "match", ms: spark.ms },
       ],
     });
-    return NextResponse.json({
-      decision,
-      result,
-      candidates,
-      demo: selected.demo,
-      ms: spark.ms,
-      scene,
-    });
+    return NextResponse.json(
+      pack({
+        decision,
+        result,
+        shops: ordered,
+        demo: selected.demo,
+        ms: spark.ms,
+        scene,
+      }),
+    );
   } catch (error) {
     if (error instanceof MetaKeyMissing) {
       return NextResponse.json({ error: "ai_not_configured" }, { status: 503 });
     }
     if (error instanceof MetaParseError) {
-      return NextResponse.json({
-        decision: "pick-all",
-        result: emptyMatcherResult(),
-        candidates: selected.candidates.map((shop) => ({
-          id: shop.id,
-          name: shop.name,
-          nameLocal: shop.nameLocal,
-          distanceM: shop.distanceM,
-        })),
-        demo: selected.demo,
-        ms: error.ms,
-        scene: buildScene({
-          model: error.model,
-          result: emptyMatcherResult(),
-          raw: null,
-          shopName: null,
-          steps: [
-            { step: "shops", ms: shopsMs },
-            { step: "match", ms: error.ms },
-          ],
+      const result = emptyMatcherResult();
+      return NextResponse.json(
+        pack({
+          decision: "pick-all",
+          result,
+          shops: forUser,
+          demo: selected.demo,
+          ms: error.ms,
+          scene: buildScene({
+            model: error.model,
+            result,
+            raw: null,
+            shopName: null,
+            steps: [
+              { step: "shops", ms: shopsMs },
+              { step: "match", ms: error.ms },
+            ],
+          }),
         }),
-      });
+      );
     }
     const code = error instanceof MetaCallError ? error.code : "upstream";
     if (code === "busy") return NextResponse.json({ error: "ai_resting" }, { status: 503 });

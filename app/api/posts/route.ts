@@ -4,6 +4,7 @@ import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../
 import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
+import { isUnreadablePhoto, POST_RADIUS_M } from "../../../lib/snap/place";
 import { factsWithConsent } from "../../../lib/posts/consent";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
@@ -11,7 +12,6 @@ import { createClient } from "../../../lib/supabase/server";
 export const maxDuration = 60;
 
 const MAX_BYTES = 3 * 1024 * 1024;
-const MAX_DISTANCE_M = 300;
 const TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const AREA_LABEL = "Soi 102, Hua Hin, Thailand";
@@ -106,8 +106,9 @@ export async function POST(request: Request) {
   const shopLat = Number(shop.lat);
   const shopLng = Number(shop.lng);
   if (!Number.isFinite(shopLat) || !Number.isFinite(shopLng)) return bad("too_far");
+  // Measured from the stored shop, not the client's claimed shop. The picker cannot widen this.
   const distanceM = Math.round(haversineMeters({ lat, lng }, { lat: shopLat, lng: shopLng }));
-  if (distanceM > MAX_DISTANCE_M) return bad("too_far");
+  if (distanceM > POST_RADIUS_M) return bad("too_far");
 
   const bytes = Buffer.from(await image.arrayBuffer());
   const mime = type === "image/jpg" ? "image/jpeg" : type;
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
   const detected = reported.filter((box): box is number[] => Array.isArray(box));
   const boxes = normalizeBoxes(detected);
   if (reported.length > 0 && boxes.length === 0) return blurUnavailable();
-  if (result.qualityScore <= 2) {
+  if (isUnreadablePhoto(result.qualityScore, result.qualityReason)) {
     return NextResponse.json({ error: "photo_unusable" }, { status: 422 });
   }
   const split = matchShownFaces(detected, readShowFaces(form.get("showFaces")));

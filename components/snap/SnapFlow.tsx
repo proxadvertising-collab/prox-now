@@ -11,7 +11,7 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
-import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
+import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
 import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
@@ -26,8 +26,12 @@ type ShopCard = {
 
 type SignLine = { original: string; translated: string };
 
+type NoMatch = "none_near" | "which_shop" | "retake";
+
 type AnalyzeBody = {
   decision?: "confirm" | "pick" | "pick-all";
+  noMatch?: NoMatch | null;
+  picker?: ShopCard[];
   result?: {
     shopId: string | null;
     confidence: number;
@@ -41,7 +45,7 @@ type AnalyzeBody = {
   scene?: SceneReport;
 };
 
-type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "error";
+type Phase = "idle" | "reading" | "confirm" | "pick" | "add" | "offer" | "posted" | "away" | "retake" | "error";
 
 type Point = { lat: number; lng: number };
 
@@ -136,8 +140,6 @@ export function SnapFlow() {
   const blobsRef = useRef<string[]>([]);
   const startedRef = useRef(0);
   const pointRef = useRef<Point | null>(null);
-  const signRef = useRef<SignLine[]>([]);
-  const categoryRef = useRef("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -146,6 +148,8 @@ export function SnapFlow() {
   const [demoShopName, setDemoShopName] = useState("");
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
+  const [picker, setPicker] = useState<ShopCard[]>([]);
+  const [askWhich, setAskWhich] = useState(false);
   const [guessId, setGuessId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ShopCard | null>(null);
   const [added, setAdded] = useState(false);
@@ -335,25 +339,27 @@ export function SnapFlow() {
     clearDraft();
   }
 
-  function openAdd(signText: SignLine[], matcherCategory: string) {
+  function showAway() {
+    fileRef.current = null;
+    forgetOriginal();
+    clearDraft();
     clearPostDraft();
-    const filled = prefillShop({ signText, category: matcherCategory });
-    const here = pointRef.current;
-    setName(filled.name);
-    setNameLocal(filled.nameLocal ?? "");
-    setCategory(filled.category);
-    setAddError("");
-    setShowLogin(false);
-    setAdded(false);
-    setPhase("add");
-    writeDraft({
-      name: filled.name,
-      nameLocal: filled.nameLocal ?? "",
-      category: filled.category,
-      lat: here?.lat ?? null,
-      lng: here?.lng ?? null,
-      demo: !here,
-    });
+    setChosen(null);
+    setCandidates([]);
+    setPicker([]);
+    setAskWhich(false);
+    setGuessId(null);
+    setPreview(null);
+    setPhase("away");
+  }
+
+  function showRetake() {
+    fileRef.current = null;
+    forgetOriginal();
+    clearPostDraft();
+    setChosen(null);
+    setAskWhich(false);
+    setPhase("retake");
   }
 
   function reset() {
@@ -368,6 +374,8 @@ export function SnapFlow() {
     setDemo(false);
     setError("");
     setCandidates([]);
+    setPicker([]);
+    setAskWhich(false);
     setGuessId(null);
     setChosen(null);
     setAdded(false);
@@ -501,27 +509,49 @@ export function SnapFlow() {
             ])
           : null,
       );
-      signRef.current = body.result.signText ?? [];
-      categoryRef.current = body.result.category ?? "";
       setFaceBoxes(cleanFaceBoxes(body.result.faces));
       setShown([]);
       setFriendAgrees(false);
       setCandidates(shops);
+      const choices = body.picker ?? [];
+      setPicker(choices);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
       const guess = shops.find((shop) => shop.id === body.result?.shopId) ?? null;
-      if (body.decision === "pick-all") {
-        openAdd(signRef.current, categoryRef.current);
+      if (body.noMatch === "none_near") {
+        showAway();
+        return;
+      }
+      if (body.noMatch === "retake") {
+        showRetake();
+        return;
+      }
+      if (body.noMatch === "which_shop") {
+        if (choices.length === 0) {
+          showAway();
+          return;
+        }
+        setAskWhich(true);
+        setGuessId(null);
+        setChosen(null);
+        setPhase("pick");
         return;
       }
       if (body.decision === "confirm" && guess) {
+        setAskWhich(false);
         setGuessId(guess.id);
         setChosen(guess);
         setPhase("confirm");
         return;
       }
+      setAskWhich(body.decision === "pick-all" || body.decision === "pick");
       setGuessId(body.decision === "pick" ? guess?.id ?? null : null);
       setChosen(null);
+      if (choices.length === 0 && shops.length === 0) {
+        showAway();
+        return;
+      }
+      if (choices.length === 0) setPicker(shops.slice(0, 5));
       setPhase("pick");
     } catch {
       if (run !== runRef.current) return;
@@ -777,7 +807,9 @@ export function SnapFlow() {
           {demo && demoShopName ? (
             <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
           ) : null}
-          {behindOn && scene && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
+          {behindOn && scene && phase !== "reading" && phase !== "error" && phase !== "away" && phase !== "retake" ? (
+            <ScenePanel scene={scene} />
+          ) : null}
         </>
       )}
 
@@ -812,7 +844,19 @@ export function SnapFlow() {
           <button type="button" className={primary} onClick={() => choose(guess)}>
             {t("en", "confirm.yes")}
           </button>
-          <button type="button" className={secondary} onClick={() => setPhase("pick")}>
+          <button
+            type="button"
+            className={secondary}
+            onClick={() => {
+              if (picker.length === 0) {
+                showAway();
+                return;
+              }
+              setAskWhich(false);
+              setGuessId(null);
+              setPhase("pick");
+            }}
+          >
             {t("en", "confirm.no")}
           </button>
         </div>
@@ -820,16 +864,15 @@ export function SnapFlow() {
 
       {phase === "pick" ? (
         <div className="flex flex-col gap-3">
-          <p className="text-heading font-bold text-fg">{t("en", "confirm.q")}</p>
+          <p className="text-heading font-bold text-fg">{t("en", askWhich ? "snap.which" : "confirm.q")}</p>
+          {askWhich ? <p className="text-body text-fg">{t("en", "snap.unsure")}</p> : null}
           <ul className="flex flex-col gap-2">
-            {candidates.map((shop) => (
+            {picker.map((shop) => (
               <li key={shop.id}>
                 <button type="button" className={secondary + " items-start text-left"} onClick={() => choose(shop)}>
                   <span className="flex w-full flex-col">
-                    {shop.id === guessId ? (
-                      <span className="text-caption font-semibold text-accent">{t("en", "pick.best")}</span>
-                    ) : null}
                     <span>{shop.name}</span>
+                    {shop.nameLocal ? <span className="text-caption text-fg-muted">{shop.nameLocal}</span> : null}
                     <span className="text-caption text-fg-muted">
                       {t("en", "snap.meters", { n: String(shop.distanceM) })}
                     </span>
@@ -838,8 +881,31 @@ export function SnapFlow() {
               </li>
             ))}
           </ul>
-          <button type="button" className={secondary} onClick={() => openAdd(signRef.current, categoryRef.current)}>
+          <button type="button" className={secondary} onClick={() => showAway()}>
             {t("en", "pick.none")}
+          </button>
+        </div>
+      ) : null}
+
+      {phase === "away" ? (
+        <div className="flex flex-col gap-3">
+          <p role="status" className="text-heading font-bold text-fg">
+            {t("en", "snap.noneNear")}
+          </p>
+          <p className="text-body text-fg">{t("en", "snap.placesOnly")}</p>
+          <button type="button" className={secondary} onClick={reset}>
+            {t("en", "success.again")}
+          </button>
+        </div>
+      ) : null}
+
+      {phase === "retake" ? (
+        <div className="flex flex-col gap-3">
+          <p role="status" className="text-body text-fg">
+            {t("en", "post.unusable")}
+          </p>
+          <button type="button" className={primary} onClick={() => inputRef.current?.click()}>
+            {t("en", "snap.take")}
           </button>
         </div>
       ) : null}

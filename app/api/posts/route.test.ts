@@ -1,6 +1,8 @@
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { haversineMeters } from "../../../lib/geo";
 import { blurFaces } from "../../../lib/image/blur";
+import { POST_RADIUS_M } from "../../../lib/snap/place";
 import { DELETE, POST } from "./route";
 
 const { getUser, maybeSingle, upload, remove, rpc } = vi.hoisted(() => ({
@@ -320,6 +322,91 @@ describe("POST /api/posts", () => {
     expect(remove).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+
+  it("posts a food photo that has no readable sign", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        sparkResponse(
+          JSON.stringify({
+            shop_id: SHOP,
+            confidence: 0.2,
+            sign_text: [],
+            quality_score: 1,
+            quality_reason: "a plate of food, no shop name",
+            faces: [],
+            category: "food",
+            safe_to_post: true,
+            safe_reason: "",
+          }),
+        ),
+      ),
+    );
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(200);
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("still refuses a photo the model says is unreadable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        sparkResponse(
+          JSON.stringify({
+            shop_id: SHOP,
+            confidence: 0,
+            sign_text: [],
+            quality_score: 1,
+            quality_reason: "too blurry and dark",
+            faces: [],
+            category: "",
+            safe_to_post: true,
+            safe_reason: "",
+          }),
+        ),
+      ),
+    );
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "photo_unusable" });
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("rechecks distance from the stored shop and ignores a farther client choice", async () => {
+    const origin = { lat: 12.5684, lng: 99.9577 };
+    const outsideLat = origin.lat + (POST_RADIUS_M + 25) / ((6_371_000 * Math.PI) / 180);
+    expect(haversineMeters(origin, { lat: outsideLat, lng: origin.lng })).toBeGreaterThan(POST_RADIUS_M);
+    maybeSingle.mockResolvedValue({
+      data: { id: SHOP, name: "Far", name_local: null, category: "other", lat: outsideLat, lng: origin.lng },
+      error: null,
+    });
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network disabled");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "too_far" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("lets a shop inside the publish radius reach the photo check", async () => {
+    const origin = { lat: 12.5684, lng: 99.9577 };
+    const insideLat = origin.lat + (POST_RADIUS_M - 25) / ((6_371_000 * Math.PI) / 180);
+    expect(haversineMeters(origin, { lat: insideLat, lng: origin.lng })).toBeLessThanOrEqual(POST_RADIUS_M);
+    maybeSingle.mockResolvedValue({
+      data: { id: SHOP, name: "Near", name_local: null, category: "other", lat: insideLat, lng: origin.lng },
+      error: null,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("spark down");
+    }));
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "blur_unavailable" });
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 
