@@ -5,6 +5,7 @@ export type BookPageView = {
   kind: string;
   imageUrl: string | null;
   position: number;
+  credit: string | null;
 };
 
 export type BookView = {
@@ -81,6 +82,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
         kind,
         imageUrl: bookImageUrl(supabaseUrl, typeof page.image_path === "string" ? page.image_path : null),
         position,
+        credit: text(page.credit, 80),
       });
     }
   }

@@ -343,7 +343,7 @@ describe("POST /api/book/pages", () => {
     expect(state.book).toBeNull();
   });
 
-  it("does not unhide a book or overwrite owner hours", async () => {
+  it("refuses a new photo while the book is hidden and leaves it hidden", async () => {
     state.book = {
       status: "hidden",
       hours: { days: [{ d: 1, open: "09:00", close: "12:00" }], raw: null, source: "owner" },
@@ -353,7 +353,10 @@ describe("POST /api/book/pages", () => {
       built_by_model: "older-model",
     };
     const response = await postPages(1, { kind: "hours" });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "book_hidden" });
+    expect(state.uploads).toHaveLength(0);
+    expect(state.pages).toHaveLength(0);
     expect(state.book?.status).toBe("hidden");
     expect(state.book?.hours).toMatchObject({ source: "owner", days: [{ open: "09:00" }] });
   });

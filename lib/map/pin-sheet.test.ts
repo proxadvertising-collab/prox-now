@@ -34,6 +34,8 @@ describe("pin sheet", () => {
     expect(sheet.walkMinutes).toBeGreaterThan(0);
     expect(sheet.goNowHref).toContain("12.57,99.96");
     expect(sheet.bookHref).toBe("/book/dawn-cafe");
+    expect(sheet.buildHref).toBe("/book/dawn-cafe/build");
+    expect(sheet.showBuild).toBe(true);
     expect(sheet.cameraHref).toBe("/snap?shop=shop-1&name=Dawn%20Cafe");
   });
 
@@ -67,5 +69,12 @@ describe("pin sheet", () => {
     expect(sheet.prompt).toBe("add");
     expect(sheet.bookHref).toBe("/book/dawn-cafe");
     expect(sheet.cameraHref).toContain("shop=shop-1");
+  });
+
+  it("hides the build prompt when the book is already complete", () => {
+    const sheet = pinSheetContent({ shop, posts: [], now, origin, missing: [] });
+    expect(sheet.showBuild).toBe(false);
+    expect(sheet.buildHref).toBe("/book/dawn-cafe/build");
+    expect(sheet.bookHref).toBe("/book/dawn-cafe");
   });
 });

@@ -16,6 +16,7 @@ import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
 import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
+import { bookBuildHref } from "@/lib/book/builder";
 import { snapShopHref } from "@/lib/snap/target";
 import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
 
@@ -1201,6 +1202,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
               {t("en", "auth.signIn")}
             </a>
           ) : null}
+          <a className={secondary} href={bookBuildHref(chosen.id)}>
+            {t("en", "book.build")}
+          </a>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}
           </button>
@@ -1223,6 +1227,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
           </a>
           <a className={primary} href={snapShopHref(chosen.id, chosen.name)}>
             {t("en", "snap.keepSeeding", { name: chosen.name })}
+          </a>
+          <a className={secondary} href={bookBuildHref(chosen.id)}>
+            {t("en", "book.build")}
           </a>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}

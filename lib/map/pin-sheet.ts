@@ -1,5 +1,6 @@
 import { haversineMeters, walkingDirectionsUrl, walkingMinutes, type LatLng } from "../geo";
 import { formatRemaining, remainingMs } from "../freshness";
+import { bookBuildHref, bookNeedsBuild } from "../book/builder";
 import { snapShopHref } from "../snap/target";
 
 export function bookHref(slug: string): string {
@@ -31,6 +32,8 @@ export type PinSheet = {
   freshness: { kind: "none" } | { kind: "live"; label: string } | { kind: "seed" };
   goNowHref: string;
   bookHref: string;
+  buildHref: string;
+  showBuild: boolean;
   cameraHref: string;
   prompt: "first" | "add";
 };
@@ -46,6 +49,7 @@ export function pinSheetContent(input: {
   posts: readonly PinSheetPost[];
   now: number;
   origin: LatLng;
+  missing?: readonly string[] | null;
 }): PinSheet {
   const post = newestLivePost(input.posts, input.now);
   const meters = haversineMeters(input.origin, input.shop);
@@ -60,6 +64,8 @@ export function pinSheetContent(input: {
     freshness,
     goNowHref: walkingDirectionsUrl(input.shop),
     bookHref: bookHref(input.shop.slug),
+    buildHref: bookBuildHref(input.shop.slug),
+    showBuild: bookNeedsBuild(input.missing === undefined ? null : input.missing),
     cameraHref: snapShopHref(input.shop.id, input.shop.name),
     prompt: post ? "add" : "first",
   };
