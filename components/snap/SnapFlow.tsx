@@ -19,6 +19,7 @@ import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
 import { bookBuildHref } from "@/lib/book/builder";
 import { snapShopHref } from "@/lib/snap/target";
 import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
+import { livePostErrorKey } from "@/lib/snap/publish";
 
 type ShopCard = {
   id: string;
@@ -833,8 +834,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
         setPostError(t("en", "post.rate"));
         return;
       }
-      if (response.status === 409 || code === "already_live") {
-        setPostError(t("en", "post.already"));
+      const liveKey = livePostErrorKey(code);
+      if (liveKey) {
+        setPostError(t("en", liveKey));
         return;
       }
       if (code === "bad_shop") {

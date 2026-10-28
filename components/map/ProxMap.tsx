@@ -16,7 +16,8 @@ import { haversineMeters, type LatLng } from "@/lib/geo";
 import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import { newestLivePost, pinSheetContent } from "@/lib/map/pin-sheet";
-import { sheetCloseUsesHistory } from "@/lib/map/sheet";
+import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
+import { PhotoStack } from "./PhotoStack";
 import { PlaceSheet } from "./PlaceSheet";
 import type { LivePost } from "@/lib/posts/source";
 import { createClient } from "@/lib/supabase/client";
@@ -123,16 +124,6 @@ function asLivePost(value: LivePost): LivePost {
   };
 }
 
-function latestByShop(posts: readonly LivePost[], now: number): globalThis.Map<string, LivePost> {
-  const buckets = new globalThis.Map<string, LivePost>();
-  for (const post of posts) {
-    if (Date.parse(post.expiresAt) <= now) continue;
-    const prev = buckets.get(post.shopId);
-    if (!prev || post.expiresAt > prev.expiresAt) buckets.set(post.shopId, post);
-  }
-  return buckets;
-}
-
 function nearestShopMeters(point: LatLng, shops: readonly FixtureShop[]): number {
   let nearest = Number.POSITIVE_INFINITY;
   for (const shop of shops) {
@@ -177,6 +168,8 @@ export function ProxMap({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
   const [bookMissing, setBookMissing] = useState<string[] | null>(null);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [stackShop, setStackShop] = useState<string | null>(null);
   const historyOn = useRef(false);
   const onArrow = useRef<(key: string) => void>(() => undefined);
   const sheetOpen = selectedPostId !== null || selectedId !== null;
@@ -417,11 +410,11 @@ export function ProxMap({
     const showLocal = map.getZoom() >= 17.5;
     if (!fixtures) {
       const tick = nowMs || Date.now();
-      const byShop = latestByShop(posts, tick);
       for (const shop of shops) {
-        const post = byShop.get(shop.id);
+        const stack = sheetPhotos(posts, shop.id, tick);
+        const post = stack[0];
         const element = post
-          ? createLivePinElement(shop.name, post.expiresAt, tick, post.seed)
+          ? createLivePinElement(shop.name, post.expiresAt, tick, post.seed, stack.length)
           : createPlacePin(shop.name);
         element.dataset.shopId = shop.id;
         element.dataset.selected = post
@@ -525,6 +518,11 @@ export function ProxMap({
     }
   }
 
+  if (stackShop !== selectedId) {
+    setStackShop(selectedId);
+    setPhotoIndex(0);
+  }
+
   if (webgl === null) {
     return <div className="h-full w-full bg-surface-2" aria-hidden="true" />;
   }
@@ -571,7 +569,9 @@ export function ProxMap({
         missing: bookMissing,
       })
     : null;
-  const focusPost = newestLivePost(sheetPosts, tick);
+  const stack = selectedShop && !fixtures ? sheetPhotos(posts, selectedShop.id, tick) : [];
+  const photoAt = clampPhotoIndex(photoIndex, stack.length);
+  const focusPost = stack[photoAt] ?? newestLivePost(sheetPosts, tick);
   const liveFocus = focusPost ? posts.find((post) => post.id === focusPost.id) ?? null : null;
   const closeSheet = () => {
     if (sheetCloseUsesHistory(false, historyOn.current)) {
@@ -644,15 +644,17 @@ export function ProxMap({
       </div>
       {sheet && selectedShop ? (
         <PlaceSheet onClose={closeSheet}>
-          {sheet.photoUrl ? (
+          {stack.length > 0 ? (
+            <PhotoStack photos={stack} now={tick} index={photoAt} onIndex={setPhotoIndex} />
+          ) : sheet.photoUrl ? (
             <img src={sheet.photoUrl} alt={sheet.name} className="mb-3 aspect-[4/3] w-full rounded-md object-cover" />
           ) : null}
           <p className="text-heading font-bold text-fg">{sheet.name}</p>
           {sheet.nameLocal ? <p className="text-label text-fg-muted">{sheet.nameLocal}</p> : null}
-          {sheet.freshness.kind === "live" ? (
+          {stack.length === 0 && sheet.freshness.kind === "live" ? (
             <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: sheet.freshness.label })}</p>
           ) : null}
-          {sheet.freshness.kind === "seed" ? (
+          {stack.length === 0 && sheet.freshness.kind === "seed" ? (
             <p className="mt-2 flex items-center gap-2 text-body text-fg">
               <span className="inline-flex rounded-full bg-accent px-2 py-0.5 text-caption font-extrabold text-accent-ink">
                 {t("en", "demo.pill")}

@@ -1,3 +1,5 @@
+import { t } from "../copy";
+import { formatRemaining, remainingMs } from "../freshness";
 import type { LivePost } from "../posts/source";
 
 export const SHEET_SWIPE_PX = 80;
@@ -38,4 +40,24 @@ export function clampPhotoIndex(index: number, count: number): number {
 
 export function photoCounter(index: number, count: number): string {
   return String(clampPhotoIndex(index, count) + 1) + " / " + String(Math.max(count, 0));
+}
+
+export function pinBadgeText(count: number): string | null {
+  if (!Number.isFinite(count) || count <= 1) return null;
+  return String(Math.min(SHEET_PHOTO_CAP, Math.floor(count)));
+}
+
+export function stackStep(index: number, count: number, deltaX: number): number {
+  const current = clampPhotoIndex(index, count);
+  if (count <= 1 || Math.abs(deltaX) < 24) return current;
+  return clampPhotoIndex(current + (deltaX < 0 ? 1 : -1), count);
+}
+
+export function stackScrollBehavior(reducedMotion: boolean): ScrollBehavior {
+  return reducedMotion ? "auto" : "smooth";
+}
+
+export function photoTimeLabel(post: { expiresAt: string; seed: boolean }, now: number): string {
+  if (post.seed) return t("en", "demo.live");
+  return t("en", "timer.left", { t: formatRemaining(Math.max(0, remainingMs(post.expiresAt, now))) });
 }

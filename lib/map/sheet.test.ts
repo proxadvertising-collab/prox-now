@@ -3,9 +3,13 @@ import type { LivePost } from "../posts/source";
 import {
   clampPhotoIndex,
   photoCounter,
+  photoTimeLabel,
+  pinBadgeText,
   sheetCloseUsesHistory,
   sheetPhotos,
   sheetSwipeCloses,
+  stackScrollBehavior,
+  stackStep,
   SHEET_PHOTO_CAP,
 } from "./sheet";
 
@@ -61,5 +65,20 @@ describe("place sheet", () => {
     expect(clampPhotoIndex(-2, 3)).toBe(0);
     expect(clampPhotoIndex(9, 3)).toBe(2);
     expect(photoCounter(1, 5)).toBe("2 / 5");
+  });
+
+  it("steps a swipe, keeps a still scroll when motion is reduced, and badges a stack", () => {
+    expect(stackStep(1, 5, -40)).toBe(2);
+    expect(stackStep(1, 5, 40)).toBe(0);
+    expect(stackStep(0, 5, 80)).toBe(0);
+    expect(stackStep(1, 5, 10)).toBe(1);
+    expect(stackScrollBehavior(true)).toBe("auto");
+    expect(stackScrollBehavior(false)).toBe("smooth");
+    expect(pinBadgeText(1)).toBeNull();
+    expect(pinBadgeText(2)).toBe("2");
+    expect(pinBadgeText(12)).toBe(String(SHEET_PHOTO_CAP));
+    const now = Date.parse("2026-10-27T10:00:00.000Z");
+    expect(photoTimeLabel({ expiresAt: "2026-10-27T12:00:00.000Z", seed: false }, now)).toBe("2h 0m left");
+    expect(photoTimeLabel({ expiresAt: "2026-10-27T12:00:00.000Z", seed: true }, now)).toBe("Live demo");
   });
 });
