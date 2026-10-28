@@ -1,58 +1,204 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCH_RADIUS_M,
+  NEW_SHOP_WINDOW_MS,
   PICKER_CAP,
   POST_RADIUS_M,
-  classifyNoMatch,
+  SAME_PLACE_M,
+  blockingShops,
+  classifySnap,
+  editedNameAllowed,
+  foldName,
   isUnreadablePhoto,
+  namesCollide,
   nearbyCandidates,
   pickerCandidates,
+  readBusiness,
+  sanitizeShopName,
+  underShopCreateLimit,
 } from "./place";
 
-const blurry = { qualityScore: 1, qualityReason: "too blurry and dark to read" };
-const food = { qualityScore: 1, qualityReason: "a plate of food, no shop name" };
+const basePlace = {
+  placeName: null,
+  placeNameLocal: null,
+  placeKind: null,
+  placeConfidence: 0,
+  qualityScore: 8,
+  category: "food",
+  signText: [] as { original: string; translated: string }[],
+};
 
-describe("classifyNoMatch", () => {
-  it("says nothing is near when GPS has no shop, even if the photo looks hard to read", () => {
+describe("classifySnap", () => {
+  it("keeps a confident match on the happy path", () => {
     expect(
-      classifyNoMatch({ nearbyCount: 0, confident: false, ...blurry }),
-    ).toBe("none_near");
-    expect(
-      classifyNoMatch({ nearbyCount: 0, confident: false, ...food }),
-    ).toBe("none_near");
+      classifySnap({
+        confident: true,
+        pickerCount: 2,
+        unreadable: true,
+        business: true,
+        publicPlace: false,
+        hasFix: true,
+      }),
+    ).toBeNull();
   });
 
-  it("asks which shop when shops are close and the photo is a menu or food shot", () => {
+  it("asks which shop when known shops are close but the match is not confident", () => {
     expect(
-      classifyNoMatch({ nearbyCount: 3, confident: false, ...food }),
-    ).toBe("which_shop");
-    expect(
-      classifyNoMatch({
-        nearbyCount: 2,
+      classifySnap({
         confident: false,
-        qualityScore: 0,
-        qualityReason: "",
+        pickerCount: 3,
+        unreadable: false,
+        business: true,
+        publicPlace: false,
+        hasFix: true,
       }),
     ).toBe("which_shop");
   });
 
-  it("asks for a retake only when a nearby photo is actually unreadable", () => {
+  it("adds a new shop when a sign is readable and nothing is close", () => {
     expect(
-      classifyNoMatch({ nearbyCount: 2, confident: false, ...blurry }),
+      classifySnap({
+        confident: false,
+        pickerCount: 0,
+        unreadable: false,
+        business: true,
+        publicPlace: false,
+        hasFix: true,
+      }),
+    ).toBe("add_shop");
+    expect(
+      classifySnap({
+        confident: false,
+        pickerCount: 0,
+        unreadable: false,
+        business: true,
+        publicPlace: false,
+        hasFix: false,
+      }),
+    ).toBe("not_a_place");
+  });
+
+  it("turns away a desk, a bird, or a sunset without blaming the photo", () => {
+    expect(
+      classifySnap({
+        confident: false,
+        pickerCount: 0,
+        unreadable: false,
+        business: false,
+        publicPlace: false,
+        hasFix: true,
+      }),
+    ).toBe("not_a_place");
+  });
+
+  it("says public places are not ready when the photo is a park or beach", () => {
+    expect(
+      classifySnap({
+        confident: false,
+        pickerCount: 1,
+        unreadable: false,
+        business: false,
+        publicPlace: true,
+        hasFix: true,
+      }),
+    ).toBe("public_place");
+  });
+
+  it("asks for a retake only when the photo itself is unreadable", () => {
+    expect(
+      classifySnap({
+        confident: false,
+        pickerCount: 0,
+        unreadable: true,
+        business: false,
+        publicPlace: false,
+        hasFix: true,
+      }),
     ).toBe("retake");
     expect(isUnreadablePhoto(1, "out of focus, cannot see the sign")).toBe(true);
     expect(isUnreadablePhoto(1, "blueberry stall, no name")).toBe(false);
     expect(isUnreadablePhoto(8, "too blurry")).toBe(false);
-    expect(isUnreadablePhoto(Number.NaN, "too blurry")).toBe(false);
+  });
+});
+
+describe("business name", () => {
+  it("reads a confident place name and falls back to sign text", () => {
+    expect(
+      readBusiness({
+        ...basePlace,
+        placeName: " Dawn Cafe ",
+        placeKind: "business",
+        placeConfidence: 0.82,
+        category: "drinks",
+      }),
+    ).toEqual({ name: "Dawn Cafe", nameLocal: null, category: "drinks", confidence: 0.82 });
+
+    expect(
+      readBusiness({
+        ...basePlace,
+        signText: [{ original: "ร้านใหม่", translated: "New Shop" }],
+      })?.name,
+    ).toBe("New Shop");
+
+    expect(
+      readBusiness({
+        ...basePlace,
+        placeName: "Maybe",
+        placeKind: "business",
+        placeConfidence: 0.4,
+        qualityScore: 9,
+        signText: [{ original: "Other", translated: "Other" }],
+      }),
+    ).toBeNull();
   });
 
-  it("leaves a confident match on the happy path", () => {
+  it("does not treat a public place or an explicit none as a business", () => {
+    expect(readBusiness({ ...basePlace, placeKind: "public", placeName: "Beach", placeConfidence: 0.9 })).toBeNull();
     expect(
-      classifyNoMatch({ nearbyCount: 4, confident: true, ...blurry }),
+      readBusiness({
+        ...basePlace,
+        placeKind: "none",
+        signText: [{ original: "Desk", translated: "Desk" }],
+      }),
     ).toBeNull();
-    expect(
-      classifyNoMatch({ nearbyCount: 0, confident: true, ...food }),
-    ).toBeNull();
+  });
+
+  it("folds accents and case, and only accepts an edit of the model name", () => {
+    expect(namesCollide("Café Dawn", "cafe dawn")).toBe(true);
+    expect(foldName("Café Dawn")).toBe("cafe dawn");
+    expect(namesCollide("Dawn Cafe", "Dusk Cafe")).toBe(false);
+    expect(editedNameAllowed("Cafe Dawn", "Café Dawn")).toBe(true);
+    expect(editedNameAllowed("Totally Different", "Café Dawn")).toBe(false);
+    expect(sanitizeShopName("  Dawn\nCafe  ")).toBe("Dawn Cafe");
+    expect(sanitizeShopName("!!!")).toBeNull();
+  });
+});
+
+describe("new shop gates", () => {
+  const shops = [
+    { id: "feet", name: "Noodle", nameLocal: null, distanceM: 10 },
+    { id: "same", name: "Café Dawn", nameLocal: "คาเฟ่", distanceM: 80 },
+    { id: "other", name: "Laundry", nameLocal: null, distanceM: 120 },
+    { id: "far", name: "Café Dawn", nameLocal: null, distanceM: POST_RADIUS_M + 20 },
+  ];
+
+  it("blocks any shop within 25 m and a similar name inside the publish radius", () => {
+    expect(blockingShops(shops, "Brand New").map((shop) => shop.id)).toEqual(["feet"]);
+    expect(SAME_PLACE_M).toBe(25);
+    const apart = shops.filter((shop) => shop.id !== "feet");
+    expect(blockingShops(apart, "cafe dawn").map((shop) => shop.id)).toEqual(["same"]);
+    expect(blockingShops(apart, "Laundry").map((shop) => shop.id)).toEqual(["other"]);
+    expect(blockingShops(apart, "Brand New")).toEqual([]);
+    expect(blockingShops([{ id: "far", name: "Café Dawn", distanceM: POST_RADIUS_M + 20 }], "cafe dawn")).toEqual([]);
+  });
+
+  it("allows three new shops in 24 hours and stops the fourth", () => {
+    const now = Date.parse("2026-10-28T00:00:00.000Z");
+    const recent = [1, 2, 3].map((hours) => new Date(now - hours * 60 * 60 * 1000).toISOString());
+    expect(underShopCreateLimit(recent.slice(0, 2), now)).toBe(true);
+    expect(underShopCreateLimit(recent, now)).toBe(false);
+    const yesterday = new Date(now - NEW_SHOP_WINDOW_MS - 1000).toISOString();
+    expect(underShopCreateLimit([yesterday, recent[0], recent[1]], now)).toBe(true);
   });
 });
 

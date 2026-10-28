@@ -11,6 +11,7 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
+import { SAME_PLACE_M } from "@/lib/snap/place";
 import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
@@ -26,12 +27,20 @@ type ShopCard = {
 
 type SignLine = { original: string; translated: string };
 
-type NoMatch = "none_near" | "which_shop" | "retake";
+type NoMatch = "which_shop" | "add_shop" | "not_a_place" | "public_place" | "retake";
+
+type ProposedPlace = {
+  name: string;
+  nameLocal: string | null;
+  category: ShopCategory;
+  confidence: number;
+};
 
 type AnalyzeBody = {
   decision?: "confirm" | "pick" | "pick-all";
   noMatch?: NoMatch | null;
   picker?: ShopCard[];
+  place?: ProposedPlace | null;
   result?: {
     shopId: string | null;
     confidence: number;
@@ -150,6 +159,9 @@ export function SnapFlow() {
   const [candidates, setCandidates] = useState<ShopCard[]>([]);
   const [picker, setPicker] = useState<ShopCard[]>([]);
   const [askWhich, setAskWhich] = useState(false);
+  const [proposed, setProposed] = useState<ProposedPlace | null>(null);
+  const [awayKind, setAwayKind] = useState<"not" | "public">("not");
+  const [alreadyHere, setAlreadyHere] = useState(false);
   const [guessId, setGuessId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<ShopCard | null>(null);
   const [added, setAdded] = useState(false);
@@ -339,7 +351,7 @@ export function SnapFlow() {
     clearDraft();
   }
 
-  function showAway() {
+  function showAway(kind: "not" | "public" = "not") {
     fileRef.current = null;
     forgetOriginal();
     clearDraft();
@@ -348,9 +360,33 @@ export function SnapFlow() {
     setCandidates([]);
     setPicker([]);
     setAskWhich(false);
+    setProposed(null);
+    setAwayKind(kind);
+    setAlreadyHere(false);
     setGuessId(null);
     setPreview(null);
     setPhase("away");
+  }
+
+  function openProposed(place: ProposedPlace) {
+    const local = place.nameLocal ?? "";
+    const nextCategory = SHOP_CATEGORIES.includes(place.category) ? place.category : "other";
+    setName(place.name);
+    setNameLocal(local);
+    setCategory(nextCategory);
+    setProposed(place);
+    setAddError("");
+    setShowLogin(false);
+    setAlreadyHere(false);
+    setPhase("add");
+    writeDraft({
+      name: place.name,
+      nameLocal: local,
+      category: nextCategory,
+      lat: pointRef.current?.lat ?? null,
+      lng: pointRef.current?.lng ?? null,
+      demo: false,
+    });
   }
 
   function showRetake() {
@@ -376,6 +412,9 @@ export function SnapFlow() {
     setCandidates([]);
     setPicker([]);
     setAskWhich(false);
+    setProposed(null);
+    setAwayKind("not");
+    setAlreadyHere(false);
     setGuessId(null);
     setChosen(null);
     setAdded(false);
@@ -515,20 +554,32 @@ export function SnapFlow() {
       setCandidates(shops);
       const choices = body.picker ?? [];
       setPicker(choices);
+      const place = body.place && body.place.name ? body.place : null;
+      setProposed(place);
+      setAlreadyHere(false);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
       const guess = shops.find((shop) => shop.id === body.result?.shopId) ?? null;
-      if (body.noMatch === "none_near") {
-        showAway();
-        return;
-      }
       if (body.noMatch === "retake") {
         showRetake();
         return;
       }
+      if (body.noMatch === "public_place") {
+        showAway("public");
+        return;
+      }
+      if (body.noMatch === "not_a_place") {
+        showAway("not");
+        return;
+      }
+      if (body.noMatch === "add_shop" && place) {
+        openProposed(place);
+        return;
+      }
       if (body.noMatch === "which_shop") {
         if (choices.length === 0) {
-          showAway();
+          if (place) openProposed(place);
+          else showAway("not");
           return;
         }
         setAskWhich(true);
@@ -544,13 +595,17 @@ export function SnapFlow() {
         setPhase("confirm");
         return;
       }
-      setAskWhich(body.decision === "pick-all" || body.decision === "pick");
-      setGuessId(body.decision === "pick" ? guess?.id ?? null : null);
-      setChosen(null);
-      if (choices.length === 0 && shops.length === 0) {
-        showAway();
+      if (place && choices.length === 0) {
+        openProposed(place);
         return;
       }
+      if (choices.length === 0 && shops.length === 0) {
+        showAway("not");
+        return;
+      }
+      setAskWhich(true);
+      setGuessId(null);
+      setChosen(null);
       if (choices.length === 0) setPicker(shops.slice(0, 5));
       setPhase("pick");
     } catch {
@@ -599,22 +654,68 @@ export function SnapFlow() {
     setShowLogin(false);
     writeDraft(draftFrom({ name: trimmed, nameLocal: nameLocal.trim(), category, demo: false }));
     try {
-      const response = await fetch("/api/shops", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          nameLocal: nameLocal.trim() || null,
-          category,
-          lat: here.lat,
-          lng: here.lng,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      });
+      const photo = fileRef.current;
+      const response = photo
+        ? await fetch("/api/shops", {
+            method: "POST",
+            body: await (async () => {
+              const jpeg = await resizeToJpeg(photo);
+              const form = new FormData();
+              form.set("name", trimmed);
+              form.set("nameLocal", nameLocal.trim());
+              form.set("category", category);
+              form.set("lat", String(here.lat));
+              form.set("lng", String(here.lng));
+              form.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+              form.set("image", jpeg, "snap.jpg");
+              return form;
+            })(),
+          })
+        : await fetch("/api/shops", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: trimmed,
+              nameLocal: nameLocal.trim() || null,
+              category,
+              lat: here.lat,
+              lng: here.lng,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }),
+          });
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        shops?: ShopCard[];
         shop?: { id?: string; name?: string; nameLocal?: string | null };
       } | null;
+      if (body?.error === "shop_exists" && body.shops && body.shops.length > 0) {
+        setPicker(body.shops);
+        setAskWhich(true);
+        setAlreadyHere(true);
+        setChosen(null);
+        setPhase("pick");
+        return;
+      }
+      if (body?.error === "not_a_place") {
+        showAway("not");
+        return;
+      }
+      if (body?.error === "public_place") {
+        showAway("public");
+        return;
+      }
+      if (body?.error === "photo_unusable") {
+        showRetake();
+        return;
+      }
+      if (body?.error === "ai_not_configured") {
+        setAddError(t("en", "err.ai"));
+        return;
+      }
+      if (body?.error === "ai_resting") {
+        setAddError(t("en", "err.resting"));
+        return;
+      }
       if (response.status === 401) {
         setAddError(t("en", "add.signin"));
         setShowLogin(true);
@@ -865,6 +966,7 @@ export function SnapFlow() {
       {phase === "pick" ? (
         <div className="flex flex-col gap-3">
           <p className="text-heading font-bold text-fg">{t("en", askWhich ? "snap.which" : "confirm.q")}</p>
+          {alreadyHere ? <p className="text-body text-fg">{t("en", "snap.already")}</p> : null}
           {askWhich ? <p className="text-body text-fg">{t("en", "snap.unsure")}</p> : null}
           <ul className="flex flex-col gap-2">
             {picker.map((shop) => (
@@ -881,18 +983,22 @@ export function SnapFlow() {
               </li>
             ))}
           </ul>
-          <button type="button" className={secondary} onClick={() => showAway()}>
-            {t("en", "pick.none")}
-          </button>
+          {picker.every((shop) => shop.distanceM > SAME_PLACE_M) ? (
+            <button type="button" className={secondary} onClick={() => (proposed ? openProposed(proposed) : showAway("not"))}>
+              {t("en", "snap.addDifferent")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
       {phase === "away" ? (
         <div className="flex flex-col gap-3">
           <p role="status" className="text-heading font-bold text-fg">
-            {t("en", "snap.noneNear")}
+            {t("en", awayKind === "public" ? "snap.publicSoon" : "snap.noneNear")}
           </p>
-          <p className="text-body text-fg">{t("en", "snap.placesOnly")}</p>
+          <p className="text-body text-fg">
+            {t("en", awayKind === "public" ? "snap.noneNear" : "snap.placesOnly")}
+          </p>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}
           </button>
@@ -918,7 +1024,7 @@ export function SnapFlow() {
             void saveShop();
           }}
         >
-          <h2 className="text-heading font-bold text-fg">{t("en", "add.title")}</h2>
+          <h2 className="text-heading font-bold text-fg">{t("en", "snap.addNew", { name: name.trim() || "…" })}</h2>
           <label className="flex flex-col gap-1 text-label text-fg" htmlFor="shop-name">
             {t("en", "add.name")}
             <input
@@ -982,7 +1088,7 @@ export function SnapFlow() {
             </p>
           ) : null}
           <button type="submit" className={primary} disabled={!point || saving || name.trim().length < 2}>
-            {t("en", "add.save")}
+            {t("en", "snap.addHere")}
           </button>
           {showLogin ? (
             <a

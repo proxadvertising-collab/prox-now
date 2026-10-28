@@ -145,11 +145,13 @@ describe("POST /api/analyze", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("turns a real GPS fix with no nearby place into none_near and does not call the model", async () => {
-    vi.stubEnv("META_API_KEY", "");
-    const fetchMock = vi.fn(async () => {
-      throw new Error("network disabled");
-    });
+  it("still reads a new shop sign when no known shop is near", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        '{"shop_id":null,"confidence":0,"sign_text":[{"thai":"ดอน","english":"Dawn Cafe"}],"quality_score":8,"quality_reason":"sharp sign","faces":[],"category":"drinks","safe_to_post":true,"safe_reason":"","place_name":"Dawn Cafe","place_name_local":"ดอน","place_kind":"business","place_confidence":0.9}',
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await POST(imageRequest(new Uint8Array([4, 5]), "image/jpeg", { lat: "0", lng: "0" }));
@@ -157,13 +159,53 @@ describe("POST /api/analyze", () => {
 
     expect(response.status).toBe(200);
     expect(body.decision).toBe("pick-all");
-    expect(body.noMatch).toBe("none_near");
+    expect(body.noMatch).toBe("add_shop");
     expect(body.picker).toEqual([]);
     expect(body.candidates).toEqual([]);
-    expect(body.result.shopId).toBeNull();
-    expect(body.ms).toBe(0);
-    expect(body.scene.steps.map((step: { step: string }) => step.step)).toEqual(["shops"]);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(body.place).toEqual({
+      name: "Dawn Cafe",
+      nameLocal: "ดอน",
+      category: "drinks",
+      confidence: 0.9,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns away a photo that is not a shop or a public place", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":6,"quality_reason":"a bird on a desk","faces":[],"category":"","safe_to_post":true,"safe_reason":"","place_name":null,"place_kind":"none","place_confidence":0}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([4]), "image/jpeg", { lat: "0", lng: "0" }));
+    const body = await response.json();
+
+    expect(body.noMatch).toBe("not_a_place");
+    expect(body.place).toBeNull();
+    expect(body.picker).toEqual([]);
+  });
+
+  it("says a public place is not ready to add", async () => {
+    vi.stubEnv("META_API_KEY", SECRET);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          '{"shop_id":null,"confidence":0,"sign_text":[],"quality_score":7,"quality_reason":"beach","faces":[],"category":"","safe_to_post":true,"safe_reason":"","place_name":null,"place_kind":"public","place_confidence":0.8}',
+        ),
+      ),
+    );
+
+    const response = await POST(imageRequest(new Uint8Array([3]), "image/jpeg", { lat: "0", lng: "0" }));
+    const body = await response.json();
+
+    expect(body.noMatch).toBe("public_place");
+    expect(body.place).toBeNull();
   });
 
   it("offers the nearest shops when the photo does not match one of them", async () => {

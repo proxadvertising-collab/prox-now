@@ -13,9 +13,12 @@ import { allowSnap, clientIp } from "../../../lib/rate/window";
 import { getShopsNear, hasShopEnv, type NearbyShopRow } from "../../../lib/shops/source";
 import {
   MATCH_RADIUS_M,
-  classifyNoMatch,
+  classifySnap,
+  isPublicPlace,
+  isUnreadablePhoto,
   nearbyCandidates,
   pickerCandidates,
+  readBusiness,
 } from "../../../lib/snap/place";
 import { buildScene, type SceneReport } from "../../../lib/snap/scene";
 import { createClient } from "../../../lib/supabase/server";
@@ -89,14 +92,18 @@ function pack(input: {
   shops: readonly MatcherCandidate[];
   demo: boolean;
   ms: number;
+  hasFix: boolean;
   scene: SceneReport;
 }) {
   const offered = pickerCandidates(input.shops).map(toCard);
-  const noMatch = classifyNoMatch({
-    nearbyCount: offered.length,
+  const business = readBusiness(input.result);
+  const noMatch = classifySnap({
     confident: input.decision === "confirm",
-    qualityScore: input.result.qualityScore,
-    qualityReason: input.result.qualityReason,
+    pickerCount: offered.length,
+    unreadable: isUnreadablePhoto(input.result.qualityScore, input.result.qualityReason),
+    business: business !== null,
+    publicPlace: isPublicPlace(input.result),
+    hasFix: input.hasFix,
   });
   return {
     decision: input.decision,
@@ -104,6 +111,7 @@ function pack(input: {
     result: input.result,
     candidates: input.shops.map(toCard),
     picker: noMatch === "which_shop" || noMatch === null ? offered : [],
+    place: business,
     demo: input.demo,
     ms: input.ms,
     scene: input.scene,
@@ -140,26 +148,6 @@ export async function POST(request: Request) {
     demo: selected.demo,
     hasFix: point !== null,
   });
-  if (forUser.length === 0) {
-    const result = emptyMatcherResult();
-    return NextResponse.json(
-      pack({
-        decision: "pick-all",
-        result,
-        shops: [],
-        demo: false,
-        ms: 0,
-        scene: buildScene({
-          model: null,
-          result,
-          raw: null,
-          shopName: null,
-          steps: [{ step: "shops", ms: shopsMs }],
-        }),
-      }),
-    );
-  }
-
   const ids = forUser.map((shop) => shop.id);
   const prompt = buildMatcherPrompt({
     areaLabel: AREA_LABEL,
@@ -193,8 +181,9 @@ export async function POST(request: Request) {
         decision,
         result,
         shops: ordered,
-        demo: selected.demo,
+        demo: forUser.length > 0 && selected.demo,
         ms: spark.ms,
+        hasFix: point !== null,
         scene,
       }),
     );
@@ -209,8 +198,9 @@ export async function POST(request: Request) {
           decision: "pick-all",
           result,
           shops: forUser,
-          demo: selected.demo,
+          demo: forUser.length > 0 && selected.demo,
           ms: error.ms,
+          hasFix: point !== null,
           scene: buildScene({
             model: error.model,
             result,

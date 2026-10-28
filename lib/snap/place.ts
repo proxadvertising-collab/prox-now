@@ -1,3 +1,6 @@
+import type { PlaceKind } from "../ai/matcher";
+import { mapCategory, prefillShop, type ShopCategory } from "./prefill";
+
 /**
  * How far a Snap may be tied to a shop.
  *
@@ -5,12 +8,17 @@
  * The picker and the post route share the tighter POST_RADIUS_M gate: a shop
  * the server would reject is never offered, and the post route measures the
  * distance again from the stored shop coordinates.
+ * SAME_PLACE_M is "a shop is already here": any shop this close blocks a new one.
  */
 export const MATCH_RADIUS_M = 600;
 export const POST_RADIUS_M = 300;
+export const SAME_PLACE_M = 25;
 export const PICKER_CAP = 5;
+export const PLACE_NAME_CONFIDENCE = 0.6;
+export const NEW_SHOP_LIMIT = 3;
+export const NEW_SHOP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export type NoMatchReason = "none_near" | "which_shop" | "retake";
+export type SnapNext = "which_shop" | "add_shop" | "not_a_place" | "public_place" | "retake";
 
 export type DistanceShop = {
   id: string;
@@ -55,14 +63,145 @@ export function pickerCandidates<T extends DistanceShop>(
     .slice(0, Math.max(0, cap));
 }
 
-export function classifyNoMatch(input: {
-  nearbyCount: number;
-  confident: boolean;
+export type BusinessRead = {
+  name: string;
+  nameLocal: string | null;
+  category: ShopCategory;
+  confidence: number;
+};
+
+type PlaceSource = {
+  placeName: string | null;
+  placeNameLocal: string | null;
+  placeKind: PlaceKind | null;
+  placeConfidence: number;
   qualityScore: number;
-  qualityReason: string;
-}): NoMatchReason | null {
+  category: string;
+  signText: readonly { original: string; translated: string }[];
+};
+
+export function sanitizeShopName(value: string): string | null {
+  const clean = value
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length < 2 || clean.length > 80) return null;
+  if (!/[A-Za-z\u00C0-\u024F\u0E00-\u0E7F\u4E00-\u9FFF]/.test(clean)) return null;
+  return clean;
+}
+
+/** Case-insensitive and accent-insensitive. */
+export function foldName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0e00-\u0e7f\u4e00-\u9fff]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function namesCollide(left: string, right: string): boolean {
+  const a = foldName(left);
+  const b = foldName(right);
+  return a.length >= 2 && a === b;
+}
+
+export function editedNameAllowed(submitted: string, modelName: string): boolean {
+  const clean = sanitizeShopName(submitted);
+  const model = sanitizeShopName(modelName);
+  if (!clean || !model) return false;
+  const a = foldName(clean);
+  const b = foldName(model);
+  if (a === b) return true;
+  if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true;
+  return false;
+}
+
+export function readBusiness(result: PlaceSource): BusinessRead | null {
+  const kind = result.placeKind;
+  const named = result.placeName ? sanitizeShopName(result.placeName) : null;
+  const confidence = result.placeConfidence;
+  if (named && kind !== "public" && kind !== "none" && confidence >= PLACE_NAME_CONFIDENCE) {
+    const local = result.placeNameLocal ? sanitizeShopName(result.placeNameLocal) : null;
+    return {
+      name: named,
+      nameLocal: local,
+      category: mapCategory(result.category),
+      confidence,
+    };
+  }
+  if (kind === "public" || kind === "none") return null;
+  if (named && confidence < PLACE_NAME_CONFIDENCE) return null;
+  if (!(result.qualityScore > 2)) return null;
+  const filled = prefillShop({ signText: result.signText, category: result.category });
+  const fallback = sanitizeShopName(filled.name);
+  if (!fallback) return null;
+  return {
+    name: fallback,
+    nameLocal: filled.nameLocal ? sanitizeShopName(filled.nameLocal) : null,
+    category: filled.category,
+    confidence: 0.7,
+  };
+}
+
+export function isPublicPlace(result: PlaceSource): boolean {
+  return result.placeKind === "public" && readBusiness(result) === null;
+}
+
+export function classifySnap(input: {
+  confident: boolean;
+  pickerCount: number;
+  unreadable: boolean;
+  business: boolean;
+  publicPlace: boolean;
+  hasFix: boolean;
+}): SnapNext | null {
   if (input.confident) return null;
-  if (input.nearbyCount <= 0) return "none_near";
-  if (isUnreadablePhoto(input.qualityScore, input.qualityReason)) return "retake";
-  return "which_shop";
+  if (input.unreadable) return "retake";
+  if (input.publicPlace) return "public_place";
+  if (input.pickerCount > 0) return "which_shop";
+  if (input.business && input.hasFix) return "add_shop";
+  return "not_a_place";
+}
+
+export type GateShop = DistanceShop & {
+  name: string;
+  nameLocal?: string | null;
+};
+
+/**
+ * Shops that block a new insert. Anything within SAME_PLACE_M blocks, and so
+ * does the same folded name inside the publish radius. Farther same names do not.
+ */
+export function blockingShops<T extends GateShop>(shops: readonly T[], name: string): T[] {
+  const close = shops
+    .filter((shop) => shop.distanceM <= SAME_PLACE_M)
+    .slice()
+    .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id));
+  if (close.length > 0) return close.slice(0, PICKER_CAP);
+  const named = shops
+    .filter(
+      (shop) =>
+        shop.distanceM <= POST_RADIUS_M &&
+        (namesCollide(name, shop.name) || (shop.nameLocal ? namesCollide(name, shop.nameLocal) : false)),
+    )
+    .slice()
+    .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id));
+  return named.slice(0, PICKER_CAP);
+}
+
+export function underShopCreateLimit(
+  createdAt: readonly string[],
+  now: number,
+  limit = NEW_SHOP_LIMIT,
+  windowMs = NEW_SHOP_WINDOW_MS,
+): boolean {
+  const cutoff = now - windowMs;
+  let count = 0;
+  for (const iso of createdAt) {
+    const time = Date.parse(iso);
+    if (Number.isFinite(time) && time > cutoff) count += 1;
+  }
+  return count < limit;
 }
