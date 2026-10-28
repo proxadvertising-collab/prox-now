@@ -15,6 +15,8 @@ import { formatRemaining, phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, walkingDirectionsUrl, walkingMinutes, type LatLng } from "@/lib/geo";
 import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
+import { clampPhotoIndex, photoCounter, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
+import { PlaceSheet } from "./PlaceSheet";
 import type { LivePost } from "@/lib/posts/source";
 import { createClient } from "@/lib/supabase/client";
 import { getClock, getServerClock, subscribeClock } from "./clock";
@@ -167,6 +169,11 @@ export function ProxMap({
   const [sheetLang, setSheetLang] = useState<"en" | "th">("en");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const historyOn = useRef(false);
+  const onArrow = useRef<(key: string) => void>(() => undefined);
+  const sheetOpen = selectedPostId !== null || selectedId !== null;
 
   useEffect(() => {
     setWebgl(supportsWebGL2());
@@ -179,7 +186,67 @@ export function ProxMap({
 
   useEffect(() => {
     setDeleteNote(null);
+    setPhotoIndex(0);
   }, [selectedPostId]);
+
+  useEffect(() => {
+    if (!sheetOpen) {
+      if (historyOn.current) {
+        historyOn.current = false;
+        window.history.back();
+      }
+      return;
+    }
+    if (!historyOn.current) {
+      window.history.pushState({ proxSheet: 1 }, "");
+      historyOn.current = true;
+    }
+    const closeFromBrowser = () => {
+      historyOn.current = false;
+      setSelectedPostId(null);
+      setSelectedId(null);
+      containerRef.current?.focus();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (sheetCloseUsesHistory(false, historyOn.current)) {
+          historyOn.current = false;
+          window.history.back();
+        }
+        setSelectedPostId(null);
+        setSelectedId(null);
+        containerRef.current?.focus();
+        return;
+      }
+      onArrow.current(event.key);
+    };
+    const map = mapRef.current;
+    const onMapClick = () => {
+      if (sheetCloseUsesHistory(false, historyOn.current)) {
+        historyOn.current = false;
+        window.history.back();
+      }
+      setSelectedPostId(null);
+      setSelectedId(null);
+      containerRef.current?.focus();
+    };
+    window.addEventListener("popstate", closeFromBrowser);
+    window.addEventListener("keydown", onKey);
+    map?.on("click", onMapClick);
+    return () => {
+      window.removeEventListener("popstate", closeFromBrowser);
+      window.removeEventListener("keydown", onKey);
+      map?.off("click", onMapClick);
+    };
+  }, [sheetOpen]);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || el.clientWidth <= 0) return;
+    const left = photoIndex * el.clientWidth;
+    if (Math.abs(el.scrollLeft - left) > 2) el.scrollTo({ left, behavior: "smooth" });
+  }, [photoIndex]);
 
   useEffect(() => {
     setPosts(livePosts);
@@ -457,15 +524,31 @@ export function ProxMap({
     !selectedLive && selectedShop && (selectedPost ? phaseFor(remaining) !== "expired" : !fixtures),
   );
   const minutes = selectedShop ? walkingMinutes(haversineMeters(origin, selectedShop)) : 1;
-  const liveRemaining = selectedLive ? Math.max(0, remainingMs(selectedLive.expiresAt, tick)) : 0;
   const liveMeters = selectedLive && userPoint ? Math.round(haversineMeters(userPoint, selectedLive)) : null;
   const liveLine =
     selectedLive?.textTranslated.en || selectedLive?.textOriginal || "";
+  const photos = selectedLive ? sheetPhotos(posts, selectedLive.shopId, tick) : [];
+  const photoAt = clampPhotoIndex(photoIndex, photos.length);
+  const visible = photos[photoAt] ?? selectedLive;
+  onArrow.current = (key: string) => {
+    if (photos.length < 2) return;
+    if (key === "ArrowRight") setPhotoIndex((index) => clampPhotoIndex(index + 1, photos.length));
+    if (key === "ArrowLeft") setPhotoIndex((index) => clampPhotoIndex(index - 1, photos.length));
+  };
+  const closeSheet = () => {
+    if (sheetCloseUsesHistory(false, historyOn.current)) {
+      historyOn.current = false;
+      window.history.back();
+    }
+    setSelectedPostId(null);
+    setSelectedId(null);
+    containerRef.current?.focus();
+  };
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
   const showLocationHelp = needsExternalBrowser(userAgent, locStatus) || locStatus === "denied";
 
   return (
-    <div className="prox-map relative h-full w-full" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
+    <div tabIndex={-1} className="prox-map relative h-full w-full outline-none" data-card={showCard || selectedLive ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
       <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
         {!fixtures &&
@@ -521,25 +604,84 @@ export function ProxMap({
           <LocationHelp status={locStatus} onTryAgain={() => void useMyLocation()} />
         ) : null}
       </div>
-      {selectedLive ? (
-        <div className="absolute inset-x-3 bottom-16 z-20 max-h-[70%] overflow-y-auto rounded-lg bg-surface-1 p-4 shadow-sheet">
-          {selectedLive.photoUrl ? (
+      {selectedLive && visible ? (
+        <PlaceSheet onClose={closeSheet}>
+          {photos.length > 1 ? (
+            <div className="relative mb-3">
+              <div
+                ref={scrollerRef}
+                className="flex snap-x snap-mandatory overflow-x-auto"
+                onScroll={(event) => {
+                  const el = event.currentTarget;
+                  if (el.clientWidth <= 0) return;
+                  setPhotoIndex(clampPhotoIndex(Math.round(el.scrollLeft / el.clientWidth), photos.length));
+                }}
+              >
+                {photos.map((photo, index) =>
+                  photo.photoUrl ? (
+                    <img
+                      key={photo.id}
+                      src={photo.photoUrl}
+                      alt={photo.shopName}
+                      loading={index === 0 ? "eager" : "lazy"}
+                      className="aspect-[4/3] w-full shrink-0 snap-center object-cover"
+                    />
+                  ) : (
+                    <div key={photo.id} className="aspect-[4/3] w-full shrink-0 snap-center bg-surface-2" />
+                  ),
+                )}
+              </div>
+              <p className="mt-2 text-center text-label text-fg">{photoCounter(photoAt, photos.length)}</p>
+              <div className="mt-1 flex items-center justify-center gap-2">
+                {photos.map((photo, index) => (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    aria-label={photoCounter(index, photos.length)}
+                    aria-current={index === photoAt ? "true" : undefined}
+                    className={"inline-flex min-h-11 min-w-11 items-center justify-center"}
+                    onClick={() => setPhotoIndex(index)}
+                  >
+                    <span className={"h-2 w-2 rounded-full " + (index === photoAt ? "bg-accent" : "bg-border")} />
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="absolute left-1 top-1/3 hidden min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 text-fg md:inline-flex"
+                aria-label={t("en", "sheet.prev")}
+                onClick={() => setPhotoIndex((index) => clampPhotoIndex(index - 1, photos.length))}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="absolute right-1 top-1/3 hidden min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 text-fg md:inline-flex"
+                aria-label={t("en", "sheet.next")}
+                onClick={() => setPhotoIndex((index) => clampPhotoIndex(index + 1, photos.length))}
+              >
+                ›
+              </button>
+            </div>
+          ) : visible.photoUrl ? (
             <img
-              src={selectedLive.photoUrl}
-              alt={selectedLive.shopName}
+              src={visible.photoUrl}
+              alt={visible.shopName}
               className="mb-3 aspect-[4/3] w-full rounded-md object-cover"
             />
           ) : null}
-          <p className="text-heading font-bold text-fg">{selectedLive.shopName}</p>
-          {selectedLive.shopNameLocal ? (
-            <p className="text-label text-fg-muted">{selectedLive.shopNameLocal}</p>
+          <p className="text-heading font-bold text-fg">{visible.shopName}</p>
+          {visible.shopNameLocal ? (
+            <p className="text-label text-fg-muted">{visible.shopNameLocal}</p>
           ) : null}
-          {selectedLive.facts ? (
-            <LiveFacts post={selectedLive} lang={sheetLang} />
-          ) : liveLine ? (
+          {visible.facts ? (
+            <LiveFacts post={visible} lang={sheetLang} />
+          ) : visible.id === selectedLive.id && liveLine ? (
             <p className="mt-2 text-body text-fg">{liveLine}</p>
+          ) : visible.textTranslated.en || visible.textOriginal ? (
+            <p className="mt-2 text-body text-fg">{visible.textTranslated.en || visible.textOriginal}</p>
           ) : null}
-          {selectedLive.seed ? (
+          {visible.seed ? (
             <p className="mt-2 flex items-center gap-2 text-body text-fg">
               <span className="inline-flex rounded-full bg-accent px-2 py-0.5 text-caption font-extrabold text-accent-ink">
                 {t("en", "demo.pill")}
@@ -547,7 +689,9 @@ export function ProxMap({
               {t("en", "demo.live")}
             </p>
           ) : (
-            <p className="mt-2 text-body text-fg">{t("en", "timer.left", { t: formatRemaining(liveRemaining) })}</p>
+            <p className="mt-2 text-body text-fg">
+              {t("en", "timer.left", { t: formatRemaining(Math.max(0, remainingMs(visible.expiresAt, tick))) })}
+            </p>
           )}
           {liveMeters !== null ? (
             <p className="text-label text-fg-muted">
@@ -564,13 +708,13 @@ export function ProxMap({
           >
             {t("en", "post.go")}
           </a>
-          {selectedLive.mine ? (
+          {visible.mine ? (
             <button
               type="button"
               className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg disabled:opacity-60"
               disabled={deleteBusy}
               onClick={() => {
-                const id = selectedLive.id;
+                const id = visible.id;
                 setDeleteBusy(true);
                 setDeleteNote(null);
                 void fetch("/api/posts", {
@@ -602,10 +746,10 @@ export function ProxMap({
               {deleteNote}
             </p>
           ) : null}
-        </div>
+        </PlaceSheet>
       ) : null}
       {showCard && selectedShop ? (
-        <div className="absolute inset-x-3 bottom-16 z-20 rounded-lg bg-surface-1 p-4 shadow-sheet">
+        <PlaceSheet onClose={closeSheet}>
           <p className="text-heading font-bold text-fg">{selectedShop.name}</p>
           {selectedShop.nameLocal ? (
             <p className="text-label text-fg-muted">{selectedShop.nameLocal}</p>
@@ -647,7 +791,7 @@ export function ProxMap({
             </button>
           ) : null}
           {claimNote ? <p className="text-label text-fg">{claimNote}</p> : null}
-        </div>
+        </PlaceSheet>
       ) : null}
     </div>
   );

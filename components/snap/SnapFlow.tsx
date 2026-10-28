@@ -13,6 +13,8 @@ import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/l
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { prefillShop, SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
+import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
+import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
 import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
 
 type ShopCard = {
@@ -128,6 +130,7 @@ function clearPostDraft() {
 
 export function SnapFlow() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const onFileRef = useRef<(file: File | undefined) => void>(() => undefined);
   const runRef = useRef(0);
   const fileRef = useRef<File | null>(null);
   const blobsRef = useRef<string[]>([]);
@@ -163,6 +166,7 @@ export function SnapFlow() {
   const [shown, setShown] = useState<number[]>([]);
   const [friendAgrees, setFriendAgrees] = useState(false);
   const [scene, setScene] = useState<SceneReport | null>(null);
+  const [behindOn, setBehindOn] = useState(false);
 
   function forgetOriginal() {
     const dropped = dropOriginalMemory(blobsRef.current, (url) => URL.revokeObjectURL(url));
@@ -181,6 +185,50 @@ export function SnapFlow() {
       fileRef.current = null;
       for (const url of blobsRef.current) URL.revokeObjectURL(url);
       blobsRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
+    let stopped = false;
+    const stop = subscribeSnapFile((file) => {
+      if (!stopped) onFileRef.current(file);
+    });
+    const id = window.setTimeout(() => {
+      if (stopped) return;
+      const handed = takeSnapFile();
+      if (handed) onFileRef.current(handed);
+    }, 0);
+    return () => {
+      stopped = true;
+      window.clearTimeout(id);
+      stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryOn = params.get("behind") === "1";
+    let deviceOn = false;
+    try {
+      deviceOn = window.localStorage.getItem(BEHIND_KEY) === "1";
+    } catch {
+      deviceOn = false;
+    }
+    let cancelled = false;
+    setBehindOn(showBehind({ demoSession: false, deviceOn, queryOn }));
+    void (async () => {
+      let demoSession = false;
+      try {
+        const supabase = createClient();
+        const account = await supabase.from("demo_accounts").select("role").limit(1);
+        demoSession = !account.error && (account.data?.length ?? 0) > 0;
+      } catch {
+        demoSession = false;
+      }
+      if (!cancelled) setBehindOn(showBehind({ demoSession, deviceOn, queryOn }));
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -495,6 +543,7 @@ export function SnapFlow() {
     setPreview(URL.createObjectURL(file));
     void analyse(file);
   }
+  onFileRef.current = onFile;
 
   function choose(shop: ShopCard) {
     setChosen(shop);
@@ -701,29 +750,36 @@ export function SnapFlow() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-title font-bold text-fg">{t("en", "nav.snap")}</h1>
-      {demo ? <DemoBanner /> : null}
-      {demo && demoShopName ? (
-        <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
-      ) : null}
-      {scene && phase !== "idle" && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={(event) => onFile(event.target.files?.[0])}
-      />
-
       {phase === "idle" ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-body text-fg-muted">{t("en", "loc.why")}</p>
-          <button type="button" className={primary + " min-h-16"} onClick={() => inputRef.current?.click()}>
-            {t("en", "snap.cta")}
-          </button>
-        </div>
-      ) : null}
+        <label className={primary + " min-h-16 cursor-pointer"}>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(event) => onFile(event.target.files?.[0])}
+          />
+          {t("en", "snap.take")}
+        </label>
+      ) : (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(event) => onFile(event.target.files?.[0])}
+          />
+          <h1 className="text-title font-bold text-fg">{t("en", "nav.snap")}</h1>
+          {demo ? <DemoBanner /> : null}
+          {demo && demoShopName ? (
+            <p className="text-label text-fg">{t("en", "demo.location", { name: demoShopName })}</p>
+          ) : null}
+          {behindOn && scene && phase !== "reading" && phase !== "error" ? <ScenePanel scene={scene} /> : null}
+        </>
+      )}
 
       {preview && phase !== "idle" && !(phase === "offer" && faceBoxes.length > 0) ? (
         <img src={preview} alt={t("en", "snap.alt")} className="aspect-[4/3] w-full rounded-lg object-cover" />
@@ -731,6 +787,7 @@ export function SnapFlow() {
 
       {phase === "reading" ? (
         <div aria-live="polite" className="flex flex-col gap-2">
+          <p className="text-body text-fg-muted">{t("en", "loc.why")}</p>
           <p className="text-heading font-bold text-fg">{t("en", "reading.shop")}</p>
           <p className="min-h-6 text-label text-fg-muted">
             {t("en", "reading.seconds", { t: String(elapsed) })}
@@ -848,7 +905,10 @@ export function SnapFlow() {
               {t("en", "add.using")} · {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
             </p>
           ) : (
-            <LocationHelp status={locStatus} onTryAgain={() => void askLocation()} force />
+            <>
+              <p className="text-body text-fg-muted">{t("en", "loc.why")}</p>
+              <LocationHelp status={locStatus} onTryAgain={() => void askLocation()} force />
+            </>
           )}
           {addError ? (
             <p role="alert" className="min-h-6 text-body text-danger">
