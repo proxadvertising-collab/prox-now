@@ -172,3 +172,151 @@ export async function callSpark(input: {
     clearTimeout(timer);
   }
 }
+
+export class MetaTruncated extends Error {
+  readonly model: string | null;
+  readonly ms: number;
+
+  constructor(model: string | null, ms: number) {
+    super("max_output_tokens");
+    this.name = "MetaTruncated";
+    this.model = model;
+    this.ms = ms;
+  }
+}
+
+export type SparkImagePart = {
+  label: string;
+  imageDataUrl: string;
+};
+
+export type SparkImagesResult = SparkResult & {
+  callId: string | null;
+};
+
+const BOOK_TIMEOUT_MS = 45_000;
+
+export function outputTokenBudget(imageCount: number): number {
+  const count = Math.max(1, Math.floor(imageCount));
+  return Math.min(4000, 200 * count + 300);
+}
+
+export function sparkImagesBody(input: {
+  prompt: string;
+  images: readonly SparkImagePart[];
+  maxOutputTokens: number;
+}): {
+  model: string;
+  reasoning: { effort: "low" };
+  max_output_tokens: number;
+  store: false;
+  input: { role: "user"; content: { type: string; text?: string; image_url?: string }[] }[];
+} {
+  const content: { type: string; text?: string; image_url?: string }[] = [
+    { type: "input_text", text: input.prompt },
+  ];
+  for (const image of input.images) {
+    content.push({ type: "input_text", text: image.label });
+    content.push({ type: "input_image", image_url: image.imageDataUrl });
+  }
+  return {
+    model: "muse-spark-1.3",
+    reasoning: { effort: "low" },
+    max_output_tokens: input.maxOutputTokens,
+    store: false,
+    input: [{ role: "user", content }],
+  };
+}
+
+function readCallId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const id = (payload as { id?: unknown }).id;
+  if (typeof id !== "string") return null;
+  const trimmed = id.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  return trimmed;
+}
+
+function incompleteReason(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const details = (payload as { incomplete_details?: unknown }).incomplete_details;
+  if (!details || typeof details !== "object") return null;
+  const reason = (details as { reason?: unknown }).reason;
+  return typeof reason === "string" && reason.trim() ? reason.trim() : null;
+}
+
+/** Several JPEG pages in one Meta request. The caller decides the chunk size. */
+export async function callSparkImages(input: {
+  prompt: string;
+  images: readonly SparkImagePart[];
+  maxOutputTokens?: number;
+}): Promise<SparkImagesResult> {
+  const apiKey = process.env.META_API_KEY;
+  if (!apiKey) throw new MetaKeyMissing();
+  if (input.images.length < 1) throw new MetaCallError("upstream");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BOOK_TIMEOUT_MS);
+  const started = Date.now();
+  const maxOutputTokens = input.maxOutputTokens ?? outputTokenBudget(input.images.length);
+
+  try {
+    let response: Response;
+    try {
+      response = await fetch(META_URL, {
+        method: "POST",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          Authorization: "Bearer " + apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          sparkImagesBody({
+            prompt: input.prompt,
+            images: input.images,
+            maxOutputTokens,
+          }),
+        ),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new MetaCallError("timeout");
+      }
+      throw new MetaCallError("upstream");
+    }
+
+    if (!response.ok) {
+      throw new MetaCallError(await metaFailureCode(response));
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new MetaParseError(null, Date.now() - started);
+    }
+
+    const model = readModel(payload);
+    const ms = Date.now() - started;
+    if (incompleteReason(payload) === "max_output_tokens") {
+      throw new MetaTruncated(model, ms);
+    }
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(stripFences(collectOutputText(payload)));
+    } catch {
+      throw new MetaParseError(model, ms);
+    }
+
+    const usage =
+      payload && typeof payload === "object" && "usage" in payload
+        ? (payload as { usage: unknown }).usage
+        : null;
+
+    return { raw, usage, ms, model, callId: readCallId(payload) };
+  } finally {
+    clearTimeout(timer);
+  }
+}

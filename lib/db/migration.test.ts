@@ -350,3 +350,31 @@ describe("rate limit migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("shop book migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0011_shop_book.sql"), "utf8");
+
+  it("turns on row level security and does not let clients write the book", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql.match(/enable row level security/g)?.length).toBe(3);
+    expect(sql).toContain("alter table public.shop_books enable row level security");
+    expect(sql).toContain("alter table public.shop_book_pages enable row level security");
+    expect(sql).toContain("alter table public.shop_book_translations enable row level security");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+    expect(sql).not.toContain("for insert");
+    expect(sql).not.toContain("for delete");
+    expect(sql).not.toMatch(/create policy [^;]*for update/i);
+    expect(sql).toContain("revoke all on function public.book_remove_page(uuid) from public, anon");
+    expect(sql).toContain("revoke all on function public.book_owner_update(uuid, jsonb, text) from public, anon");
+    expect(sql).not.toContain("grant execute on function public.book_remove_page(uuid) to anon");
+    expect(sql).not.toContain("grant execute on function public.book_owner_update(uuid, jsonb, text) to anon");
+    expect(sql).toContain("values ('shop-book', 'shop-book', true, 1048576");
+    expect(sql).not.toMatch(/create policy shop_book_\w*[\s\S]{0,80}for insert/);
+    expect(sql).toContain("No insert, update or delete policy");
+    expect(sql).toContain("function public.book_missing");
+    expect(sql).toContain("function public.book_public");
+    expect(sql).toContain("is_verified_owner");
+    expect(sql).toContain("display_name");
+    expect(sql).not.toContain("eyJ");
+  });
+});
