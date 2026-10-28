@@ -3,7 +3,6 @@ import { buildMatcherPrompt, parseMatcherResult } from "../../../lib/ai/matcher"
 import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../../lib/ai/meta";
 import { currencyForCountry, parseCountryHeader, parseTimezone, timezoneFromPoint } from "../../../lib/places/world";
 import {
-  NEW_SHOP_WINDOW_MS,
   POST_RADIUS_M,
   blockingShops,
   editedNameAllowed,
@@ -11,7 +10,6 @@ import {
   isUnreadablePhoto,
   readBusiness,
   sanitizeShopName,
-  underShopCreateLimit,
   type GateShop,
 } from "../../../lib/snap/place";
 import { SHOP_CATEGORIES, type ShopCategory } from "../../../lib/snap/prefill";
@@ -81,13 +79,6 @@ function shopPayload(row: Record<string, unknown>) {
 
 type ShopClient = {
   auth: { getUser: () => Promise<{ data: { user: { id: string } | null }; error: unknown }> };
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (column: string, value: string) => {
-        gte: (column: string, value: string) => Promise<{ data: unknown; error: { message?: string } | null }>;
-      };
-    };
-  };
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string } | null }>;
 };
 
@@ -127,20 +118,6 @@ async function readBody(request: Request): Promise<{ payload: Record<string, unk
     return { payload, image: null };
   } catch {
     return "bad";
-  }
-}
-
-async function recentCreates(supabase: ShopClient, userId: string): Promise<string[] | null> {
-  try {
-    const since = new Date(Date.now() - NEW_SHOP_WINDOW_MS).toISOString();
-    const { data, error } = await supabase.from("shops").select("created_at").eq("created_by", userId).gte("created_at", since);
-    if (error || !Array.isArray(data)) return null;
-    return data.map((row) => {
-      const record = asRecord(row);
-      return typeof record?.created_at === "string" ? record.created_at : "";
-    });
-  } catch {
-    return null;
   }
 }
 
@@ -237,12 +214,6 @@ export async function POST(request: Request) {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
-  }
-
-  const recent = await recentCreates(supabase, userData.user.id);
-  if (!recent || !underShopCreateLimit(recent, Date.now())) {
-    if (!recent) return NextResponse.json({ error: "upstream" }, { status: 502 });
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const nearby = await nearbyGate(supabase, input.lat, input.lng);

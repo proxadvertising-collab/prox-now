@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCH_RADIUS_M,
-  NEW_SHOP_WINDOW_MS,
   PICKER_CAP,
   POST_RADIUS_M,
   SAME_PLACE_M,
@@ -15,7 +14,6 @@ import {
   pickerCandidates,
   readBusiness,
   sanitizeShopName,
-  underShopCreateLimit,
 } from "./place";
 
 const basePlace = {
@@ -190,15 +188,6 @@ describe("new shop gates", () => {
     expect(blockingShops(apart, "Laundry").map((shop) => shop.id)).toEqual(["other"]);
     expect(blockingShops(apart, "Brand New")).toEqual([]);
     expect(blockingShops([{ id: "far", name: "Café Dawn", distanceM: POST_RADIUS_M + 20 }], "cafe dawn")).toEqual([]);
-  });
-
-  it("allows three new shops in 24 hours and stops the fourth", () => {
-    const now = Date.parse("2026-10-28T00:00:00.000Z");
-    const recent = [1, 2, 3].map((hours) => new Date(now - hours * 60 * 60 * 1000).toISOString());
-    expect(underShopCreateLimit(recent.slice(0, 2), now)).toBe(true);
-    expect(underShopCreateLimit(recent, now)).toBe(false);
-    const yesterday = new Date(now - NEW_SHOP_WINDOW_MS - 1000).toISOString();
-    expect(underShopCreateLimit([yesterday, recent[0], recent[1]], now)).toBe(true);
   });
 });
 
