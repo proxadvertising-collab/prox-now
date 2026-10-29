@@ -5,7 +5,7 @@ export default function InboxPage() {
   return (
     <>
       <h1 className="text-title font-bold text-fg">{t("en", "nav.shop")}</h1>
-      <EmptyState message={t("en", "empty.inbox")} />
+      <EmptyState message={t("en", "empty.inbox")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
     </>
   );
 }

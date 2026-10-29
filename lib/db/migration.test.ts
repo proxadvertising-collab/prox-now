@@ -65,11 +65,14 @@ describe("core schema files", () => {
       "clean-together",
       "baan-air",
       "beegee-barber",
-      "mexican-friend-tbd",
     ]) {
       expect(seed).toContain(slug);
     }
-    expect(seed.match(/TODO_REAL_COORDS/g)?.length).toBeGreaterThanOrEqual(9);
+    expect(seed).not.toContain("mexican-friend-tbd");
+    expect(seed).not.toContain("TODO Mexican");
+    expect(seed).toMatch(/'beegee-barber'[^)]*true\) -- TODO_REAL_COORDS/);
+    expect(seed).not.toMatch(/'beegee-barber'[^)]*true\),/);
+    expect(seed.match(/TODO_REAL_COORDS/g)?.length).toBe(8);
     for (const file of [migration, seed]) {
       expect(file).not.toContain("service_role");
       expect(file).not.toContain("eyJ");

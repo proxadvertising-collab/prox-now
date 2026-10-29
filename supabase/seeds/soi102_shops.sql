@@ -20,6 +20,5 @@ insert into public.shops (
   ('thuk-jai-chieo', 'Thuk Jai Chieo', null, 'restaurant', 12.56860, 99.95840, 'TH', 'Asia/Bangkok', 'THB', true), -- TODO_REAL_COORDS
   ('clean-together', 'Clean Together', 'คลีนทูเกเตอร์', 'laundry', 12.56805, 99.95770, 'TH', 'Asia/Bangkok', 'THB', true), -- TODO_REAL_COORDS
   ('baan-air', 'Baan Air', 'บ้านแอร์', 'home_services', 12.56885, 99.95720, 'TH', 'Asia/Bangkok', 'THB', true), -- TODO_REAL_COORDS
-  ('beegee-barber', 'BEEGEE Barber', null, 'barber', 12.56845, 99.95700, 'TH', 'Asia/Bangkok', 'THB', true), -- TODO_REAL_COORDS
-  ('mexican-friend-tbd', 'TODO Mexican restaurant (friend)', null, 'restaurant', 12.56830, 99.95860, 'TH', 'Asia/Bangkok', 'THB', true) -- TODO_NAME TODO_REAL_COORDS
+  ('beegee-barber', 'BEEGEE Barber', null, 'barber', 12.56845, 99.95700, 'TH', 'Asia/Bangkok', 'THB', true) -- TODO_REAL_COORDS
 on conflict (slug) do nothing;

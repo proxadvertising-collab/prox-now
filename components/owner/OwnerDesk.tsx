@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { t } from "@/lib/copy";
+import { readOwnerShops, type OwnerShop } from "@/lib/owner/shops";
 
 type Card = {
   id: string;
@@ -12,18 +14,15 @@ type Card = {
   facts?: { items?: { name?: string; price?: number | null; currency?: string | null }[]; crowd?: string | null } | null;
 };
 
-type ShopRow = { shopId: string; name: string; status: string; slug?: string };
-
 const primary =
   "inline-flex min-h-16 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink disabled:opacity-60";
 const danger =
   "inline-flex min-h-16 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg disabled:opacity-60";
 
-export function OwnerDesk() {
-  const [shops, setShops] = useState<ShopRow[] | null>(null);
+export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] }) {
+  const [shops, setShops] = useState<OwnerShop[]>(initialShops);
   const [cards, setCards] = useState<Card[]>([]);
   const [liveNow, setLiveNow] = useState<Card[]>([]);
-  const [counts, setCounts] = useState({ keptToday: 0, passedToday: 0 });
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,26 +32,29 @@ export function OwnerDesk() {
   const verified = (shops ?? []).some((shop) => shop.status === "verified");
 
   async function load() {
-    const [home, inbox] = await Promise.all([
-      fetch("/api/owner/home"),
-      fetch("/api/owner/inbox"),
-    ]);
-    if (home.status === 401 || inbox.status === 401) {
-      setError(t("en", "post.signin"));
-      setShops([]);
-      return;
+    try {
+      const [home, inbox] = await Promise.all([
+        fetch("/api/owner/home"),
+        fetch("/api/owner/inbox"),
+      ]);
+      if (home.status === 401 || inbox.status === 401) {
+        setError(t("en", "post.signin"));
+        setShops([]);
+        return;
+      }
+      const homeBody = (await home.json().catch(() => null)) as unknown;
+      const inboxBody = (await inbox.json().catch(() => null)) as {
+        cards?: Card[];
+        liveNow?: Card[];
+        keptToday?: number;
+        passedToday?: number;
+      } | null;
+      setShops(readOwnerShops(homeBody));
+      setCards(inboxBody?.cards ?? []);
+      setLiveNow(inboxBody?.liveNow ?? []);
+    } catch {
+      setError(t("en", "loop.fail"));
     }
-    const homeBody = (await home.json().catch(() => null)) as { shops?: ShopRow[] } | null;
-    const inboxBody = (await inbox.json().catch(() => null)) as {
-      cards?: Card[];
-      liveNow?: Card[];
-      keptToday?: number;
-      passedToday?: number;
-    } | null;
-    setShops(homeBody?.shops ?? []);
-    setCards(inboxBody?.cards ?? []);
-    setLiveNow(inboxBody?.liveNow ?? []);
-    setCounts({ keptToday: inboxBody?.keptToday ?? 0, passedToday: inboxBody?.passedToday ?? 0 });
   }
 
   useEffect(() => {
@@ -120,24 +122,29 @@ export function OwnerDesk() {
     }
   }
 
-  if (shops === null) return <h1 className="text-title font-bold text-fg">{t("en", "loop.owner")}</h1>;
-
-  if (!verified) {
-    const pending = (shops ?? []).find((shop) => shop.status === "pending");
-    return (
-      <div className="flex flex-col gap-3">
-        <h1 className="text-title font-bold text-fg">{t("en", "loop.owner")}</h1>
-        <p className="text-body text-fg">{pending ? t("en", "loop.waiting") : t("en", "loop.claimHint")}</p>
-        {error ? <p role="alert" className="text-body text-danger">{error}</p> : null}
-      </div>
-    );
-  }
+  const pending = shops.find((shop) => shop.status === "pending");
 
   return (
     <div className="flex flex-col gap-3">
       <h1 className="text-title font-bold text-fg">{t("en", "loop.owner")}</h1>
+      {shops.length === 0 ? (
+        <EmptyState message={t("en", "empty.owner")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {shops.map((shop) => (
+            <li key={shop.shopId} className="rounded-lg bg-surface-1 p-4">
+              <p className="text-heading font-bold text-fg">{shop.name}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!verified && shops.length > 0 ? (
+        <p className="text-body text-fg">{pending ? t("en", "loop.waiting") : t("en", "loop.claimHint")}</p>
+      ) : null}
       {note ? <p className="text-body text-fg motion-safe:animate-pulse">{note}</p> : null}
       {error ? <p role="alert" className="text-body text-danger">{error}</p> : null}
+      {verified ? (
+      <>
       {liveNow.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-heading font-bold text-fg">{t("en", "loop.liveNow")}</h2>
@@ -152,12 +159,7 @@ export function OwnerDesk() {
         </section>
       ) : null}
       {!card ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-heading font-bold text-fg">{t("en", "loop.caught")}</p>
-          <p className="text-body text-fg-muted">
-            {t("en", "loop.today", { kept: String(counts.keptToday), passed: String(counts.passedToday) })}
-          </p>
-        </div>
+        <EmptyState message={t("en", "loop.caught")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
       ) : (
         <article
           className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
@@ -204,6 +206,8 @@ export function OwnerDesk() {
       <a className="inline-flex min-h-11 items-center text-body font-semibold text-fg" href="/owner/redeem">
         {t("en", "loop.redeem")}
       </a>
+      </>
+      ) : null}
     </div>
   );
 }
