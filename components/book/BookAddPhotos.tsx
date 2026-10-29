@@ -25,8 +25,7 @@ export function BookAddPhotos({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function onFiles(list: FileList | null) {
-    const files = Array.from(list ?? []);
+  async function onFiles(files: File[]) {
     if (files.length === 0 || busy) return;
     setBusy(true);
     setNote("");
@@ -78,7 +77,7 @@ export function BookAddPhotos({
           className="sr-only"
           disabled={busy}
           onChange={(event) => {
-            const files = event.target.files;
+            const files = Array.from(event.target.files ?? []);
             event.target.value = "";
             void onFiles(files);
           }}

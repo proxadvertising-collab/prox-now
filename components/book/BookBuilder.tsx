@@ -118,8 +118,7 @@ export function BookBuilder({
     setAttempt((current) => current + 1);
   }
 
-  function queue(kind: BookTile, list: FileList | null) {
-    const files = Array.from(list ?? []);
+  function queue(kind: BookTile, files: File[]) {
     if (files.length === 0) return;
     const added = addBookShots(
       shots.map((shot) => ({ id: shot.id, kind: shot.kind, file: shot.file })),
@@ -238,7 +237,7 @@ export function BookBuilder({
               className="sr-only"
               disabled={busy}
               onChange={(event) => {
-                const files = event.target.files;
+                const files = Array.from(event.target.files ?? []);
                 event.target.value = "";
                 queue(capture, files);
               }}
@@ -253,7 +252,7 @@ export function BookBuilder({
               className="sr-only"
               disabled={busy}
               onChange={(event) => {
-                const files = event.target.files;
+                const files = Array.from(event.target.files ?? []);
                 event.target.value = "";
                 queue(capture, files);
               }}
