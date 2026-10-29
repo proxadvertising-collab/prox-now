@@ -1,157 +1,268 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t, type CopyKey } from "@/lib/copy";
+import { locate } from "@/lib/geo/locate";
 import {
+  BOOK_CAPTURE_STEPS,
+  addBookShots,
+  atThisShop,
   bookBuildHref,
   bookErrorKey,
-  bookTileInput,
   bookUploadState,
-  pickedBookFiles,
-  prepareBookPick,
-  summarizeBookUpload,
+  removeBookShot,
+  uploadBookSession,
+  type BookShot,
   type BookTile,
-  type UploadSummary,
 } from "@/lib/book/builder";
-import { resizeToJpeg } from "@/lib/image/resize";
 
-const TILES: { kind: BookTile; label: CopyKey }[] = [
-  { kind: "menu", label: "book.menu" },
-  { kind: "storefront", label: "book.storefront" },
-  { kind: "hours", label: "book.hoursTile" },
-];
+type Gate = "checking" | "ok" | "need_location" | "too_far" | "unknown_shop";
+type Step = BookTile | "review";
+
+type Queued = BookShot & { url: string };
 
 const primary =
-  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline";
-const tileClass =
-  "inline-flex min-h-16 w-full cursor-pointer items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg";
+  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
+const secondary =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg no-underline touch-manipulation disabled:opacity-60";
 
-export function BookBuilder({ slug, name }: { slug: string; name: string }) {
-  const input = bookTileInput();
-  const [busy, setBusy] = useState<BookTile | null>(null);
-  const [thumbs, setThumbs] = useState<string[]>([]);
+function stepTitle(step: BookTile): CopyKey {
+  if (step === "menu") return "book.menuStep";
+  if (step === "hours") return "book.hours";
+  return "book.storefront";
+}
+
+function withUrls(previous: readonly Queued[], shots: readonly BookShot[]): Queued[] {
+  const known = new Map(previous.map((shot) => [shot.id, shot]));
+  const next = shots.map((shot) => {
+    const kept = known.get(shot.id);
+    if (kept) return kept;
+    return { ...shot, url: URL.createObjectURL(shot.file) };
+  });
+  for (const shot of previous) {
+    if (!next.some((item) => item.id === shot.id)) URL.revokeObjectURL(shot.url);
+  }
+  return next;
+}
+
+export function BookBuilder({
+  shopId,
+  slug,
+  name,
+  lat,
+  lng,
+}: {
+  shopId: string;
+  slug: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+}) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const pointRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [gate, setGate] = useState<Gate>("checking");
+  const [attempt, setAttempt] = useState(0);
+  const [step, setStep] = useState<Step>("storefront");
+  const [shots, setShots] = useState<Queued[]>([]);
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const [summary, setSummary] = useState<UploadSummary | null>(null);
+  const shotsRef = useRef<Queued[]>([]);
 
-  function replaceThumbs(next: string[]) {
-    setThumbs((current) => {
-      for (const url of current) URL.revokeObjectURL(url);
-      return next;
+  useEffect(() => {
+    shotsRef.current = shots;
+  }, [shots]);
+
+  useEffect(() => {
+    return () => {
+      for (const shot of shotsRef.current) URL.revokeObjectURL(shot.url);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      const located = await locate();
+      if (cancel) return;
+      const here = located.status === "ok" ? located.point : null;
+      pointRef.current = here;
+      const shop = lat != null && lng != null ? { lat, lng } : null;
+      setGate(atThisShop(here, shop));
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [lat, lng, attempt]);
+
+  function recheck() {
+    setNote("");
+    setGate("checking");
+    setAttempt((current) => current + 1);
+  }
+
+  function queue(kind: BookTile, list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (files.length === 0) return;
+    const added = addBookShots(
+      shots.map((shot) => ({ id: shot.id, kind: shot.kind, file: shot.file })),
+      kind,
+      files,
+    );
+    if (added.capped) setNote(t("en", "book.cap"));
+    setShots((current) => withUrls(current, added.shots));
+    if (kind === "storefront") setStep("menu");
+    if (kind === "hours") setStep("review");
+  }
+
+  function skip() {
+    if (step === "storefront") setStep("menu");
+    else if (step === "menu") setStep("hours");
+    else if (step === "hours") setStep("review");
+  }
+
+  function remove(id: string) {
+    setShots((current) => {
+      const next = removeBookShot(current, id);
+      return withUrls(current, next);
     });
   }
 
-  async function onPick(kind: BookTile, list: FileList | null) {
-    const picked = pickedBookFiles(list, input.cap);
-    const plan = prepareBookPick(kind, picked.length);
-    if ("error" in plan) {
-      setNote(t("en", plan.error === "one" ? "book.one" : "book.failed"));
+  async function save() {
+    if (shots.length === 0) {
+      setNote(t("en", "book.emptySave"));
       return;
     }
-    const files = picked.slice(0, plan.send);
-    replaceThumbs(files.map((file) => URL.createObjectURL(file)));
-    setBusy(kind);
-    setSummary(null);
-    setNote(
-      (plan.capped ? t("en", "book.cap") + " " : "") + t("en", "book.uploading", { n: String(files.length) }),
-    );
+    setBusy(true);
+    setNote(t("en", "book.uploading", { n: String(shots.length) }));
     try {
-      const form = new FormData();
-      form.set("shop", slug);
-      form.set("kind", kind);
-      for (const file of files) {
-        const jpeg = await resizeToJpeg(file);
-        form.append("files", new File([jpeg], "page.jpg", { type: "image/jpeg" }));
-      }
-      const response = await fetch("/api/book/pages", { method: "POST", body: form });
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
-      const state = bookUploadState(response.status, body?.error);
+      const result = await uploadBookSession(
+        shopId,
+        shots.map(({ id, kind, file }) => ({ id, kind, file })),
+      );
+      const state = bookUploadState(result.status, result.error);
       if (state === "signin") {
         window.location.assign("/login?next=" + encodeURIComponent(bookBuildHref(slug)));
         return;
       }
-      const read = summarizeBookUpload(body);
       if (state === "ok" || state === "resting" || state === "saved") {
-        setSummary(read);
-        setNote(state === "ok" ? "" : t("en", bookErrorKey(body?.error) as CopyKey));
+        const here = pointRef.current;
+        const params = new URLSearchParams({ seeded: "1" });
+        if (here) {
+          params.set("lat", String(here.lat));
+          params.set("lng", String(here.lng));
+        }
+        window.location.assign("/book/" + encodeURIComponent(slug) + "?" + params.toString());
         return;
       }
-      setNote(t("en", bookErrorKey(body?.error) as CopyKey));
+      setNote(t("en", bookErrorKey(result.error) as CopyKey));
     } catch {
       setNote(t("en", "book.failed"));
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
+
+  const thumbs = (
+    <ul className="flex gap-2 overflow-x-auto">
+      {shots.map((shot) => (
+        <li key={shot.id}>
+          <button type="button" className="min-h-11 min-w-11" aria-label={t("en", "book.remove")} onClick={() => remove(shot.id)}>
+            <img src={shot.url} alt="" className="h-20 w-20 rounded-md object-cover" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  if (gate === "checking") {
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-title font-bold text-fg">{name}</h1>
+        <p className="text-body text-fg">{t("en", "book.checking")}</p>
+      </div>
+    );
+  }
+
+  if (gate !== "ok") {
+    const key: CopyKey = gate === "too_far" ? "book.tooFar" : gate === "need_location" ? "book.needLoc" : "book.where";
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-title font-bold text-fg">{name}</h1>
+        <p role="status" className="text-body text-fg">
+          {t("en", key)}
+        </p>
+        <button type="button" className={primary} onClick={recheck}>
+          {t("en", "err.retry")}
+        </button>
+      </div>
+    );
+  }
+
+  const capture = step === "review" ? null : step;
+  const menuCount = shots.filter((shot) => shot.kind === "menu").length;
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-title font-bold text-fg">{name}</h1>
-      <p className="text-heading font-bold text-fg">{t("en", "book.build")}</p>
       <p className="text-label text-fg-muted">{t("en", "book.stay")}</p>
-      <ul className="flex flex-col gap-2">
-        {TILES.map((tile) => (
-          <li key={tile.kind}>
-            <label className={tileClass}>
-              <input
-                type={input.type}
-                accept={input.accept}
-                multiple={input.multiple}
-                className="sr-only"
-                disabled={busy !== null}
-                onChange={(event) => {
-                  const files = event.target.files;
-                  event.target.value = "";
-                  void onPick(tile.kind, files);
-                }}
-              />
-              {busy === tile.kind ? t("en", "book.uploading", { n: String(thumbs.length || 1) }) : t("en", tile.label)}
-            </label>
-          </li>
-        ))}
-      </ul>
-      {thumbs.length > 0 ? (
-        <ul className="flex gap-2 overflow-x-auto">
-          {thumbs.map((url) => (
-            <li key={url}>
-              <img src={url} alt="" className="h-20 w-20 rounded-md object-cover" />
-            </li>
-          ))}
-        </ul>
+      {capture ? (
+        <p className="text-heading font-bold text-fg">
+          {t("en", stepTitle(capture))} {BOOK_CAPTURE_STEPS.indexOf(capture) + 1}/{BOOK_CAPTURE_STEPS.length}
+        </p>
       ) : null}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        disabled={busy}
+        onChange={(event) => {
+          const files = event.target.files;
+          event.target.value = "";
+          if (capture) queue(capture, files);
+        }}
+      />
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        disabled={busy}
+        onChange={(event) => {
+          const files = event.target.files;
+          event.target.value = "";
+          if (capture) queue(capture, files);
+        }}
+      />
+      {capture ? (
+        <>
+          <button type="button" className={primary} disabled={busy} onClick={() => cameraRef.current?.click()}>
+            {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
+          </button>
+          <button type="button" className={secondary} disabled={busy} onClick={() => libraryRef.current?.click()}>
+            {t("en", "book.library")}
+          </button>
+          {capture === "menu" ? (
+            <button type="button" className={secondary} disabled={busy} onClick={() => setStep("hours")}>
+              {t("en", "book.stepDone")}
+            </button>
+          ) : null}
+          <button type="button" className={secondary} disabled={busy} onClick={skip}>
+            {t("en", "book.skip")}
+          </button>
+        </>
+      ) : (
+        <button type="button" className={primary} disabled={busy} onClick={() => void save()}>
+          {t("en", "book.save")}
+        </button>
+      )}
+      {shots.length > 0 ? thumbs : null}
       {note ? (
         <p role="status" className="text-body text-fg">
           {note}
         </p>
-      ) : null}
-      {summary ? (
-        <div className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
-          {summary.swatches.length > 0 ? (
-            <div className="flex h-3 overflow-hidden rounded-full" aria-hidden="true">
-              {summary.swatches.map((color) => (
-                <span key={color} className="h-3 flex-1" style={{ background: color }} />
-              ))}
-            </div>
-          ) : null}
-          <p className="text-body text-fg">{t("en", "book.found", { n: String(summary.items.length) })}</p>
-          {summary.items.length > 0 ? (
-            <ul className="flex flex-col gap-1">
-              {summary.items.map((item) => (
-                <li key={item.name} className="flex justify-between text-body text-fg">
-                  <span>{item.name}</span>
-                  {item.price ? <span className="tabular-nums">{item.price}</span> : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {summary.hours ? (
-            <p className="text-body text-fg">
-              {t("en", "book.hours")}: {summary.hours}
-            </p>
-          ) : null}
-          <a className={primary} href={"/book/" + encodeURIComponent(slug)}>
-            {t("en", "book.see")}
-          </a>
-        </div>
       ) : null}
     </div>
   );

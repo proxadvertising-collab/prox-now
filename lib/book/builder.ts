@@ -1,4 +1,6 @@
-import { MAX_UPLOAD_IMAGES, type UploadKind } from "./limits";
+import { haversineMeters, type LatLng } from "../geo";
+import { POST_RADIUS_M } from "../snap/place";
+import { MAX_IMAGES_PER_CALL, MAX_UPLOAD_IMAGES } from "./limits";
 
 export const BOOK_PICK_CAP = MAX_UPLOAD_IMAGES;
 
@@ -107,4 +109,113 @@ export function summarizeBookUpload(body: unknown): UploadSummary {
     ? theme.swatches.filter((color): color is string => typeof color === "string" && color.startsWith("#")).slice(0, 5)
     : [];
   return { items, hours: hoursLabel, swatches };
+}
+
+/** Storefront, then menu, then hours. The capture screen opens on the first step. */
+export const BOOK_CAPTURE_STEPS = ["storefront", "menu", "hours"] as const;
+
+export type BookShot = {
+  id: string;
+  kind: BookTile;
+  file: File;
+};
+
+export const BOOK_UPLOAD_PATH = "/api/book/pages";
+
+/**
+ * Same gate as a live post: the person is at the shop when the rounded
+ * distance is within POST_RADIUS_M. Checked once when the book flow opens.
+ */
+export function atThisShop(
+  here: LatLng | null,
+  shop: LatLng | null,
+): "ok" | "need_location" | "too_far" | "unknown_shop" {
+  if (!shop || !Number.isFinite(shop.lat) || !Number.isFinite(shop.lng)) return "unknown_shop";
+  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lng)) return "need_location";
+  const distanceM = Math.round(haversineMeters(here, shop));
+  if (distanceM > POST_RADIUS_M) return "too_far";
+  return "ok";
+}
+
+export function addBookShots(
+  current: readonly BookShot[],
+  kind: BookTile,
+  files: readonly File[],
+  cap = BOOK_PICK_CAP,
+): { shots: BookShot[]; capped: boolean } {
+  const incoming = files.filter((file) => file instanceof File);
+  if (kind === "menu") {
+    const menus = current.filter((shot) => shot.kind === "menu").length;
+    const room = Math.max(0, cap - menus);
+    const take = incoming.slice(0, room);
+    const added = take.map((file) => ({ id: crypto.randomUUID(), kind: "menu" as const, file }));
+    return { shots: [...current, ...added], capped: incoming.length > room };
+  }
+  const primary = incoming[0];
+  const without = current.filter((shot) => shot.kind !== kind);
+  const withPrimary = primary
+    ? [...without, { id: crypto.randomUUID(), kind, file: primary }]
+    : without;
+  const extras = incoming.slice(1);
+  if (extras.length === 0) return { shots: withPrimary, capped: false };
+  return addBookShots(withPrimary, "menu", extras, cap);
+}
+
+export function removeBookShot(shots: readonly BookShot[], id: string): BookShot[] {
+  return shots.filter((shot) => shot.id !== id);
+}
+
+/** One request for this shop. Muse still reads at most 8 images per call. */
+export function bookSessionForm(shopId: string, shots: readonly BookShot[]): FormData {
+  const form = new FormData();
+  form.set("shop", shopId);
+  form.set("session", "1");
+  for (const shot of shots) form.append(shot.kind, shot.file, shot.file.name || "page.jpg");
+  return form;
+}
+
+export function museCallSizes(imageCount: number, limit = MAX_IMAGES_PER_CALL): number[] {
+  if (imageCount <= 0) return [];
+  const sizes: number[] = [];
+  let left = imageCount;
+  const cap = Math.max(1, limit);
+  while (left > 0) {
+    const size = Math.min(cap, left);
+    sizes.push(size);
+    left -= size;
+  }
+  return sizes;
+}
+
+type BookFetch = (url: string, init: { method: "POST"; body: FormData }) => Promise<Response>;
+
+export type BookUploadResult = {
+  url: string;
+  status: number;
+  error?: string;
+  body: unknown;
+};
+
+export async function uploadBookSession(
+  shopId: string,
+  shots: readonly BookShot[],
+  fetchImpl: BookFetch = fetch,
+): Promise<BookUploadResult> {
+  const response = await fetchImpl(BOOK_UPLOAD_PATH, { method: "POST", body: bookSessionForm(shopId, shots) });
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  const error = typeof body?.error === "string" ? body.error : undefined;
+  return { url: BOOK_UPLOAD_PATH, status: response.status, error, body };
+}
+
+export function nextShopNearby<T extends { id: string; slug?: string }>(
+  shops: readonly T[],
+  current: { id?: string | null; slug?: string | null },
+): T | null {
+  return (
+    shops.find((shop) => {
+      if (current.id && shop.id === current.id) return false;
+      if (current.slug && shop.slug === current.slug) return false;
+      return true;
+    }) ?? null
+  );
 }

@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
 import { bookBuildHref } from "@/lib/book/builder";
 import { presentBook } from "@/lib/book/present";
@@ -18,10 +19,25 @@ async function shopByKey(key: string): Promise<{ id: string; slug: string; name:
   return { id: row.id, slug: row.slug, name: row.name };
 }
 
-export default async function BookPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function BookPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ seeded?: string; lat?: string; lng?: string }>;
+}) {
   await connection();
   const { slug } = await params;
+  const query = await searchParams;
   const key = decodeURIComponent(slug);
+  const seeded = query.seeded === "1";
+  const lat = Number(query.lat);
+  const lng = Number(query.lng);
+  const here = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const actions = (shopId: string, bookSlug: string) =>
+    seeded ? (
+      <SeededActions shopId={shopId} slug={bookSlug} lat={here?.lat ?? null} lng={here?.lng ?? null} />
+    ) : null;
   if (!hasShopEnv()) {
     return (
       <div className="flex flex-col gap-3">
@@ -33,6 +49,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
         >
           {t("en", "book.build")}
         </a>
+        {actions(key, key)}
       </div>
     );
   }
@@ -57,6 +74,7 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
           >
             {t("en", "book.build")}
           </a>
+          {actions(shop?.id ?? key, view?.slug ?? shop?.slug ?? key)}
         </div>
       );
     }
@@ -93,9 +111,15 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
             </li>
           ))}
         </ul>
+        {actions(shop?.id ?? key, view.slug)}
       </div>
     );
   } catch {
-    return <p className="text-body text-fg">{t("en", "book.empty")}</p>;
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-body text-fg">{t("en", "book.empty")}</p>
+        {actions(key, key)}
+      </div>
+    );
   }
 }
