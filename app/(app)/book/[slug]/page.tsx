@@ -1,7 +1,7 @@
 import { connection } from "next/server";
+import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
-import { bookBuildHref } from "@/lib/book/builder";
 import { presentBook } from "@/lib/book/present";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
@@ -10,13 +10,18 @@ export const instant = false;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string } | null> {
+function coord(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string; lat: number | null; lng: number | null } | null> {
   const supabase = await createClient();
-  const query = supabase.from("shops").select("id, slug, name");
+  const query = supabase.from("shops").select("id, slug, name, lat, lng");
   const result = UUID.test(key) ? await query.eq("id", key).maybeSingle() : await query.eq("slug", key).maybeSingle();
   const row = result.data;
   if (!row || typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.name !== "string") return null;
-  return { id: row.id, slug: row.slug, name: row.name };
+  return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng) };
 }
 
 export default async function BookPage({
@@ -43,12 +48,11 @@ export default async function BookPage({
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{t("en", "sheet.openBook")}</h1>
         <p className="text-body text-fg">{t("en", "book.empty")}</p>
-        <a
-          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
-          href={bookBuildHref(key)}
-        >
-          {t("en", "book.build")}
-        </a>
+        <BookAddPhotos
+          shopId={key}
+          shop={null}
+          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
+        />
         {actions(key, key)}
       </div>
     );
@@ -61,19 +65,18 @@ export default async function BookPage({
     const result = lookup ? await supabase.rpc("book_public", { p_slug: lookup }) : { data: null };
     const view = presentBook(result.data, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
     const name = view?.name ?? shop?.name ?? key;
-    const build = bookBuildHref(view?.slug ?? shop?.slug ?? key);
+    const point = shop?.lat != null && shop.lng != null ? { lat: shop.lat, lng: shop.lng } : null;
 
     if (!view || view.pages.length === 0) {
       return (
         <div className="flex flex-col gap-3">
           <h1 className="text-title font-bold text-fg">{name}</h1>
           <p className="text-body text-fg">{t("en", "book.empty")}</p>
-          <a
-            className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
-            href={build}
-          >
-            {t("en", "book.build")}
-          </a>
+          <BookAddPhotos
+            shopId={shop?.id ?? key}
+            shop={point}
+            className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
+          />
           {actions(shop?.id ?? key, view?.slug ?? shop?.slug ?? key)}
         </div>
       );
@@ -111,6 +114,11 @@ export default async function BookPage({
             </li>
           ))}
         </ul>
+        <BookAddPhotos
+          shopId={shop?.id ?? key}
+          shop={point}
+          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
+        />
         {actions(shop?.id ?? key, view.slug)}
       </div>
     );
@@ -118,6 +126,11 @@ export default async function BookPage({
     return (
       <div className="flex flex-col gap-3">
         <p className="text-body text-fg">{t("en", "book.empty")}</p>
+        <BookAddPhotos
+          shopId={key}
+          shop={null}
+          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
+        />
         {actions(key, key)}
       </div>
     );

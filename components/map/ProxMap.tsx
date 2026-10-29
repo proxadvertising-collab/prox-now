@@ -6,7 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
-import { DEMO_ZONE_FALLBACK, showExploreChip } from "@/lib/demo/zone";
+import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
+import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { pickLanguage } from "@/lib/i18n/viewer";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
@@ -397,6 +398,10 @@ export function ProxMap({
   }, [webgl, demoSession]);
 
   useEffect(() => {
+    if (fixtures || demoSession) document.cookie = demoSessionCookie();
+  }, [fixtures, demoSession]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !focus) return;
     map.flyTo({ center: [focus.lng, focus.lat], zoom: 16, essential: true });
@@ -599,6 +604,7 @@ export function ProxMap({
             type="button"
             className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 text-left text-label font-semibold text-accent-ink shadow-card"
             onClick={() => {
+              document.cookie = demoSessionCookie();
               const map = mapRef.current;
               if (!map) return;
               void (async () => {
@@ -671,9 +677,7 @@ export function ProxMap({
             {t("en", "sheet.openBook")}
           </a>
           {sheet.showBuild ? (
-            <a className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
-              {t("en", "book.build")}
-            </a>
+            <BookAddPhotos shopId={selectedShop.id} shop={selectedShop} className={"mt-2 " + secondaryLink} />
           ) : null}
           <a
             className={

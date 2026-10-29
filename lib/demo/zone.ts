@@ -3,6 +3,20 @@ import { haversineMeters, type LatLng } from "../geo";
 export const DEMO_ZONE_FALLBACK = { lat: 12.5684, lng: 99.9577, zoom: 16.5 };
 export const EXPLORE_RADIUS_M = 25_000;
 
+/** Session cookie set by the map's Explore-the-demo-zone toggle and by a demo session. */
+export const DEMO_SESSION_COOKIE = "prox-demo";
+
+export function demoSessionCookie(): string {
+  return DEMO_SESSION_COOKIE + "=1; Path=/; SameSite=Lax";
+}
+
+export function hasDemoSessionCookie(cookie: string): boolean {
+  return cookie.split(";").some((part) => {
+    const [name, value] = part.trim().split("=");
+    return name === DEMO_SESSION_COOKIE && value === "1";
+  });
+}
+
 export function showExploreChip(input: {
   demoSession: boolean;
   viewer: LatLng | null;

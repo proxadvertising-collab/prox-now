@@ -139,12 +139,17 @@ export function atThisShop(
   return "ok";
 }
 
-/** Fixture demo mode has no shop env. A demo account row is the judge shopper or owner. */
+/**
+ * Demo mode matches the map: no shop env, the prox-demo session cookie
+ * (Explore the demo zone, or a fixture/demo session), or a demo_accounts row.
+ * A real user with none of those stays on the GPS check.
+ */
 export async function viewerUsesDemoLocation(input: {
   hasEnv: boolean;
+  demoCookie: boolean;
   lookup: () => Promise<{ error: unknown; count: number }>;
 }): Promise<boolean> {
-  if (!input.hasEnv) return true;
+  if (!input.hasEnv || input.demoCookie) return true;
   try {
     const account = await input.lookup();
     if (account.error) return false;

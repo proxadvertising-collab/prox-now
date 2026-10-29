@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { nearestDemoShop, showExploreChip } from "./zone";
+import { hasDemoSessionCookie, nearestDemoShop, showExploreChip } from "./zone";
 
 const viewer = { lat: 12.5684, lng: 99.9577 };
+
+describe("demo session cookie", () => {
+  it("reads only the map toggle cookie", () => {
+    expect(hasDemoSessionCookie("")).toBe(false);
+    expect(hasDemoSessionCookie("prox-demo=1")).toBe(true);
+    expect(hasDemoSessionCookie("other=1; prox-demo=1")).toBe(true);
+    expect(hasDemoSessionCookie("prox-demo=0")).toBe(false);
+  });
+});
 
 describe("explore chip", () => {
   it("hides for a demo session and shows when nothing live is within 25 km", () => {

@@ -104,8 +104,9 @@ describe("book capture session", () => {
     expect(screen.includes("/api/analyze")).toBe(false);
     expect(screen.includes("/api/shops")).toBe(false);
     expect(screen.includes("uploadBookSession")).toBe(true);
-    expect(screen.includes('capture="environment"')).toBe(true);
-    expect(screen.includes("multiple")).toBe(true);
+    expect(screen.includes('capture="environment"')).toBe(false);
+    expect(screen.match(/type="file"/g)?.length).toBe(2);
+    expect(screen.match(/multiple/g)?.length).toBeGreaterThanOrEqual(2);
     expect(screen.includes('accept="image/*"')).toBe(true);
   });
 
@@ -122,12 +123,30 @@ describe("book capture session", () => {
   });
 
   it("treats demo mode and a demo account as on site, and keeps a real user on GPS", async () => {
-    expect(await viewerUsesDemoLocation({ hasEnv: false, lookup: async () => ({ error: null, count: 0 }) })).toBe(true);
-    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: null, count: 1 }) })).toBe(true);
-    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: null, count: 0 }) })).toBe(false);
-    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: new Error("no"), count: 1 }) })).toBe(
-      false,
+    const none = async () => ({ error: null, count: 0 });
+    expect(await viewerUsesDemoLocation({ hasEnv: false, demoCookie: false, lookup: none })).toBe(true);
+    expect(await viewerUsesDemoLocation({ hasEnv: true, demoCookie: true, lookup: none })).toBe(true);
+    expect(await viewerUsesDemoLocation({ hasEnv: true, demoCookie: false, lookup: async () => ({ error: null, count: 1 }) })).toBe(
+      true,
     );
+    expect(await viewerUsesDemoLocation({ hasEnv: true, demoCookie: false, lookup: none })).toBe(false);
+    expect(
+      await viewerUsesDemoLocation({ hasEnv: true, demoCookie: false, lookup: async () => ({ error: new Error("no"), count: 1 }) }),
+    ).toBe(false);
+  });
+
+  it("picks many photos from the sheet, the book, and the builder", () => {
+    const sheet = readFileSync(resolve(root, "components/map/ProxMap.tsx"), "utf8");
+    const book = readFileSync(resolve(root, "app/(app)/book/[slug]/page.tsx"), "utf8");
+    const add = readFileSync(resolve(root, "components/book/BookAddPhotos.tsx"), "utf8");
+    expect(sheet).toContain("BookAddPhotos");
+    expect(sheet).toContain("demoSessionCookie()");
+    expect(book).toContain("BookAddPhotos");
+    expect(add).toContain('type="file"');
+    expect(add).toContain('accept="image/*"');
+    expect(add).toContain("multiple");
+    expect(add).toContain("uploadBookSession");
+    expect(add).not.toContain("capture=");
   });
 
   it("sends storefront, three menu photos, and hours as one upload for that shop id", () => {

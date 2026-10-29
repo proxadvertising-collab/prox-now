@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { t, type CopyKey } from "@/lib/copy";
-import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
+import { DEMO_ZONE_FALLBACK, hasDemoSessionCookie } from "@/lib/demo/zone";
 import { locate } from "@/lib/geo/locate";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/client";
@@ -62,8 +62,6 @@ export function BookBuilder({
   lat: number | null;
   lng: number | null;
 }) {
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const libraryRef = useRef<HTMLInputElement>(null);
   const pointRef = useRef<{ lat: number; lng: number } | null>(null);
   const [gate, setGate] = useState<Gate>("checking");
   const [attempt, setAttempt] = useState(0);
@@ -89,6 +87,7 @@ export function BookBuilder({
       const shop = lat != null && lng != null ? { lat, lng } : null;
       const demo = await viewerUsesDemoLocation({
         hasEnv: hasShopEnv(),
+        demoCookie: hasDemoSessionCookie(document.cookie),
         lookup: async () => {
           const supabase = createClient();
           const account = await supabase.from("demo_accounts").select("role").limit(1);
@@ -229,40 +228,38 @@ export function BookBuilder({
           {t("en", stepTitle(capture))} {BOOK_CAPTURE_STEPS.indexOf(capture) + 1}/{BOOK_CAPTURE_STEPS.length}
         </p>
       ) : null}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        disabled={busy}
-        onChange={(event) => {
-          const files = event.target.files;
-          event.target.value = "";
-          if (capture) queue(capture, files);
-        }}
-      />
-      <input
-        ref={libraryRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="sr-only"
-        disabled={busy}
-        onChange={(event) => {
-          const files = event.target.files;
-          event.target.value = "";
-          if (capture) queue(capture, files);
-        }}
-      />
       {capture ? (
         <>
-          <button type="button" className={primary} disabled={busy} onClick={() => cameraRef.current?.click()}>
+          <label className={primary}>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              disabled={busy}
+              onChange={(event) => {
+                const files = event.target.files;
+                event.target.value = "";
+                queue(capture, files);
+              }}
+            />
             {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
-          </button>
-          <button type="button" className={secondary} disabled={busy} onClick={() => libraryRef.current?.click()}>
+          </label>
+          <label className={secondary}>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              disabled={busy}
+              onChange={(event) => {
+                const files = event.target.files;
+                event.target.value = "";
+                queue(capture, files);
+              }}
+            />
             {t("en", "book.library")}
-          </button>
+          </label>
           {capture === "menu" ? (
             <button type="button" className={secondary} disabled={busy} onClick={() => setStep("hours")}>
               {t("en", "book.stepDone")}
