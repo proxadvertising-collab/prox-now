@@ -1,13 +1,19 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../image/resize", () => ({
+  resizeToJpeg: vi.fn(async (file: Blob) => file),
+}));
+import { resizeToJpeg } from "../image/resize";
 import { bookHref } from "../map/pin-sheet";
 import { POST_RADIUS_M } from "../snap/place";
 import { snapShopHref } from "../snap/target";
 import {
   BOOK_CAPTURE_STEPS,
   BOOK_PICK_CAP,
+  BOOK_REQUEST_BYTES,
   BOOK_UPLOAD_PATH,
   addBookShots,
   atThisShop,
@@ -79,6 +85,10 @@ describe("book upload states", () => {
     expect(bookErrorKey("book_hidden")).toBe("book.hidden");
     expect(bookUploadState(200, undefined)).toBe("ok");
     expect(bookUploadState(503, "ai_resting")).toBe("resting");
+    expect(bookUploadState(502, "upstream")).toBe("saved");
+    expect(bookUploadState(502, undefined)).toBe("rejected");
+    expect(bookUploadState(502, "upload_failed")).toBe("rejected");
+    expect(bookErrorKey("upload_failed")).toBe("book.failed");
   });
 
   it("reads items, prices, hours, and palette from the upload", () => {
@@ -98,6 +108,10 @@ function photo(name: string): File {
 }
 
 describe("book capture session", () => {
+  beforeEach(() => {
+    vi.mocked(resizeToJpeg).mockImplementation(async (file: Blob) => file);
+  });
+
   it("opens on storefront, then menu, then hours, and the screen never calls the matcher", () => {
     expect(BOOK_CAPTURE_STEPS).toEqual(["storefront", "menu", "hours"]);
     const screen = readFileSync(resolve(root, "components/book/BookBuilder.tsx"), "utf8");
@@ -105,9 +119,8 @@ describe("book capture session", () => {
     expect(screen.includes("/api/shops")).toBe(false);
     expect(screen.includes("uploadBookSession")).toBe(true);
     expect(screen.includes('capture="environment"')).toBe(false);
-    expect(screen.match(/type="file"/g)?.length).toBe(2);
-    expect(screen.match(/multiple/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(screen.includes('accept="image/*"')).toBe(true);
+    expect(screen.includes('type="file"')).toBe(false);
+    expect(screen.includes("/snap?seed=1")).toBe(true);
   });
 
   it("checks presence once with the same radius as a live post", () => {
@@ -139,21 +152,22 @@ describe("book capture session", () => {
     const sheet = readFileSync(resolve(root, "components/map/ProxMap.tsx"), "utf8");
     const book = readFileSync(resolve(root, "app/(app)/book/[slug]/page.tsx"), "utf8");
     const add = readFileSync(resolve(root, "components/book/BookAddPhotos.tsx"), "utf8");
-    expect(sheet).toContain("BookAddPhotos");
+    expect(sheet).not.toContain("BookAddPhotos");
+    expect(sheet).toContain("sheet.buildHref");
+    expect(sheet).toContain('t("en", "book.build")');
     expect(sheet).toContain("demoSessionCookie()");
     expect(book).toContain("BookAddPhotos");
-    expect(add).toContain('type="file"');
-    expect(add).toContain('accept="image/*"');
-    expect(add).toContain("multiple");
-    expect(add).toContain("uploadBookSession");
+    expect(add).not.toContain('type="file"');
+    expect(add).toContain("/snap?seed=1");
     expect(add).not.toContain("capture=");
   });
 
-  it("sends storefront, three menu photos, and hours as one upload for that shop id", () => {
+  it("sends storefront, three menu photos, and hours as one upload for that shop id", async () => {
     let shots = addBookShots([], "storefront", [photo("front.jpg")]).shots;
     shots = addBookShots(shots, "menu", [photo("m1.jpg"), photo("m2.jpg"), photo("m3.jpg")]).shots;
     shots = addBookShots(shots, "hours", [photo("hours.jpg")]).shots;
-    const form = bookSessionForm("shop-9", shots);
+    const form = await bookSessionForm("shop-9", shots);
+    expect(resizeToJpeg).toHaveBeenCalledWith(expect.any(File), 1600, 0.8);
     expect(form.get("shop")).toBe("shop-9");
     expect(form.get("session")).toBe("1");
     expect(form.getAll("storefront")).toHaveLength(1);
@@ -162,9 +176,9 @@ describe("book capture session", () => {
     expect(BOOK_UPLOAD_PATH).toBe("/api/book/pages");
   });
 
-  it("skipping storefront and hours still saves menu only", () => {
+  it("skipping storefront and hours still saves menu only", async () => {
     const shots = addBookShots([], "menu", [photo("m1.jpg"), photo("m2.jpg"), photo("m3.jpg")]).shots;
-    const form = bookSessionForm("shop-9", shots);
+    const form = await bookSessionForm("shop-9", shots);
     expect(form.getAll("menu")).toHaveLength(3);
     expect(form.get("storefront")).toBeNull();
     expect(form.get("hours")).toBeNull();
@@ -186,6 +200,50 @@ describe("book capture session", () => {
     expect(urls).toEqual(["/api/book/pages"]);
     expect(result.url).toBe("/api/book/pages");
     expect(result.status).toBe(200);
+    expect(resizeToJpeg).toHaveBeenCalledWith(expect.any(File), 1600, 0.8);
+  });
+
+  it("keeps three resized photos in one request when they fit under 4 MB", async () => {
+    const chunk = Math.floor(BOOK_REQUEST_BYTES / 3);
+    vi.mocked(resizeToJpeg).mockImplementation(async () => new Blob([new Uint8Array(chunk)]));
+    const shots = addBookShots([], "menu", [photo("a.jpg"), photo("b.jpg"), photo("c.jpg")]).shots;
+    const calls: FormData[] = [];
+    const result = await uploadBookSession("shop-9", shots, async (_url, init) => {
+      calls.push(init.body);
+      return new Response(JSON.stringify({ pages: [] }), { status: 200 });
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.getAll("menu")).toHaveLength(3);
+    expect(result.status).toBe(200);
+  });
+
+  it("splits a session that is still over 4 MB and stops on a bare 502", async () => {
+    const heavy = Math.floor(BOOK_REQUEST_BYTES / 2) + 1;
+    vi.mocked(resizeToJpeg).mockImplementation(async () => new Blob([new Uint8Array(heavy)]));
+    const shots = addBookShots([], "menu", [photo("a.jpg"), photo("b.jpg")]).shots;
+    const calls: number[] = [];
+    const split = await uploadBookSession("shop-9", shots, async () => {
+      calls.push(1);
+      return new Response(JSON.stringify({ pages: [] }), { status: 200 });
+    });
+    expect(calls).toHaveLength(2);
+    expect(split.status).toBe(200);
+
+    calls.length = 0;
+    const failed = await uploadBookSession("shop-9", shots, async () => {
+      calls.push(1);
+      return new Response("bad gateway", { status: 502 });
+    });
+    expect(calls).toHaveLength(1);
+    expect(failed.status).toBe(502);
+    expect(failed.error).toBeUndefined();
+    expect(bookUploadState(failed.status, failed.error)).toBe("rejected");
+
+    const named = await uploadBookSession("shop-9", shots, async () => {
+      return new Response(JSON.stringify({ error: "upload_failed" }), { status: 502 });
+    });
+    expect(named.error).toBe("upload_failed");
+    expect(bookUploadState(named.status, named.error)).toBe("rejected");
   });
 
   it("keeps one storefront, queues library extras as menu, and caps menu at 8", () => {

@@ -14,9 +14,9 @@ export function uploadBlock(input: {
   const live = input.livePages.filter((page) => page.status === "live");
   if (SINGLE.has(input.kind) && input.fileCount > 1) return "bad_image";
   if (SINGLE.has(input.kind) && live.some((page) => page.kind === input.kind)) return "already_there";
-  if (input.kind === "menu") {
-    const menus = live.filter((page) => page.kind === "menu").length;
-    if (menus + input.fileCount > MAX_MENU_PAGES) return "page_limit";
+  if (input.kind === "menu" || input.kind === "extra") {
+    const pages = live.filter((page) => page.kind === input.kind).length;
+    if (pages + input.fileCount > MAX_MENU_PAGES) return "page_limit";
   }
   return null;
 }

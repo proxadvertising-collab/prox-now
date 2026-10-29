@@ -82,11 +82,33 @@ export default async function BookPage({
       );
     }
 
-    const menu = view.pages.filter((page) => page.kind === "menu" || page.kind === "storefront" || page.kind === "hours");
-    const shown = menu.length > 0 ? menu : view.pages;
+    const extras = view.pages.filter((page) => page.kind === "extra");
+    const shown = view.pages.filter((page) => page.kind === "menu" || page.kind === "hours" || page.kind === "storefront");
+    const pages = shown.length > 0 ? shown : view.pages.filter((page) => page.kind !== "logo" && page.kind !== "extra");
+    const accent = view.accent ?? "#FF8A3D";
+    const ink = view.ink ?? "#1C0E05";
+    const mood =
+      view.mood === "elegant"
+        ? "font-serif tracking-wide"
+        : view.mood === "playful"
+          ? "italic"
+          : view.mood === "street"
+            ? "uppercase tracking-widest"
+            : "font-black";
 
     return (
-      <div className="flex flex-col gap-4" style={view.swatches[0] ? { borderTop: "4px solid " + view.swatches[0] } : undefined}>
+      <div className="flex flex-col gap-4">
+        <header className="flex items-center gap-4 rounded-lg p-4" style={{ background: accent, color: ink }}>
+          {view.logoUrl ? (
+            <img src={view.logoUrl} alt="" className="h-20 w-20 rounded-md bg-white object-contain" />
+          ) : (
+            <div className="h-20 w-20 rounded-md bg-white/40" />
+          )}
+          <div>
+            <h1 className={"text-title " + mood}>{view.name}</h1>
+            {view.nameLocal ? <p className="text-label opacity-80">{view.nameLocal}</p> : null}
+          </div>
+        </header>
         {view.swatches.length > 0 ? (
           <div className="flex h-3 overflow-hidden rounded-full" aria-hidden="true">
             {view.swatches.map((color) => (
@@ -94,26 +116,42 @@ export default async function BookPage({
             ))}
           </div>
         ) : null}
-        <h1 className="text-title font-bold text-fg">{view.name}</h1>
-        {view.nameLocal ? <p className="text-label text-fg-muted">{view.nameLocal}</p> : null}
-        {view.tagline ? <p className="text-body text-fg">{view.tagline}</p> : null}
+        {view.tagline ? <p className={"text-body " + mood} style={{ color: accent }}>{view.tagline}</p> : null}
         {view.hoursLabel ? (
           <p className="text-body text-fg">
             {t("en", "book.hours")}: {view.hoursLabel}
           </p>
         ) : null}
         <ul className="flex flex-col gap-3">
-          {shown.map((page) => (
-            <li key={page.id}>
+          {pages.map((page) => (
+            <li key={page.id} className="overflow-hidden rounded-lg border-4" style={{ borderColor: accent, background: ink, color: accent }}>
               {page.imageUrl ? (
-                <img src={page.imageUrl} alt={view.name} className="aspect-[4/3] w-full rounded-lg object-cover" />
+                <img src={page.imageUrl} alt={view.name} className="aspect-[4/3] w-full object-cover" />
               ) : (
-                <div className="aspect-[4/3] w-full rounded-lg bg-surface-2" />
+                <div className="aspect-[4/3] w-full bg-surface-2" />
               )}
-              {page.credit ? <p className="mt-1 text-label text-fg-muted">{t("en", "book.credit", { name: page.credit })}</p> : null}
+              {page.credit ? <p className="px-3 py-2 text-label">{t("en", "book.credit", { name: page.credit })}</p> : null}
             </li>
           ))}
         </ul>
+        {extras.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <h2 className={"text-heading " + mood} style={{ color: accent }}>
+              Extras
+            </h2>
+            <ul className="flex flex-col gap-3">
+              {extras.map((page) => (
+                <li key={page.id} className="overflow-hidden rounded-lg border-4" style={{ borderColor: accent, background: ink, color: accent }}>
+                  {page.imageUrl ? (
+                    <img src={page.imageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                  ) : (
+                    <div className="aspect-[4/3] w-full bg-surface-2" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <BookAddPhotos
           shopId={shop?.id ?? key}
           shop={point}

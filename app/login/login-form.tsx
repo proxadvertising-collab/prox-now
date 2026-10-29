@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { safeNext } from "@/lib/auth/safe-next";
+import { useLayoutEffect, useState, type FormEvent } from "react";
 import { t } from "@/lib/copy";
-import { createClient } from "@/lib/supabase/client";
+import {
+  KEEP_STORAGE_KEY,
+  SESSION_MIRROR_KEY,
+  clientSkipsLogin,
+  createClient,
+  sessionPersistence,
+  shouldClearTabSession,
+} from "@/lib/supabase/client";
 
 const primary =
-  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
+  "inline-flex min-h-14 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
 
 const field =
   "min-h-12 w-full rounded-md border border-border bg-surface-1 px-3 text-base text-fg";
@@ -15,105 +21,55 @@ function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function LoginForm({ nextPath, failed }: { nextPath: string; failed: boolean }) {
-  const next = safeNext(nextPath);
-  const codeRef = useRef<HTMLInputElement>(null);
+export function LoginForm({ dest, failed }: { dest: string; failed: boolean }) {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [phase, setPhase] = useState<"email" | "code">("email");
+  const [password, setPassword] = useState("");
+  const [keep, setKeep] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState<string | null>(failed ? t("en", "auth.failed") : null);
-  const [info, setInfo] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (phase === "code") codeRef.current?.focus();
-  }, [phase]);
+  useLayoutEffect(() => {
+    let persistence = sessionPersistence(true);
+    let mirror: string | null = null;
+    try {
+      persistence = sessionPersistence(window.localStorage.getItem(KEEP_STORAGE_KEY) !== "0");
+      mirror = persistence === "session" ? window.sessionStorage.getItem(SESSION_MIRROR_KEY) : null;
+    } catch {
+      return;
+    }
+    if (clientSkipsLogin(persistence, mirror)) {
+      window.location.replace(dest);
+      return;
+    }
+    if (shouldClearTabSession(persistence, mirror)) createClient();
+  }, [dest]);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = window.setTimeout(() => setCooldown((value) => value - 1), 1000);
-    return () => window.clearTimeout(id);
-  }, [cooldown]);
-
-  async function sendCode() {
+  async function signIn() {
     const address = email.trim();
     if (!isEmail(address)) {
-      setInfo(null);
       setError(t("en", "auth.emailInvalid"));
       return;
     }
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const supabase = createClient();
-      const { error: sendError } = await supabase.auth.signInWithOtp({
-        email: address,
-        options: { shouldCreateUser: true },
-      });
-      if (sendError) {
-        setError(t("en", "auth.failed"));
-        return;
-      }
-      setPhase("code");
-      setCooldown(30);
-      setInfo(t("en", "auth.sent"));
-    } catch {
-      setError(t("en", "auth.failed"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function verifyCode() {
-    const address = email.trim();
-    const token = code.replace(/\D/g, "").slice(0, 6);
-    if (token.length !== 6) {
-      setInfo(null);
-      setError(t("en", "auth.mismatch"));
+    if (!password) {
+      setError("Enter your password.");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.verifyOtp({
+      const supabase = createClient({ keepSignedIn: keep });
+      const { error: signError } = await supabase.auth.signInWithPassword({
         email: address,
-        token,
-        type: "email",
+        password,
       });
-      if (verifyError) {
-        setError(t("en", "auth.mismatch"));
+      if (signError) {
+        setError(t("en", "auth.failed"));
         return;
       }
-      window.location.assign(next);
+      window.location.assign(dest);
     } catch {
       setError(t("en", "auth.failed"));
     } finally {
-      setLoading(false);
-    }
-  }
-
-  async function continueWithGoogle() {
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const supabase = createClient();
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo:
-            window.location.origin + "/auth/callback?next=" + encodeURIComponent(next),
-        },
-      });
-      if (oauthError) {
-        setError(t("en", "auth.failed"));
-        setLoading(false);
-      }
-    } catch {
-      setError(t("en", "auth.failed"));
       setLoading(false);
     }
   }
@@ -121,11 +77,8 @@ export function LoginForm({ nextPath, failed }: { nextPath: string; failed: bool
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (loading) return;
-    if (phase === "email") void sendCode();
-    else void verifyCode();
+    void signIn();
   }
-
-  const message = error ?? info ?? "";
 
   return (
     <form className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -134,21 +87,8 @@ export function LoginForm({ nextPath, failed }: { nextPath: string; failed: bool
         role={error ? "alert" : "status"}
         className={"min-h-6 text-label " + (error ? "text-danger" : "text-fg-muted")}
       >
-        {message}
+        {error ?? ""}
       </p>
-      <button
-        type="button"
-        className={primary}
-        disabled={loading}
-        onClick={() => void continueWithGoogle()}
-      >
-        {t("en", "auth.google")}
-      </button>
-      <div className="flex items-center gap-3 text-label text-fg-muted" role="separator">
-        <span className="h-px flex-1 bg-border" />
-        <span>{t("en", "auth.or")}</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
       <div className="flex flex-col gap-2">
         <label htmlFor="email" className="text-label font-semibold text-fg">
           {t("en", "auth.emailLabel")}
@@ -171,48 +111,37 @@ export function LoginForm({ nextPath, failed }: { nextPath: string; failed: bool
           }}
         />
       </div>
-      {phase === "email" ? (
-        <button type="submit" className={primary} disabled={loading}>
-          {t("en", "auth.email")}
-        </button>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <label htmlFor="code" className="text-label font-semibold text-fg">
-              {t("en", "auth.codeLabel")}
-            </label>
-            <input
-              id="code"
-              ref={codeRef}
-              name="one-time-code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              className={field}
-              value={code}
-              aria-describedby="auth-message"
-              aria-invalid={error ? true : undefined}
-              onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                setError(null);
-              }}
-            />
-          </div>
-          <button type="submit" className={primary} disabled={loading || code.length !== 6}>
-            {t("en", "auth.verify")}
-          </button>
-          <button
-            type="button"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-md px-4 text-base font-semibold text-fg no-underline disabled:opacity-60"
-            disabled={loading || cooldown > 0}
-            onClick={() => void sendCode()}
-          >
-            {cooldown > 0
-              ? t("en", "auth.resendIn", { t: String(cooldown) })
-              : t("en", "auth.resend")}
-          </button>
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="password" className="text-label font-semibold text-fg">
+          Password
+        </label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          className={field}
+          value={password}
+          aria-describedby="auth-message"
+          aria-invalid={error ? true : undefined}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setError(null);
+          }}
+        />
+      </div>
+      <label className="flex min-h-11 items-center gap-3 text-label text-fg">
+        <input
+          type="checkbox"
+          name="keep"
+          checked={keep}
+          onChange={(event) => setKeep(event.target.checked)}
+        />
+        Keep me signed in
+      </label>
+      <button type="submit" className={primary} disabled={loading}>
+        {t("en", "auth.signIn")}
+      </button>
     </form>
   );
 }

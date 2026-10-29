@@ -145,8 +145,13 @@ function clearPostDraft() {
   }
 }
 
-export function SnapFlow({ preselected = null }: { preselected?: { id: string; name: string } | null }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+export function SnapFlow({
+  preselected = null,
+  onRetake,
+}: {
+  preselected?: { id: string; name: string } | null;
+  onRetake?: () => void;
+}) {
   const onFileRef = useRef<(file: File | undefined) => void>(() => undefined);
   const runRef = useRef(0);
   const fileRef = useRef<File | null>(null);
@@ -452,7 +457,6 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
     setFriendAgrees(false);
     setScene(null);
     forgetOriginal();
-    if (inputRef.current) inputRef.current.value = "";
   }
 
   async function askLocation() {
@@ -929,32 +933,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
   return (
     <div className="flex flex-col gap-4">
       {phase === "idle" ? (
-        <div className="flex flex-col gap-3">
-          {preselected ? (
-            <p className="text-heading font-bold text-fg">{t("en", "snap.forShop", { name: preselected.name })}</p>
-          ) : null}
-          <label className={primary + " min-h-16 cursor-pointer"}>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(event) => onFile(event.target.files?.[0])}
-            />
-            {t("en", "snap.take")}
-          </label>
-        </div>
+        <p className="text-body text-fg">{t("en", "reading.shop")}</p>
       ) : (
         <>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(event) => onFile(event.target.files?.[0])}
-          />
           <h1 className="text-title font-bold text-fg">{t("en", "nav.snap")}</h1>
           {demo ? <DemoBanner /> : null}
           {demo && demoShopName ? (
@@ -1060,7 +1041,7 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
           <p role="status" className="text-body text-fg">
             {t("en", "post.unusable")}
           </p>
-          <button type="button" className={primary} onClick={() => inputRef.current?.click()}>
+          <button type="button" className={primary} onClick={() => onRetake?.()}>
             {t("en", "snap.take")}
           </button>
         </div>
@@ -1205,7 +1186,7 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
             </p>
           ) : null}
           {photoMissing ? (
-            <button type="button" className={primary + " min-h-16"} onClick={() => inputRef.current?.click()}>
+            <button type="button" className={primary + " min-h-16"} onClick={() => onRetake?.()}>
               {t("en", "snap.cta")}
             </button>
           ) : (

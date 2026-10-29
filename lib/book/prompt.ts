@@ -16,6 +16,24 @@ export function facePrompt(indexes: readonly number[]): string {
   );
 }
 
+export function improvePrompt(
+  kind: string,
+  existing: readonly { id: string; extracted: unknown }[],
+): string {
+  const lines = existing.map((page) => "id=" + page.id + " " + JSON.stringify(page.extracted ?? {})).join("\n");
+  return (
+    "Compare this new shop photo with the existing " +
+    kind +
+    " pages.\n" +
+    "same info = skip. newer or different (new prices, new hours, new logo) = replace that page. a new item = add.\n" +
+    "Output ONLY JSON. No markdown. No extra keys.\n" +
+    '{"action":"skip","pageId":null}\n' +
+    "action is skip, replace, or add. pageId is the existing id when action is replace.\n" +
+    "Existing pages:\n" +
+    (lines || "(none)")
+  );
+}
+
 export function bookReadPrompt(indexes: readonly number[]): string {
   return (
     "Read the REAL text in these photos for a shop book. Copy text exactly as printed. " +
@@ -36,6 +54,18 @@ export function bookReadPrompt(indexes: readonly number[]): string {
     "The images are numbered: " +
     numbered(indexes) +
     ". Return one pages entry for each number, with index set to that number."
+  );
+}
+
+export function logoFixPrompt(): string {
+  return (
+    "This photo contains one shop logo. Find the logo mark, not the whole storefront.\n" +
+    "Output ONLY JSON. No markdown. No extra keys.\n" +
+    '{"box":[0.1,0.1,0.4,0.4],"rotation":0,"colors":["#112233","#AABBCC"],"mood":"bold"}\n' +
+    "box is [x1,y1,x2,y2] around the logo after it is straightened, origin top-left, each value from 0 to 1. " +
+    "rotation is the degrees to rotate the photo so the logo is upright, from -180 to 180. " +
+    "colors are 2 or 3 brand hex colours actually visible in the logo. " +
+    "mood is bold, elegant, playful, or street."
   );
 }
 

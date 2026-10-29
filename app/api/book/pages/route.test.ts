@@ -34,6 +34,8 @@ const { getUser, state, service } = vi.hoisted(() => {
     op = "select";
     payload: unknown = null;
 
+    eqs: [string, unknown][] = [];
+
     constructor(table: string) {
       this.table = table;
     }
@@ -44,6 +46,7 @@ const { getUser, state, service } = vi.hoisted(() => {
 
     eq(column: string, value: unknown) {
       state.filters.push([this.table, column, value]);
+      this.eqs.push([column, value]);
       return this;
     }
 
@@ -71,6 +74,12 @@ const { getUser, state, service } = vi.hoisted(() => {
       if (this.table === "shops") return { data: state.shop, error: state.shopError };
       if (this.table === "shop_book_pages" && this.op === "select") {
         return { data: state.pages.filter((page) => page.status === "live"), error: null };
+      }
+      if (this.table === "shop_book_pages" && this.op === "update") {
+        const id = this.eqs.find((pair) => pair[0] === "id")?.[1];
+        const page = state.pages.find((row) => row.id === id);
+        if (page) Object.assign(page, this.payload as Row);
+        return { data: page ?? null, error: null };
       }
       if (this.table === "shop_book_pages" && this.op === "insert") {
         if (state.pageInsertError) return { data: null, error: state.pageInsertError };
@@ -145,6 +154,14 @@ function installFetch() {
     const indexes = content
       .filter((part) => part.text?.startsWith("Image "))
       .map((part) => Number(String(part.text).replace("Image ", "").replace(":", "")));
+    if (prompt.includes("Compare this new shop photo")) {
+      if (mode === "improve-skip") return metaResponse(JSON.stringify({ action: "skip", pageId: null }));
+      if (mode === "improve-replace") {
+        const id = /id=([0-9a-f-]{36})/i.exec(prompt)?.[1] ?? null;
+        return metaResponse(JSON.stringify({ action: "replace", pageId: id }));
+      }
+      return metaResponse(JSON.stringify({ action: "add", pageId: null }));
+    }
     if (prompt.includes("Find every human face")) {
       if (mode === "blur") return metaResponse(JSON.stringify({ pages: indexes.map((index) => ({ index })) }));
       const faces = mode === "face" ? [[0.4, 0.4, 0.6, 0.6]] : [];
@@ -382,12 +399,14 @@ describe("POST /api/book/pages", () => {
   });
 
   async function postSession(
-    items: { kind: "storefront" | "menu" | "hours"; file?: File }[],
+    items: { kind: "storefront" | "logo" | "menu" | "hours" | "extra"; file?: File }[],
     shop = SHOP,
+    bookMode?: string,
   ) {
     const form = new FormData();
     form.set("shop", shop);
     form.set("session", "1");
+    if (bookMode) form.set("mode", bookMode);
     for (const item of items) form.append(item.kind, item.file ?? (await jpegFile(item.kind + ".jpg")));
     return POST(
       new Request("http://localhost/api/book/pages", {
@@ -397,6 +416,13 @@ describe("POST /api/book/pages", () => {
       }),
     );
   }
+
+  it("stores a session logo as a logo page and a default theme when the logo read fails", async () => {
+    const response = await postSession([{ kind: "logo" }, { kind: "menu" }, { kind: "hours" }]);
+    expect(response.status).toBe(200);
+    expect(state.pages.map((page) => page.kind)).toEqual(["logo", "menu", "hours"]);
+    expect(state.book?.theme).toMatchObject({ mood: "bold", accent: "#FF8A3D" });
+  });
 
   it("a book upload with a shop id never calls the matcher or creates a shop", async () => {
     const response = await postSession([{ kind: "menu" }]);
@@ -464,5 +490,43 @@ describe("POST /api/book/pages", () => {
       return sent.input[0].content.filter((part: { type: string }) => part.type === "input_image").length;
     });
     expect(sizes).toEqual([8, 1]);
+  });
+
+  it("improve mode skips a duplicate, replaces a changed page, and adds a new one", async () => {
+    const hoursId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const menuId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    state.pages = [
+      { id: hoursId, kind: "hours", status: "live", extracted: { section: "old" }, shop_id: SHOP },
+      { id: menuId, kind: "menu", status: "live", extracted: { section: "old" }, shop_id: SHOP },
+    ];
+    state.book = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };
+
+    mode = "improve-skip";
+    const skipped = await postSession([{ kind: "hours" }], SHOP, "improve");
+    expect(skipped.status).toBe(200);
+    const skippedBody = (await skipped.json()) as { summary?: string };
+    expect(skippedBody.summary).toBe("1 skipped as duplicate");
+    expect(state.pages.filter((page) => page.kind === "hours" && page.status === "live")).toHaveLength(1);
+    expect(state.removed.length).toBeGreaterThan(0);
+
+    mode = "improve-replace";
+    const replaced = await postSession([{ kind: "menu" }], SHOP, "improve");
+    expect(replaced.status).toBe(200);
+    const replacedBody = (await replaced.json()) as { summary?: string };
+    expect(replacedBody.summary).toContain("Updated 1 menu item");
+    expect(state.pages.find((page) => page.id === menuId)?.status).toBe("removed");
+
+    mode = "improve-add";
+    const added = await postSession([{ kind: "menu" }], SHOP, "improve");
+    expect(added.status).toBe(200);
+    const addedBody = (await added.json()) as { summary?: string };
+    expect(addedBody.summary).toContain("Added 1 menu item");
+    expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed").length).toBeGreaterThan(1);
+  });
+
+  it("stores an extra page as the extra kind", async () => {
+    const response = await postSession([{ kind: "extra" }]);
+    expect(response.status).toBe(200);
+    expect(state.pages.map((page) => page.kind)).toEqual(["extra"]);
   });
 });

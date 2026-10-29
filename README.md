@@ -67,7 +67,7 @@ Routes in this scaffold:
 - `DEMO_OWNER_EMAIL`
 - `DEMO_OWNER_PASSWORD`
 
-`SUPABASE_SERVICE_ROLE_KEY` is unused in this scaffold. The `DEMO_*` values stay on the server. They are not in client code.
+`SUPABASE_SERVICE_ROLE_KEY` is REQUIRED for book uploads. The `DEMO_*` values stay on the server. They are not in client code.
 
 ## Where Meta models are used
 
