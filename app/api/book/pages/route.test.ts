@@ -382,7 +382,7 @@ describe("POST /api/book/pages", () => {
   });
 
   async function postSession(
-    items: { kind: "storefront" | "menu" | "hours"; file?: File }[],
+    items: { kind: "storefront" | "logo" | "menu" | "hours"; file?: File }[],
     shop = SHOP,
   ) {
     const form = new FormData();
@@ -397,6 +397,13 @@ describe("POST /api/book/pages", () => {
       }),
     );
   }
+
+  it("stores a session logo as a logo page and a default theme when the logo read fails", async () => {
+    const response = await postSession([{ kind: "logo" }, { kind: "menu" }, { kind: "hours" }]);
+    expect(response.status).toBe(200);
+    expect(state.pages.map((page) => page.kind)).toEqual(["logo", "menu", "hours"]);
+    expect(state.book?.theme).toMatchObject({ mood: "bold", accent: "#FF8A3D" });
+  });
 
   it("a book upload with a shop id never calls the matcher or creates a shop", async () => {
     const response = await postSession([{ kind: "menu" }]);

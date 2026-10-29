@@ -94,7 +94,8 @@ export function LiveCamera({
   const [draftName, setDraftName] = useState(preselected?.name ?? "");
   const [liveFile, setLiveFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
-  const [flying, setFlying] = useState<string | null>(null);
+  const [flying, setFlying] = useState<{ url: string; go: boolean } | null>(null);
+  const [badge, setBadge] = useState(0);
   const [busy, setBusy] = useState(false);
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File>>({});
@@ -191,8 +192,16 @@ export function LiveCamera({
     }
     setFiles((current) => ({ ...current, [id]: file }));
     setTray(next);
-    if (armed !== "menu") setFlying(id);
+    if (armed !== "menu") launch(file);
     if (armed === "logo" || !match) void matchShop(file, fix);
+  }
+
+  function launch(file: File) {
+    const url = URL.createObjectURL(file);
+    setFlying({ url, go: false });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setFlying((current) => (current && current.url === url ? { url, go: true } : current)));
+    });
   }
 
   async function matchShop(file: File, fix: CaptureFix) {
@@ -257,8 +266,7 @@ export function LiveCamera({
       const bookShots: BookShot[] = tray.shots.flatMap((shot) => {
         const file = files[shot.id];
         if (!file) return [];
-        const kind = bookKind(shot.slot);
-        return [{ id: shot.id, kind: kind === "logo" ? "storefront" : kind, file }];
+        return [{ id: shot.id, kind: bookKind(shot.slot), file }];
       });
       const result = await uploadBookSession(shop.id, bookShots);
       if (result.status >= 400 && result.error !== "upstream") {
@@ -274,7 +282,10 @@ export function LiveCamera({
   }
 
   const menu = menuButton(tray);
-  const badge = bubbleCount(tray);
+  const parked = bubbleCount(tray);
+  if (!flying && badge !== parked) {
+    queueMicrotask(() => setBadge(parked));
+  }
 
   if (liveFile) {
     return (
@@ -301,7 +312,11 @@ export function LiveCamera({
         >
           {seedTitle(hasBook)}
           {badge > 0 ? (
-            <span className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1 text-caption font-bold text-accent-ink">
+            <span
+              key={badge}
+              className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1 text-caption font-bold text-accent-ink"
+              style={{ animation: "seed-bump 200ms ease-out" }}
+            >
               {badge}
             </span>
           ) : null}
@@ -324,7 +339,9 @@ export function LiveCamera({
                   className="min-h-11 rounded-full bg-white/90 px-3 font-semibold text-black disabled:opacity-40"
                   onClick={() => {
                     if (slot === "menu" && menu.label === "Done") {
-                      setFlying("menu");
+                      const last = shotsFor(tray, "menu").at(-1);
+                      const file = last ? files[last.id] : null;
+                      if (file) launch(file);
                       setTray((current) => parkMenu(current));
                       return;
                     }
@@ -340,10 +357,22 @@ export function LiveCamera({
           </div>
         ) : null}
       </div>
+      <style>{"@keyframes seed-bump { from { transform: scale(0.6); } to { transform: scale(1); } }"}</style>
       {flying ? (
-        <span
-          className="absolute right-16 top-16 h-10 w-10 rounded-md bg-white/80 motion-safe:animate-pulse"
-          onAnimationEnd={() => setFlying(null)}
+        <img
+          src={flying.url}
+          alt=""
+          className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-16 w-16 rounded-md object-cover"
+          style={{
+            transition: "transform 400ms ease-in",
+            transform: flying.go
+              ? "translate(calc(50vw - 5rem), calc(-50vh + 1.5rem)) scale(0.15)"
+              : "translate(-50%, -50%) scale(1)",
+          }}
+          onTransitionEnd={() => {
+            URL.revokeObjectURL(flying.url);
+            setFlying(null);
+          }}
         />
       ) : null}
       {!match && draftName ? (

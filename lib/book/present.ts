@@ -16,6 +16,10 @@ export type BookView = {
   tagline: string | null;
   hoursLabel: string | null;
   swatches: string[];
+  accent: string | null;
+  ink: string | null;
+  mood: "bold" | "elegant" | "playful" | "street" | null;
+  logoUrl: string | null;
   pages: BookPageView[];
 };
 
@@ -68,6 +72,10 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
   const swatches = Array.isArray(theme?.swatches)
     ? theme.swatches.filter((item): item is string => typeof item === "string" && /^#[0-9A-Fa-f]{6}$/.test(item)).slice(0, 5)
     : [];
+  const accent = text(theme?.accent, 7);
+  const ink = text(theme?.ink, 7);
+  const moodText = text(theme?.mood, 12);
+  const mood = moodText === "bold" || moodText === "elegant" || moodText === "playful" || moodText === "street" ? moodText : null;
   const pages: BookPageView[] = [];
   if (Array.isArray(root.pages)) {
     for (const item of root.pages) {
@@ -86,6 +94,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
       });
     }
   }
+  const logo = pages.find((page) => page.kind === "logo" && page.imageUrl);
   return {
     id,
     slug,
@@ -94,6 +103,10 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     tagline: text(book?.tagline, 140),
     hoursLabel: hoursLabel(book?.hours),
     swatches,
+    accent: accent && /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent.toUpperCase() : null,
+    ink: ink && /^#[0-9A-Fa-f]{6}$/.test(ink) ? ink.toUpperCase() : null,
+    mood,
+    logoUrl: logo?.imageUrl ?? null,
     pages,
   };
 }

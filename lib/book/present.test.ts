@@ -21,6 +21,8 @@ describe("book view", () => {
     expect(view?.name).toBe("Dawn Cafe");
     expect(view?.hoursLabel).toBe("08:00–17:00");
     expect(view?.swatches).toEqual(["#FF8A3D", "#112233"]);
+    expect(view?.mood).toBeNull();
+    expect(view?.logoUrl).toBeNull();
     expect(view?.pages.map((page) => page.kind)).toEqual(["menu", "storefront"]);
     expect(view?.pages[0]?.imageUrl).toBe(bookImageUrl("https://example.supabase.co", "shop-1/menu.jpg"));
     expect(view?.pages[0]?.imageUrl).toContain("/shop-book/shop-1/menu.jpg");

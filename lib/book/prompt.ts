@@ -39,6 +39,18 @@ export function bookReadPrompt(indexes: readonly number[]): string {
   );
 }
 
+export function logoFixPrompt(): string {
+  return (
+    "This photo contains one shop logo. Find the logo mark, not the whole storefront.\n" +
+    "Output ONLY JSON. No markdown. No extra keys.\n" +
+    '{"box":[0.1,0.1,0.4,0.4],"rotation":0,"colors":["#112233","#AABBCC"],"mood":"bold"}\n' +
+    "box is [x1,y1,x2,y2] around the logo after it is straightened, origin top-left, each value from 0 to 1. " +
+    "rotation is the degrees to rotate the photo so the logo is upright, from -180 to 180. " +
+    "colors are 2 or 3 brand hex colours actually visible in the logo. " +
+    "mood is bold, elegant, playful, or street."
+  );
+}
+
 export function imageLabel(index: number): string {
   return "Image " + index + ":";
 }

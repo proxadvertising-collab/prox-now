@@ -117,7 +117,7 @@ export const BOOK_CAPTURE_STEPS = ["storefront", "menu", "hours"] as const;
 
 export type BookShot = {
   id: string;
-  kind: BookTile;
+  kind: BookTile | "logo";
   file: File;
 };
 

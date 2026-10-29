@@ -5,6 +5,7 @@ import { jpegDataUrl, metaJpeg, storedJpeg, StoredTooBig } from "../../../../lib
 import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from "../../../../lib/book/limits";
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
+import { readLogoFix, straightenLogo, themeFromBrand, type BrandTheme } from "../../../../lib/book/brand";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, type BookPass } from "../../../../lib/book/read";
 import { extractedOf, type PageRead } from "../../../../lib/book/schema";
@@ -31,6 +32,7 @@ type Ingested = {
   upstream: boolean;
   pageByIndex: Map<number, PageRead>;
   faceCalls: number;
+  brand: BrandTheme | null;
 };
 
 type ShopRow = {
@@ -166,12 +168,14 @@ type LivePage = { kind: string; status: string };
 
 function sessionGroups(form: FormData): { kind: UploadKind; files: File[] }[] | "empty" | "bad_image" | "page_limit" {
   const storefront = namedFiles(form, "storefront");
+  const logo = namedFiles(form, "logo");
   const hours = namedFiles(form, "hours");
   const menu = namedFiles(form, "menu");
-  if (storefront.length > 1 || hours.length > 1) return "bad_image";
+  if (storefront.length > 1 || logo.length > 1 || hours.length > 1) return "bad_image";
   if (menu.length > MAX_MENU_PAGES) return "page_limit";
   const groups: { kind: UploadKind; files: File[] }[] = [];
   if (storefront.length === 1) groups.push({ kind: "storefront", files: storefront });
+  if (logo.length === 1) groups.push({ kind: "logo", files: logo });
   if (menu.length > 0) groups.push({ kind: "menu", files: menu });
   if (hours.length === 1) groups.push({ kind: "hours", files: hours });
   if (groups.length === 0) return "empty";
@@ -229,10 +233,23 @@ async function runPrepared(
 
   const stored: StoredPage[] = [];
   const uploaded: string[] = [];
+  let brand: BrandTheme | null = null;
   try {
     for (const image of prepared) {
       const boxes = faceBoxes.get(image.index) ?? [];
-      const jpeg = await storedJpeg(image.original, boxes);
+      let source = image.original;
+      if (kind === "logo") {
+        const fix = await readLogoFix(image);
+        brand = themeFromBrand(fix);
+        if (fix) {
+          try {
+            source = await straightenLogo(image.original, fix);
+          } catch {
+            source = image.original;
+          }
+        }
+      }
+      const jpeg = await storedJpeg(source, boxes);
       const id = crypto.randomUUID();
       const path = shop.id + "/" + id + ".jpg";
       const uploadedFile = await service.storage.from("shop-book").upload(path, jpeg.bytes, {
@@ -282,7 +299,7 @@ async function runPrepared(
   for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
   return {
     ok: true,
-    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls },
+    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls, brand },
   };
 }
 
@@ -314,8 +331,11 @@ async function commitBook(input: {
   const hours = hoursFromOwner(existing?.hours) ? null : mergeHours(pageReads.map((page) => page.hours));
   const savedHours: BookHours | Record<string, never> | unknown = hours ?? existing?.hours ?? {};
   let theme: BookTheme | unknown = existing?.theme ?? {};
+  const branded = groups.find((group) => group.brand);
   const cover = groups.find((group) => (group.kind === "storefront" || group.kind === "logo") && group.stored[0]);
-  if (cover?.stored[0]) {
+  if (branded?.brand) {
+    theme = branded.brand;
+  } else if (cover?.stored[0]) {
     try {
       theme = await paletteFromImage(cover.stored[0].bytes);
     } catch {
