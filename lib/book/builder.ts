@@ -1,4 +1,5 @@
 import { haversineMeters, type LatLng } from "../geo";
+import { resizeToJpeg } from "../image/resize";
 import { POST_RADIUS_M } from "../snap/place";
 import { MAX_IMAGES_PER_CALL, MAX_UPLOAD_IMAGES } from "./limits";
 
@@ -41,7 +42,7 @@ export function bookUploadState(status: number, error: string | undefined): Book
   if (status === 401 || error === "not_signed_in") return "signin";
   if (error === "ai_resting") return "resting";
   if (status >= 200 && status < 300 && !error) return "ok";
-  if (error === "upstream" || status === 502) return "saved";
+  if (error === "upstream") return "saved";
   return "rejected";
 }
 
@@ -187,13 +188,51 @@ export function removeBookShot(shots: readonly BookShot[], id: string): BookShot
   return shots.filter((shot) => shot.id !== id);
 }
 
-/** One request for this shop. Muse still reads at most 8 images per call. */
-export function bookSessionForm(shopId: string, shots: readonly BookShot[]): FormData {
+/** One request stays under this so a phone upload is not rejected as too large. */
+export const BOOK_REQUEST_BYTES = 4 * 1024 * 1024;
+
+const BOOK_JPEG_EDGE = 1600;
+const BOOK_JPEG_QUALITY = 0.8;
+
+function sessionForm(shopId: string, shots: readonly BookShot[]): FormData {
   const form = new FormData();
   form.set("shop", shopId);
   form.set("session", "1");
   for (const shot of shots) form.append(shot.kind, shot.file, shot.file.name || "page.jpg");
   return form;
+}
+
+async function shrinkBookShot(shot: BookShot): Promise<BookShot> {
+  const blob = await resizeToJpeg(shot.file, BOOK_JPEG_EDGE, BOOK_JPEG_QUALITY);
+  const named = shot.file.name && /\.jpe?g$/i.test(shot.file.name) ? shot.file.name : "page.jpg";
+  const file = new File([blob], named, { type: "image/jpeg" });
+  return { id: shot.id, kind: shot.kind, file };
+}
+
+/** Pack resized pages so each request stays within the byte cap. One file that is still over the cap goes alone. */
+export function packBookShots(shots: readonly BookShot[], limit = BOOK_REQUEST_BYTES): BookShot[][] {
+  const batches: BookShot[][] = [];
+  let current: BookShot[] = [];
+  let bytes = 0;
+  for (const shot of shots) {
+    const size = shot.file.size;
+    if (current.length > 0 && bytes + size > limit) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(shot);
+    bytes += size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** Resize every page, then one form. Uploads split that form when the bytes are still over the cap. */
+export async function bookSessionForm(shopId: string, shots: readonly BookShot[]): Promise<FormData> {
+  const resized: BookShot[] = [];
+  for (const shot of shots) resized.push(await shrinkBookShot(shot));
+  return sessionForm(shopId, resized);
 }
 
 export function museCallSizes(imageCount: number, limit = MAX_IMAGES_PER_CALL): number[] {
@@ -223,10 +262,25 @@ export async function uploadBookSession(
   shots: readonly BookShot[],
   fetchImpl: BookFetch = fetch,
 ): Promise<BookUploadResult> {
-  const response = await fetchImpl(BOOK_UPLOAD_PATH, { method: "POST", body: bookSessionForm(shopId, shots) });
-  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-  const error = typeof body?.error === "string" ? body.error : undefined;
-  return { url: BOOK_UPLOAD_PATH, status: response.status, error, body };
+  const resized: BookShot[] = [];
+  for (const shot of shots) resized.push(await shrinkBookShot(shot));
+  const batches = packBookShots(resized);
+  const forms = batches.length > 0 ? batches.map((batch) => sessionForm(shopId, batch)) : [sessionForm(shopId, [])];
+  let lastOk: BookUploadResult | null = null;
+  let upstream: BookUploadResult | null = null;
+  for (const form of forms) {
+    const response = await fetchImpl(BOOK_UPLOAD_PATH, { method: "POST", body: form });
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    const error = typeof body?.error === "string" ? body.error : undefined;
+    const result: BookUploadResult = { url: BOOK_UPLOAD_PATH, status: response.status, error, body };
+    if (error === "upstream") {
+      upstream = result;
+      continue;
+    }
+    if (response.status >= 400) return result;
+    lastOk = result;
+  }
+  return upstream ?? lastOk ?? { url: BOOK_UPLOAD_PATH, status: 204, body: null };
 }
 
 export function nextShopNearby<T extends { id: string; slug?: string }>(
