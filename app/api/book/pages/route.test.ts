@@ -23,6 +23,9 @@ const { getUser, state, service } = vi.hoisted(() => {
     uploadError: false,
     pageInsertError: null as { message: string; code?: string } | null,
     shopError: null as { message: string } | null,
+    filters: [] as [string, string, unknown][],
+    rpcCalls: [] as string[],
+    bookWrites: 0,
   };
   const getUser = vi.fn();
 
@@ -39,7 +42,8 @@ const { getUser, state, service } = vi.hoisted(() => {
       return this;
     }
 
-    eq() {
+    eq(column: string, value: unknown) {
+      state.filters.push([this.table, column, value]);
       return this;
     }
 
@@ -76,6 +80,7 @@ const { getUser, state, service } = vi.hoisted(() => {
       }
       if (this.table === "shop_books" && this.op === "select") return { data: state.book, error: null };
       if (this.table === "shop_books" && (this.op === "insert" || this.op === "update")) {
+        state.bookWrites += 1;
         state.book = { ...(state.book ?? {}), ...(this.payload as Row) };
         return { data: state.book, error: null };
       }
@@ -102,7 +107,10 @@ const { getUser, state, service } = vi.hoisted(() => {
         };
       },
     },
-    rpc: async () => ({ data: state.missing, error: null }),
+    rpc: async (fn: string) => {
+      state.rpcCalls.push(fn);
+      return { data: state.missing, error: null };
+    },
   };
 
   return { getUser, state, service };
@@ -212,6 +220,9 @@ describe("POST /api/book/pages", () => {
     state.uploadError = false;
     state.pageInsertError = null;
     state.shopError = null;
+    state.filters = [];
+    state.rpcCalls = [];
+    state.bookWrites = 0;
     mode = "ok";
     vi.stubGlobal("fetch", installFetch());
   });
@@ -368,5 +379,90 @@ describe("POST /api/book/pages", () => {
     expect(state.pages).toHaveLength(0);
     expect(state.book?.status).toBe("hidden");
     expect(state.book?.hours).toMatchObject({ source: "owner", days: [{ open: "09:00" }] });
+  });
+
+  async function postSession(
+    items: { kind: "storefront" | "menu" | "hours"; file?: File }[],
+    shop = SHOP,
+  ) {
+    const form = new FormData();
+    form.set("shop", shop);
+    form.set("session", "1");
+    for (const item of items) form.append(item.kind, item.file ?? (await jpegFile(item.kind + ".jpg")));
+    return POST(
+      new Request("http://localhost/api/book/pages", {
+        method: "POST",
+        body: form,
+        headers: { "x-forwarded-for": "203.0.113.9" },
+      }),
+    );
+  }
+
+  it("a book upload with a shop id never calls the matcher or creates a shop", async () => {
+    const response = await postSession([{ kind: "menu" }]);
+    expect(response.status).toBe(200);
+    expect(state.filters).toContainEqual(["shops", "id", SHOP]);
+    expect(state.rpcCalls).toEqual(["book_missing"]);
+    expect(state.rpcCalls.join(" ")).not.toContain("create_shop_from_snap");
+    const source = await import("node:fs").then((fs) =>
+      fs.readFileSync(new URL("./route.ts", import.meta.url), "utf8"),
+    );
+    expect(source.includes("create_shop_from_snap")).toBe(false);
+    expect(source.includes("buildMatcherPrompt")).toBe(false);
+    expect(source.includes("/api/analyze")).toBe(false);
+    for (const call of vi.mocked(fetch).mock.calls) {
+      const sent = JSON.parse(String(call[1]?.body));
+      const prompt = (sent.input[0].content as { type: string; text?: string }[]).find((part) => part.type === "input_text")
+        ?.text ?? "";
+      expect(prompt.includes("shop_id")).toBe(false);
+      expect(prompt.includes("GPS fix")).toBe(false);
+      expect(prompt.startsWith("Read the REAL text") || prompt.startsWith("Find every human face")).toBe(true);
+    }
+  });
+
+  it("stores storefront, three menu photos, and hours as one book update", async () => {
+    const response = await postSession([
+      { kind: "storefront" },
+      { kind: "menu" },
+      { kind: "menu" },
+      { kind: "menu" },
+      { kind: "hours" },
+    ]);
+    expect(response.status).toBe(200);
+    expect(state.bookWrites).toBe(1);
+    expect(state.pages.map((page) => page.kind)).toEqual(["storefront", "menu", "menu", "menu", "hours"]);
+    expect(state.pages.every((page) => page.shop_id === SHOP)).toBe(true);
+    const reads = contentCalls(vi.mocked(fetch));
+    expect(reads).toHaveLength(3);
+    const menuRead = reads.find((call) => {
+      const sent = JSON.parse(String(call[1]?.body));
+      const images = sent.input[0].content.filter((part: { type: string }) => part.type === "input_image");
+      return images.length === 3;
+    });
+    expect(menuRead).toBeTruthy();
+  });
+
+  it("skipping storefront and hours still saves the menu", async () => {
+    const response = await postSession([{ kind: "menu" }, { kind: "menu" }, { kind: "menu" }]);
+    expect(response.status).toBe(200);
+    expect(state.bookWrites).toBe(1);
+    expect(state.pages).toHaveLength(3);
+    expect(state.pages.every((page) => page.kind === "menu")).toBe(true);
+    expect(state.pages.some((page) => page.kind === "storefront" || page.kind === "hours")).toBe(false);
+  });
+
+  it("batches a menu over 8 images into Muse calls and still writes the book once", async () => {
+    const items = Array.from({ length: 9 }, () => ({ kind: "menu" as const }));
+    const response = await postSession(items);
+    expect(response.status).toBe(200);
+    expect(state.bookWrites).toBe(1);
+    expect(state.pages).toHaveLength(9);
+    const reads = contentCalls(vi.mocked(fetch));
+    expect(reads).toHaveLength(2);
+    const sizes = reads.map((call) => {
+      const sent = JSON.parse(String(call[1]?.body));
+      return sent.input[0].content.filter((part: { type: string }) => part.type === "input_image").length;
+    });
+    expect(sizes).toEqual([8, 1]);
   });
 });
