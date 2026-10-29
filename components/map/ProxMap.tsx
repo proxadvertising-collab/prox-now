@@ -7,7 +7,6 @@ import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
-import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { pickLanguage } from "@/lib/i18n/viewer";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
@@ -677,7 +676,9 @@ export function ProxMap({
             {t("en", "sheet.openBook")}
           </a>
           {sheet.showBuild ? (
-            <BookAddPhotos shopId={selectedShop.id} shop={selectedShop} className={"mt-2 " + secondaryLink} />
+            <a className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
+              {t("en", "book.build")}
+            </a>
           ) : null}
           <a
             className={
