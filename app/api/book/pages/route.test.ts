@@ -332,7 +332,7 @@ describe("POST /api/book/pages", () => {
     expect(images).toHaveLength(5);
     expect(sent.store).toBe(false);
     expect(sent.reasoning).toEqual({ effort: "low" });
-    expect(sent.max_output_tokens).toBe(4000);
+    expect(sent.max_output_tokens).toBe(8000);
     expect(body.ai).toMatchObject({
       model: "muse-spark-1.3-live",
       calls: 1,

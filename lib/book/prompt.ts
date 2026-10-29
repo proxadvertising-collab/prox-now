@@ -34,17 +34,18 @@ export function improvePrompt(
   );
 }
 
-export function bookReadPrompt(indexes: readonly number[]): string {
-  return (
+export function bookReadPrompt(indexes: readonly number[], brief = false): string {
+  const rules =
     "Read the REAL text in these photos for a shop book. Copy text exactly as printed. " +
-    "Do not translate. Do not convert currency. Do not invent items, prices, hours, or dishes. " +
+    "Do not translate. Do not convert currency. Do not invent items, prices, hours, dishes, or contact details. " +
+    "Fill a field only when that text is visible in the photo. If it is not visible, use null or an empty array. " +
     "If a word is unreadable, use null and leave that item out only when the name itself cannot be read. " +
     "A price may be empty. Still list every dish, including dishes with no price. " +
     "Do not drop a dish because it has no price. " +
     "Do not redraw, clean, or describe a logo. The photograph is the logo. " +
-    "When a dish shows a Thai name and an English name, put the Thai name in name and the English name in note.\n" +
-    "Output ONLY this JSON. No markdown. No extra keys.\n" +
-    '{"pages":[{"index":1,"kind_guess":"menu","is_menu":true,"language":"th","section":null,"items":[{"name":"","price":null,"currency":null,"note":null}],"hours":{"days":[{"d":"mon","open":"08:00","close":"17:00"}],"raw":null}}],"shop_language":null,"tagline_facts":[],"shop_name":null,"colors":[]}\n' +
+    "When a dish shows two names, put the printed local name in name and the printed English name in name_en. " +
+    "Put a short printed description in note. tags may include spicy or vegan only when the photo shows that mark.\n";
+  const tail =
     "kind_guess is storefront, logo, hours, menu, qr, or other. " +
     "is_menu is true only when the photo is a menu or a price list. " +
     "price is the printed text, or null when no price is printed. " +
@@ -56,7 +57,25 @@ export function bookReadPrompt(indexes: readonly number[]): string {
     "colors are up to 3 hex colours actually visible in the logo.\n" +
     "The images are numbered: " +
     numbered(indexes) +
-    ". Return one pages entry for each number, with index set to that number."
+    ". Return one pages entry for each number, with index set to that number.";
+  if (brief) {
+    return (
+      rules +
+      "This is a shorter read. Skip contacts and tags. Leave name_en null.\n" +
+      "Output ONLY this JSON. No markdown. No extra keys.\n" +
+      '{"pages":[{"index":1,"kind_guess":"menu","is_menu":true,"language":"th","section":null,"items":[{"name":"","name_en":null,"price":null,"currency":null,"note":null}],"hours":{"days":[{"d":"mon","open":"08:00","close":"17:00"}],"raw":null}}],"shop_language":null,"tagline_facts":[],"shop_name":null,"colors":[]}\n' +
+      tail
+    );
+  }
+  return (
+    rules +
+    "Also copy contact details printed or shown as a logo anywhere in the photo: phone numbers, a LINE ID, whether a LINE QR is visible, a WhatsApp number, Facebook, Instagram, TikTok, website, email, delivery apps shown (Grab, foodpanda, LINE MAN, Robinhood, ShopeeFood, Uber Eats), payment marks shown (PromptPay QR, cards, cash only), hours text, address text, and a Wi-Fi name when a sign shows one. Never guess a handle or a number.\n" +
+    "Output ONLY this JSON. No markdown. No extra keys.\n" +
+    '{"pages":[{"index":1,"kind_guess":"menu","is_menu":true,"language":"th","section":null,"items":[{"name":"","name_en":null,"price":null,"currency":null,"note":null,"tags":[]}],"hours":{"days":[{"d":"mon","open":"08:00","close":"17:00"}],"raw":null},"contacts":{"phones":[],"line_id":null,"line_qr":false,"whatsapp":null,"facebook":null,"instagram":null,"tiktok":null,"website":null,"email":null,"delivery":[],"payment":[],"hours_text":null,"address":null,"wifi":null}}],"shop_language":null,"tagline_facts":[],"shop_name":null,"colors":[]}\n' +
+    "contacts.delivery uses only Grab, foodpanda, LINE MAN, Robinhood, ShopeeFood, or Uber Eats. " +
+    "contacts.payment uses only PromptPay QR, cards, or cash only. " +
+    "line_qr is true only when a LINE QR code is visible.\n" +
+    tail
   );
 }
 

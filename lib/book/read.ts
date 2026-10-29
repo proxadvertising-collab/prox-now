@@ -42,6 +42,25 @@ export class FaceCheckFailed extends Error {
 
 type Call = typeof callSparkImages;
 
+async function readMenu(
+  indexes: readonly number[],
+  labeled: { label: string; imageDataUrl: string }[],
+  count: number,
+  call: Call,
+): Promise<SparkImagesResult> {
+  try {
+    return await call({ prompt: bookReadPrompt(indexes), images: labeled, maxOutputTokens: 8000 });
+  } catch (error) {
+    if (!(error instanceof MetaTruncated) || count > 1) throw error;
+    try {
+      return await call({ prompt: bookReadPrompt(indexes, true), images: labeled, maxOutputTokens: 4000 });
+    } catch (again) {
+      if (again instanceof MetaTruncated) throw new Error("max_output_tokens");
+      throw again;
+    }
+  }
+}
+
 async function callChunk(prompt: string, chunk: readonly IndexedImage[], call: Call): Promise<SparkImagesResult> {
   return call({
     prompt,
@@ -102,11 +121,13 @@ export async function readBook(
   const shopNames: string[] = [];
   const colorSets: string[][] = [];
   const pass = await readChunked(images, limit, async (chunk) => {
-    const result = await call({
-      prompt: bookReadPrompt(chunk.map((image) => image.index)),
-      images: chunk.map((image) => ({ label: imageLabel(image.index), imageDataUrl: image.dataUrl })),
-      maxOutputTokens: 4000,
-    });
+    const indexes = chunk.map((image) => image.index);
+    const result = await readMenu(
+      indexes,
+      chunk.map((image) => ({ label: imageLabel(image.index), imageDataUrl: image.dataUrl })),
+      chunk.length,
+      call,
+    );
     const parsed = parseBookRead(result.raw);
     if (!parsed.ok) throw new MetaParseError(result.model, result.ms);
     const meta: PageMeta = {

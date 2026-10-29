@@ -3,8 +3,27 @@ import { EXTRACTED_JSON_BUDGET, MAX_ITEMS_PER_PAGE } from "./limits";
 import { buildTagline } from "./tagline";
 
 const TOP_KEYS = new Set(["pages", "shop_language", "tagline_facts", "shop_name", "colors"]);
-const PAGE_KEYS = new Set(["index", "kind_guess", "is_menu", "language", "section", "items", "hours"]);
-const ITEM_KEYS = new Set(["name", "price", "currency", "note"]);
+const PAGE_KEYS = new Set(["index", "kind_guess", "is_menu", "language", "section", "items", "hours", "contacts"]);
+const ITEM_KEYS = new Set(["name", "name_en", "price", "currency", "note", "tags"]);
+const CONTACT_KEYS = new Set([
+  "phones",
+  "line_id",
+  "line_qr",
+  "whatsapp",
+  "facebook",
+  "instagram",
+  "tiktok",
+  "website",
+  "email",
+  "delivery",
+  "payment",
+  "hours_text",
+  "address",
+  "wifi",
+]);
+const DELIVERY = new Set(["grab", "foodpanda", "lineman", "robinhood", "shopeefood", "ubereats"]);
+const PAYMENT = new Set(["promptpay", "card", "cash"]);
+const TAGS = new Set(["spicy", "vegan"]);
 const HOURS_KEYS = new Set(["days", "raw"]);
 const DAY_KEYS = new Set(["d", "open", "close"]);
 const FACE_TOP = new Set(["pages"]);
@@ -17,7 +36,64 @@ export type MenuItem = {
   price: string | null;
   currency: string | null;
   note: string | null;
+  nameEn?: string;
+  tags?: string[];
 };
+
+export type PageContacts = {
+  phones: string[];
+  lineId: string | null;
+  lineQr: boolean;
+  whatsapp: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  tiktok: string | null;
+  website: string | null;
+  email: string | null;
+  delivery: string[];
+  payment: string[];
+  hoursText: string | null;
+  address: string | null;
+  wifi: string | null;
+};
+
+export function emptyContacts(): PageContacts {
+  return {
+    phones: [],
+    lineId: null,
+    lineQr: false,
+    whatsapp: null,
+    facebook: null,
+    instagram: null,
+    tiktok: null,
+    website: null,
+    email: null,
+    delivery: [],
+    payment: [],
+    hoursText: null,
+    address: null,
+    wifi: null,
+  };
+}
+
+export function contactsBlank(contacts: PageContacts): boolean {
+  return (
+    contacts.phones.length === 0 &&
+    !contacts.lineId &&
+    !contacts.lineQr &&
+    !contacts.whatsapp &&
+    !contacts.facebook &&
+    !contacts.instagram &&
+    !contacts.tiktok &&
+    !contacts.website &&
+    !contacts.email &&
+    contacts.delivery.length === 0 &&
+    contacts.payment.length === 0 &&
+    !contacts.hoursText &&
+    !contacts.address &&
+    !contacts.wifi
+  );
+}
 
 export type PageRead = {
   index: number;
@@ -27,6 +103,7 @@ export type PageRead = {
   section: string | null;
   items: MenuItem[];
   hours: BookHours | null;
+  contacts: PageContacts;
 };
 
 export type BookRead = {
@@ -89,7 +166,133 @@ function parseItem(value: unknown): MenuItem | "bad" | "invented" {
     if (typeof record.note !== "string") return "bad";
     note = clip(record.note, 80);
   }
-  return { name, price, currency, note };
+  let nameEn: string | null = null;
+  if (record.name_en !== undefined && record.name_en !== null && record.name_en !== "") {
+    if (typeof record.name_en !== "string") return "bad";
+    nameEn = clip(record.name_en, 80);
+  }
+  const tags: string[] = [];
+  if (record.tags !== undefined && record.tags !== null) {
+    if (!Array.isArray(record.tags)) return "bad";
+    for (const tag of record.tags) {
+      if (typeof tag !== "string") return "invented";
+      const key = tag.trim().toLowerCase();
+      if (!TAGS.has(key)) return "invented";
+      if (!tags.includes(key)) tags.push(key);
+    }
+  }
+  const item: MenuItem = { name, price, currency, note };
+  if (nameEn) item.nameEn = nameEn;
+  if (tags.length > 0) item.tags = tags;
+  return item;
+}
+
+function phoneOf(value: unknown): string | null | "bad" {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") return "bad";
+  const text = value.trim();
+  if (!/^[+0-9][0-9\s().-]{5,22}$/.test(text)) return "bad";
+  const digits = text.replace(/\D/g, "");
+  if (digits.length < 6 || digits.length > 15) return "bad";
+  return text;
+}
+
+function handleOf(value: unknown, website = false): string | null | "bad" {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") return "bad";
+  const text = value.trim();
+  if (text.length < 2 || text.length > 120 || /\s/.test(text)) return "bad";
+  if (!/^[A-Za-z0-9@./_:+-]{2,120}$/.test(text)) return "bad";
+  if (website && !text.includes(".")) return "bad";
+  return text;
+}
+
+function emailOf(value: unknown): string | null | "bad" {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") return "bad";
+  const text = value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text) || text.length > 120) return "bad";
+  return text;
+}
+
+function wordsOf(value: unknown, allowed: Set<string>, alias: Record<string, string>): string[] | "bad" {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return "bad";
+  const found: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") return "bad";
+    const key = alias[item.trim().toLowerCase().replace(/\s+/g, " ")];
+    if (!key || !allowed.has(key)) return "bad";
+    if (!found.includes(key)) found.push(key);
+  }
+  return found;
+}
+
+function parseContacts(value: unknown): PageContacts | "bad" | "invented" {
+  const record = asRecord(value);
+  if (!record) return "bad";
+  if (unknownKey(record, CONTACT_KEYS)) return "invented";
+  const phones: string[] = [];
+  if (record.phones !== undefined && record.phones !== null) {
+    if (!Array.isArray(record.phones)) return "bad";
+    for (const phone of record.phones) {
+      const parsed = phoneOf(phone);
+      if (parsed === "bad") return "bad";
+      if (parsed) phones.push(parsed);
+    }
+  }
+  const lineId = handleOf(record.line_id);
+  if (lineId === "bad") return "bad";
+  if (record.line_qr !== undefined && record.line_qr !== null && typeof record.line_qr !== "boolean") return "bad";
+  const whatsapp = phoneOf(record.whatsapp);
+  if (whatsapp === "bad") return "bad";
+  const facebook = handleOf(record.facebook);
+  if (facebook === "bad") return "bad";
+  const instagram = handleOf(record.instagram);
+  if (instagram === "bad") return "bad";
+  const tiktok = handleOf(record.tiktok);
+  if (tiktok === "bad") return "bad";
+  const website = handleOf(record.website, true);
+  if (website === "bad") return "bad";
+  const email = emailOf(record.email);
+  if (email === "bad") return "bad";
+  const delivery = wordsOf(record.delivery, DELIVERY, {
+    grab: "grab",
+    foodpanda: "foodpanda",
+    lineman: "lineman",
+    "line man": "lineman",
+    robinhood: "robinhood",
+    shopeefood: "shopeefood",
+    "shopee food": "shopeefood",
+    ubereats: "ubereats",
+    "uber eats": "ubereats",
+  });
+  if (delivery === "bad") return "bad";
+  const payment = wordsOf(record.payment, PAYMENT, {
+    promptpay: "promptpay",
+    "promptpay qr": "promptpay",
+    card: "card",
+    cards: "card",
+    cash: "cash",
+    "cash only": "cash",
+  });
+  if (payment === "bad") return "bad";
+  return {
+    phones,
+    lineId,
+    lineQr: record.line_qr === true,
+    whatsapp,
+    facebook,
+    instagram,
+    tiktok,
+    website,
+    email,
+    delivery,
+    payment,
+    hoursText: clip(record.hours_text, 160),
+    address: clip(record.address, 160),
+    wifi: clip(record.wifi, 80),
+  };
 }
 
 function fitItems(items: MenuItem[]): MenuItem[] {
@@ -136,6 +339,13 @@ export function parseBookRead(value: unknown): { ok: true; read: BookRead } | Sc
       }
       hours = parseHours(hoursRecord);
     }
+    let contacts = emptyContacts();
+    if (row.contacts !== undefined && row.contacts !== null) {
+      const parsedContacts = parseContacts(row.contacts);
+      if (parsedContacts === "invented") return { ok: false, reason: "invented_key" };
+      if (parsedContacts === "bad") return { ok: false, reason: "bad_shape" };
+      contacts = parsedContacts;
+    }
     pages.push({
       index: row.index,
       kindGuess: clip(row.kind_guess, 20),
@@ -144,6 +354,7 @@ export function parseBookRead(value: unknown): { ok: true; read: BookRead } | Sc
       section: clip(row.section, 80),
       items: fitItems(items),
       hours,
+      contacts,
     });
   }
 
@@ -184,9 +395,18 @@ export function parseBookRead(value: unknown): { ok: true; read: BookRead } | Sc
   };
 }
 
-export function extractedOf(page: PageRead | null): { section: string | null; items: MenuItem[] } {
+export function extractedOf(page: PageRead | null): {
+  section: string | null;
+  items: MenuItem[];
+  contacts?: PageContacts & { page: number };
+} {
   if (!page) return { section: null, items: [] };
-  return { section: page.section, items: page.items };
+  const body: { section: string | null; items: MenuItem[]; contacts?: PageContacts & { page: number } } = {
+    section: page.section,
+    items: page.items,
+  };
+  if (!contactsBlank(page.contacts)) body.contacts = { ...page.contacts, page: page.index };
+  return body;
 }
 
 export type FacePage = { index: number; faces: number[][] };

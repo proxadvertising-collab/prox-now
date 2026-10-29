@@ -118,6 +118,7 @@ function readFailure(error: unknown): string {
   if (error instanceof MetaParseError) return error.message;
   if (error instanceof MetaCallError) return error.code;
   if (error instanceof MetaKeyMissing) return error.code;
+  if (error instanceof Error && error.message === "max_output_tokens") return "max_output_tokens";
   return "upstream";
 }
 
