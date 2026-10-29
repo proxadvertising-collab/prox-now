@@ -36,6 +36,7 @@ function text(value: unknown, max = 200): string | null {
 }
 
 export function bookImageUrl(supabaseUrl: string, imagePath: string | null): string | null {
+  if (imagePath?.startsWith("/demo/")) return imagePath;
   const url = photoPublicUrl(supabaseUrl, imagePath);
   if (!url) return null;
   return url.replace("/post-photos/", "/shop-book/");

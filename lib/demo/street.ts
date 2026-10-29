@@ -45,6 +45,6 @@ export function checkDemoStreet(sql: string): DemoStreetCheck {
     postCount: posts.match(/::uuid/g)?.length ?? 0,
     couponCount: coupons.match(/::uuid/g)?.length ?? 0,
     bookKinds: [...pages.matchAll(/'(logo|menu|hours|storefront|extra|qr|other)'/g)].map((match) => match[1]),
-    imagePaths: [...pages.matchAll(/'(demo\/[^']+)'/g)].map((match) => match[1]),
+    imagePaths: [...pages.matchAll(/'\/?(demo\/[^']+)'/g)].map((match) => match[1]),
   };
 }

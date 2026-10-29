@@ -28,6 +28,30 @@ describe("book view", () => {
     expect(view?.pages[0]?.imageUrl).toContain("/shop-book/shop-1/menu.jpg");
   });
 
+  it("serves /demo/ pages from public and leaves other paths on storage", () => {
+    expect(bookImageUrl("https://example.supabase.co", "/demo/mala-mafia-logo.svg")).toBe(
+      "/demo/mala-mafia-logo.svg",
+    );
+    expect(bookImageUrl("", "/demo/mala-mafia-hours.svg")).toBe("/demo/mala-mafia-hours.svg");
+    const stored = bookImageUrl("https://example.supabase.co", "shop-1/menu.jpg");
+    expect(stored).toBe(
+      "https://example.supabase.co/storage/v1/object/public/shop-book/shop-1/menu.jpg",
+    );
+    const view = presentBook(
+      {
+        shop: { id: "shop-1", slug: "mala-mafia", name: "Mala Mafia" },
+        book: {},
+        pages: [
+          { id: "logo", kind: "logo", position: 0, image_path: "/demo/mala-mafia-logo.svg" },
+          { id: "menu", kind: "menu", position: 0, image_path: "shop-1/menu.jpg" },
+        ],
+      },
+      "https://example.supabase.co",
+    );
+    expect(view?.logoUrl).toBe("/demo/mala-mafia-logo.svg");
+    expect(view?.pages[1]?.imageUrl).toBe(stored);
+  });
+
   it("returns nothing when the book payload has no shop", () => {
     expect(presentBook(null, "https://example.supabase.co")).toBeNull();
     expect(presentBook({ pages: [] }, "https://example.supabase.co")).toBeNull();

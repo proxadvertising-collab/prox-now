@@ -156,29 +156,29 @@ select
   '{}'::jsonb
 from (
   values
-    ('11111111-1111-4111-8111-111111111301'::uuid, 'logo', 0, 'demo/mala-mafia-logo.svg', '{}'),
+    ('11111111-1111-4111-8111-111111111301'::uuid, 'logo', 0, '/demo/mala-mafia-logo.svg', '{}'),
     (
       '11111111-1111-4111-8111-111111111302'::uuid,
       'menu',
       0,
-      'demo/mala-mafia-menu-1.svg',
+      '/demo/mala-mafia-menu-1.svg',
       '{"section":"Skewers","items":[{"name":"Mala beef","price":"40","currency":"THB","note":null},{"name":"Mala pork","price":"35","currency":"THB","note":null},{"name":"Mala tofu","price":"25","currency":"THB","note":null}]}'
     ),
     (
       '11111111-1111-4111-8111-111111111303'::uuid,
       'menu',
       1,
-      'demo/mala-mafia-menu-2.svg',
+      '/demo/mala-mafia-menu-2.svg',
       '{"section":"Plates","items":[{"name":"Dry pot","price":"89","currency":"THB","note":null},{"name":"Mala soup","price":"79","currency":"THB","note":null}]}'
     ),
     (
       '11111111-1111-4111-8111-111111111304'::uuid,
       'menu',
       2,
-      'demo/mala-mafia-menu-3.svg',
+      '/demo/mala-mafia-menu-3.svg',
       '{"section":"Drinks","items":[{"name":"Sour plum","price":"20","currency":"THB","note":null},{"name":"Soy milk","price":"15","currency":"THB","note":null}]}'
     ),
-    ('11111111-1111-4111-8111-111111111305'::uuid, 'hours', 0, 'demo/mala-mafia-hours.svg', '{}')
+    ('11111111-1111-4111-8111-111111111305'::uuid, 'hours', 0, '/demo/mala-mafia-hours.svg', '{}')
 ) as page(id, kind, position, image_path, extracted)
 join public.shops as shops on shops.slug = 'mala-mafia' and shops.is_demo = true
 on conflict (id) do nothing;
