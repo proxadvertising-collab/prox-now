@@ -1,19 +1,32 @@
-import Link from "next/link";
-import { t } from "@/lib/copy";
+import { connection } from "next/server";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { openingDest, serverSignedIn } from "./login/gate";
 
-export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <h1 className="text-display font-extrabold text-fg">Prox Now</h1>
-      <p className="mt-3 text-heading text-fg-muted">
-        Prox Now makes your street wonder-full
-      </p>
-      <Link
-        href="/map"
-        className="mt-8 inline-flex h-14 min-h-11 w-full items-center justify-center rounded-full bg-accent px-6 text-label font-semibold text-accent-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
-      >
-        {t("en", "nav.map")}
-      </Link>
-    </main>
-  );
+function isDigest(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "digest" in error;
+}
+
+async function readSignedIn(): Promise<boolean> {
+  const jar = await cookies();
+  const keep = jar.get("prox-keep")?.value;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return serverSignedIn(false, keep);
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    return serverSignedIn(Boolean(data.user), keep);
+  } catch (error) {
+    if (isDigest(error)) throw error;
+    return false;
+  }
+}
+
+export const instant = false;
+
+export default async function Home() {
+  await connection();
+  redirect(openingDest(await readSignedIn()));
 }
