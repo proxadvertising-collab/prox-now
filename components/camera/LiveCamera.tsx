@@ -2,6 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SnapFlow } from "@/components/snap/SnapFlow";
+import {
+  adoptFacing,
+  cameraConstraints,
+  drawUnmirrored,
+  facingForSession,
+  flipControl,
+  flipStream,
+  previewClass,
+  rememberFacing,
+  type Facing,
+} from "./flip";
+import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
 import {
   addSeedShot,
@@ -86,6 +98,12 @@ export function LiveCamera({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const facingRef = useRef<Facing>(facingForSession());
+  const armedWas = useRef<SeedSlot | null>(null);
+  const alive = useRef(true);
+  const [facing, setFacing] = useState<Facing>(facingForSession());
+  const [cameraCount, setCameraCount] = useState<number | null>(null);
+  const [flipFailed, setFlipFailed] = useState(false);
   const [tray, setTray] = useState<SeedTray>(emptyTray());
   const [fan, setFan] = useState(startSeeding);
   const [hasBook, setHasBook] = useState(false);
@@ -102,27 +120,82 @@ export function LiveCamera({
   const [files, setFiles] = useState<Record<string, File>>({});
 
   useEffect(() => {
+    alive.current = true;
     let stopped = false;
     const video = videoRef.current;
+    const opening = facingRef.current;
     void navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
-      .then((stream) => {
-        if (stopped) {
+      .getUserMedia(cameraConstraints(opening))
+      .then(async (stream) => {
+        if (stopped || !alive.current) {
           for (const track of stream.getTracks()) track.stop();
           return;
         }
-        streamRef.current = stream;
+        let active = stream;
+        if (facingRef.current !== opening) {
+          const adopted = await adoptFacing(facingRef.current, opening, stream, (constraints) =>
+            navigator.mediaDevices.getUserMedia(constraints),
+          );
+          if (stopped || !alive.current) {
+            for (const track of adopted.stream.getTracks()) track.stop();
+            return;
+          }
+          active = adopted.stream;
+        }
+        streamRef.current = active;
         if (video) {
-          video.srcObject = stream;
+          video.srcObject = active;
           void video.play();
         }
+        void navigator.mediaDevices.enumerateDevices().then((devices) => {
+          if (stopped) return;
+          setCameraCount(devices.filter((device) => device.kind === "videoinput").length);
+        }).catch(() => undefined);
       })
       .catch(() => setNote("The camera did not open."));
     return () => {
       stopped = true;
+      alive.current = false;
       for (const track of streamRef.current?.getTracks() ?? []) track.stop();
     };
   }, []);
+
+  useEffect(() => {
+    const previous = armedWas.current;
+    const armed = tray.armed;
+    armedWas.current = armed;
+    if (!armed || previous) return;
+    const stream = streamRef.current;
+    if (!stream || facingRef.current === "environment") {
+      facingRef.current = "environment";
+      rememberFacing("environment");
+      setFacing("environment");
+      return;
+    }
+    let cancel = false;
+    void adoptFacing("environment", facingRef.current, stream, (constraints) =>
+      navigator.mediaDevices.getUserMedia(constraints),
+    ).then((result) => {
+      if (cancel || !alive.current) {
+        if (result.stream !== stream) {
+          for (const track of result.stream.getTracks()) track.stop();
+        }
+        return;
+      }
+      if (!result.ok) return;
+      streamRef.current = result.stream;
+      facingRef.current = result.facing;
+      setFacing(result.facing);
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = result.stream;
+        void video.play();
+      }
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [tray.armed]);
 
   useEffect(() => {
     if (liveFile) return;
@@ -142,7 +215,7 @@ export function LiveCamera({
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context || !video) throw new Error("frame");
-    context.drawImage(video, 0, 0, width, height);
+    drawUnmirrored(context, video, width, height);
     const line = stampLine(fix);
     context.fillStyle = "rgba(0,0,0,0.55)";
     context.fillRect(0, height - 40, width, 40);
@@ -336,7 +409,39 @@ export function LiveCamera({
     }
   }
 
+  async function flip() {
+    const currentStream = streamRef.current;
+    if (!currentStream || flipControl(cameraCount, flipFailed) !== "show") return;
+    const result = await flipStream(facingRef.current, currentStream, (constraints) =>
+      navigator.mediaDevices.getUserMedia(constraints),
+    );
+    if (!alive.current) {
+      if (result.stream !== currentStream) {
+        for (const track of result.stream.getTracks()) track.stop();
+      }
+      return;
+    }
+    if (!result.ok) {
+      setFlipFailed(true);
+      const video = videoRef.current;
+      if (video && video.srcObject !== currentStream) {
+        video.srcObject = currentStream;
+        void video.play();
+      }
+      return;
+    }
+    streamRef.current = result.stream;
+    facingRef.current = result.facing;
+    setFacing(result.facing);
+    const video = videoRef.current;
+    if (video) {
+      video.srcObject = result.stream;
+      void video.play();
+    }
+  }
+
   const menu = menuButton(tray);
+  const flipMode = flipControl(cameraCount, flipFailed);
   const parked = bubbleCount(tray);
   if (!flying && badge !== parked) {
     queueMicrotask(() => setBadge(parked));
@@ -355,7 +460,7 @@ export function LiveCamera({
 
   return (
     <div className="fixed inset-0 z-40 bg-black text-white">
-      <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline />
+      <video ref={videoRef} className={previewClass(facing)} autoPlay muted playsInline />
       <a className="absolute left-4 top-4 inline-flex min-h-11 min-w-11 items-center text-2xl" href="/map" aria-label="Back">
         ←
       </a>
@@ -447,6 +552,22 @@ export function LiveCamera({
         className="absolute bottom-8 left-1/2 -translate-x-1/2"
         onClick={() => void shoot()}
       />
+      {flipMode === "hide" ? null : (
+        <button
+          type="button"
+          className="camera-flip"
+          aria-label={t("en", "snap.flip")}
+          disabled={flipMode === "disable"}
+          onClick={() => void flip()}
+        >
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M7 7h9a4 4 0 0 1 0 8H8" />
+            <path fill="currentColor" d="M7 3.5 3 7.5 7 11.5z" />
+            <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M17 17H8a4 4 0 0 1 0-8h8" />
+            <path fill="currentColor" d="M17 20.5 21 16.5 17 12.5z" />
+          </svg>
+        </button>
+      )}
       {note ? <p className="absolute inset-x-4 bottom-32 text-center text-body">{note}</p> : null}
       {savedSlug ? (
         <a className="absolute bottom-32 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-3 font-semibold text-accent-ink" href={"/book/" + encodeURIComponent(savedSlug)}>

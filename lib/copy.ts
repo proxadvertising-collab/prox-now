@@ -269,6 +269,7 @@ const en = {
   "sheet.prev": "Previous photo",
   "sheet.next": "Next photo",
   "snap.take": "Take photo",
+  "snap.flip": "Flip camera",
   "you.behind": "Show how the AI works",
 } as const;
 
@@ -543,6 +544,7 @@ const th: { [K in keyof typeof en]: string } = {
   "sheet.prev": "รูปก่อนหน้า",
   "sheet.next": "รูปถัดไป",
   "snap.take": "ถ่ายรูป",
+  "snap.flip": "สลับกล้อง",
   "you.behind": "แสดงว่าเอไอทำงานอย่างไร",
 };
 

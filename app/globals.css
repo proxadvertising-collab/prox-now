@@ -279,3 +279,21 @@
 .book-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-surface-2); }
 .book-dot-current { background: var(--color-accent); }
 .book-counter { margin: 0; color: var(--color-fg-muted); font-size: var(--text-label); font-variant-numeric: tabular-nums; }
+
+.camera-preview { height: 100%; width: 100%; object-fit: cover; }
+.camera-preview-mirror { transform: scaleX(-1); }
+.camera-flip {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 2rem;
+  z-index: 20;
+  display: inline-flex;
+  width: 3.25rem;
+  height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  color: #111;
+}
+.camera-flip:disabled { opacity: 0.4; }
