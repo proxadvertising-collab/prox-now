@@ -2,7 +2,7 @@ import { parseHours, type BookHours } from "./hours";
 import { EXTRACTED_JSON_BUDGET, MAX_ITEMS_PER_PAGE } from "./limits";
 import { buildTagline } from "./tagline";
 
-const TOP_KEYS = new Set(["pages", "shop_language", "tagline_facts"]);
+const TOP_KEYS = new Set(["pages", "shop_language", "tagline_facts", "shop_name", "colors"]);
 const PAGE_KEYS = new Set(["index", "kind_guess", "is_menu", "language", "section", "items", "hours"]);
 const ITEM_KEYS = new Set(["name", "price", "currency", "note"]);
 const HOURS_KEYS = new Set(["days", "raw"]);
@@ -33,6 +33,8 @@ export type BookRead = {
   pages: PageRead[];
   shopLanguage: string | null;
   tagline: string | null;
+  shopName: string | null;
+  colors: string[];
 };
 
 export type SchemaFailure = { ok: false; reason: "invented_key" | "bad_shape" };
@@ -153,6 +155,22 @@ export function parseBookRead(value: unknown): { ok: true; read: BookRead } | Sc
   if (record.tagline_facts !== undefined && !Array.isArray(record.tagline_facts)) {
     return { ok: false, reason: "bad_shape" };
   }
+  let shopName: string | null = null;
+  if (record.shop_name !== undefined && record.shop_name !== null) {
+    if (typeof record.shop_name !== "string") return { ok: false, reason: "bad_shape" };
+    shopName = clip(record.shop_name, 80);
+  }
+  const colors: string[] = [];
+  if (record.colors !== undefined && record.colors !== null) {
+    if (!Array.isArray(record.colors)) return { ok: false, reason: "bad_shape" };
+    for (const color of record.colors) {
+      if (typeof color !== "string") continue;
+      const match = /^#([0-9a-f]{6})$/i.exec(color.trim());
+      if (!match) continue;
+      colors.push("#" + match[1].toUpperCase());
+      if (colors.length >= 3) break;
+    }
+  }
 
   return {
     ok: true,
@@ -160,6 +178,8 @@ export function parseBookRead(value: unknown): { ok: true; read: BookRead } | Sc
       pages,
       shopLanguage,
       tagline: buildTagline(record.tagline_facts),
+      shopName,
+      colors,
     },
   };
 }

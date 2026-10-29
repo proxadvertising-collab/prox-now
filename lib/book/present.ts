@@ -1,11 +1,20 @@
 import { photoPublicUrl } from "../posts/source";
 
+export type BookLine = {
+  name: string;
+  price: string | null;
+  note: string | null;
+};
+
 export type BookPageView = {
   id: string;
   kind: string;
   imageUrl: string | null;
   position: number;
   credit: string | null;
+  section: string | null;
+  items: BookLine[];
+  failed: boolean;
 };
 
 export type BookView = {
@@ -21,6 +30,7 @@ export type BookView = {
   mood: "bold" | "elegant" | "playful" | "street" | null;
   logoUrl: string | null;
   pages: BookPageView[];
+  reading: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -33,6 +43,24 @@ function text(value: unknown, max = 200): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, max);
+}
+
+function menuLines(value: unknown): { section: string | null; items: BookLine[] } {
+  const record = asRecord(value);
+  if (!record || !Array.isArray(record.items)) return { section: null, items: [] };
+  const items: BookLine[] = [];
+  for (const item of record.items) {
+    const row = asRecord(item);
+    const name = text(row?.name, 80);
+    if (!name) continue;
+    items.push({ name, price: text(row?.price, 32), note: text(row?.note, 80) });
+  }
+  return { section: text(record.section, 80), items };
+}
+
+function readFailed(value: unknown): boolean {
+  const meta = asRecord(value);
+  return typeof meta?.error === "string" && meta.error.trim().length > 0;
 }
 
 export function bookImageUrl(supabaseUrl: string, imagePath: string | null): string | null {
@@ -86,12 +114,16 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
       const kind = text(page.kind, 20);
       if (!pageId || !kind) continue;
       const position = typeof page.position === "number" && Number.isFinite(page.position) ? page.position : pages.length;
+      const menu = menuLines(page.extracted);
       pages.push({
         id: pageId,
         kind,
         imageUrl: bookImageUrl(supabaseUrl, typeof page.image_path === "string" ? page.image_path : null),
         position,
         credit: text(page.credit, 80),
+        section: menu.section,
+        items: menu.items,
+        failed: readFailed(page.ai_meta),
       });
     }
   }
@@ -109,5 +141,6 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     mood,
     logoUrl: logo?.imageUrl ?? null,
     pages,
+    reading: pages.some((page) => page.failed),
   };
 }

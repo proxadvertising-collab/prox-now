@@ -194,11 +194,12 @@ export const BOOK_REQUEST_BYTES = 4 * 1024 * 1024;
 const BOOK_JPEG_EDGE = 1600;
 const BOOK_JPEG_QUALITY = 0.8;
 
-function sessionForm(shopId: string, shots: readonly BookShot[], mode?: "improve"): FormData {
+function sessionForm(shopId: string, shots: readonly BookShot[], mode?: "improve", fresh = false): FormData {
   const form = new FormData();
   form.set("shop", shopId);
   form.set("session", "1");
   if (mode === "improve") form.set("mode", "improve");
+  if (fresh) form.set("fresh", "1");
   for (const shot of shots) form.append(shot.kind, shot.file, shot.file.name || "page.jpg");
   return form;
 }
@@ -263,12 +264,15 @@ export async function uploadBookSession(
   shots: readonly BookShot[],
   fetchImpl: BookFetch = fetch,
   mode?: "improve",
+  fresh = false,
 ): Promise<BookUploadResult> {
   const resized: BookShot[] = [];
   for (const shot of shots) resized.push(await shrinkBookShot(shot));
   const batches = packBookShots(resized);
   const forms =
-    batches.length > 0 ? batches.map((batch) => sessionForm(shopId, batch, mode)) : [sessionForm(shopId, [], mode)];
+    batches.length > 0
+      ? batches.map((batch) => sessionForm(shopId, batch, mode, fresh))
+      : [sessionForm(shopId, [], mode, fresh)];
   let lastOk: BookUploadResult | null = null;
   let upstream: BookUploadResult | null = null;
   for (const form of forms) {

@@ -14,7 +14,7 @@ type Row = Record<string, unknown>;
 
 const { getUser, state, service } = vi.hoisted(() => {
   const state = {
-    shop: null as { id: string; category: string } | null,
+    shop: null as { id: string; category: string; name?: string } | null,
     book: null as Row | null,
     pages: [] as Row[],
     uploads: [] as { path: string; bytes: Buffer }[],
@@ -71,6 +71,10 @@ const { getUser, state, service } = vi.hoisted(() => {
     }
 
     finish() {
+      if (this.table === "shops" && this.op === "update") {
+        state.shop = { ...(state.shop ?? { id: "", category: "other" }), ...(this.payload as Row) };
+        return { data: state.shop, error: state.shopError };
+      }
       if (this.table === "shops") return { data: state.shop, error: state.shopError };
       if (this.table === "shop_book_pages" && this.op === "select") {
         return { data: state.pages.filter((page) => page.status === "live"), error: null };
@@ -168,6 +172,25 @@ function installFetch() {
       return metaResponse(JSON.stringify({ pages: indexes.map((index) => ({ index, faces })) }));
     }
     if (mode === "rest") return new Response("rate limit", { status: 429 });
+    if (mode === "named") {
+      return metaResponse(
+        JSON.stringify({
+          pages: indexes.map((index) => ({
+            index,
+            kind_guess: "menu",
+            is_menu: true,
+            language: "th",
+            section: "Skewers",
+            items: [{ name: "หม่าล่า", price: "40", currency: "THB", note: "Mala beef" }],
+            hours: { days: [{ d: "mon", open: "16:00", close: "23:00" }], raw: "Daily 16:00-23:00" },
+          })),
+          shop_language: "th",
+          tagline_facts: ["Skewers"],
+          shop_name: "Mala Mafia",
+          colors: ["#E23D28", "#1C0E05"],
+        }),
+      );
+    }
     return metaResponse(
       JSON.stringify({
         pages: indexes.map((index) => ({
@@ -309,7 +332,7 @@ describe("POST /api/book/pages", () => {
     expect(images).toHaveLength(5);
     expect(sent.store).toBe(false);
     expect(sent.reasoning).toEqual({ effort: "low" });
-    expect(sent.max_output_tokens).toBe(1300);
+    expect(sent.max_output_tokens).toBe(4000);
     expect(body.ai).toMatchObject({
       model: "muse-spark-1.3-live",
       calls: 1,
@@ -402,11 +425,13 @@ describe("POST /api/book/pages", () => {
     items: { kind: "storefront" | "logo" | "menu" | "hours" | "extra"; file?: File }[],
     shop = SHOP,
     bookMode?: string,
+    fresh = false,
   ) {
     const form = new FormData();
     form.set("shop", shop);
     form.set("session", "1");
     if (bookMode) form.set("mode", bookMode);
+    if (fresh) form.set("fresh", "1");
     for (const item of items) form.append(item.kind, item.file ?? (await jpegFile(item.kind + ".jpg")));
     return POST(
       new Request("http://localhost/api/book/pages", {
@@ -459,13 +484,9 @@ describe("POST /api/book/pages", () => {
     expect(state.pages.map((page) => page.kind)).toEqual(["storefront", "menu", "menu", "menu", "hours"]);
     expect(state.pages.every((page) => page.shop_id === SHOP)).toBe(true);
     const reads = contentCalls(vi.mocked(fetch));
-    expect(reads).toHaveLength(3);
-    const menuRead = reads.find((call) => {
-      const sent = JSON.parse(String(call[1]?.body));
-      const images = sent.input[0].content.filter((part: { type: string }) => part.type === "input_image");
-      return images.length === 3;
-    });
-    expect(menuRead).toBeTruthy();
+    expect(reads).toHaveLength(1);
+    const sent = JSON.parse(String(reads[0]?.[1]?.body));
+    expect(sent.input[0].content.filter((part: { type: string }) => part.type === "input_image")).toHaveLength(5);
   });
 
   it("skipping storefront and hours still saves the menu", async () => {
@@ -539,5 +560,53 @@ describe("POST /api/book/pages", () => {
     expect(state.removed).toHaveLength(0);
     expect(state.uploads).toHaveLength(1);
     expect(state.pages.map((page) => page.kind)).toEqual(["extra"]);
+  });
+
+  it("a seed save calls the AI once and stores extracted items", async () => {
+    const response = await postSession([{ kind: "logo" }, { kind: "menu" }, { kind: "menu" }]);
+    expect(response.status).toBe(200);
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const reads = contentCalls(fetchMock);
+    expect(reads).toHaveLength(1);
+    const menu = state.pages.filter((page) => page.kind === "menu");
+    expect(menu).toHaveLength(2);
+    expect(menu[0]?.extracted).toEqual({
+      section: "Noodles",
+      items: [{ name: "Pad Thai", price: "50", currency: "THB", note: null }],
+    });
+    expect(menu[0]?.ai_meta).toMatchObject({ model: "muse-spark-1.3-live", images_in_call: 3 });
+  });
+
+  it("keeps seed photos and sets ai_meta.error when the AI call fails", async () => {
+    mode = "rest";
+    const response = await postSession([{ kind: "menu" }, { kind: "menu" }]);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.reading).toBe(true);
+    expect(body.ai.error).toBe("busy");
+    expect(state.pages).toHaveLength(2);
+    expect(state.removed).toHaveLength(0);
+    expect(state.pages[0]?.extracted).toEqual({});
+    expect(state.pages[0]?.ai_meta).toMatchObject({ model: null, images_in_call: 0, error: "busy" });
+  });
+
+  it("renames only a fresh shop whose name looks like a menu description", async () => {
+    state.shop = { id: SHOP, category: "street_food", name: "Blended fruit juice menu" };
+    mode = "named";
+    const renamed = await postSession([{ kind: "logo" }, { kind: "menu" }], SHOP, undefined, true);
+    expect(renamed.status).toBe(200);
+    expect(state.shop?.name).toBe("Mala Mafia");
+    const menu = state.pages.find((page) => page.kind === "menu");
+    expect(menu?.extracted).toMatchObject({
+      items: [{ name: "หม่าล่า", price: "40", currency: "THB", note: "Mala beef" }],
+    });
+
+    state.shop = { id: SHOP, category: "street_food", name: "Mala Mafia" };
+    state.pages = [];
+    state.book = null;
+    const kept = await postSession([{ kind: "menu" }], SHOP, undefined, true);
+    expect(kept.status).toBe(200);
+    expect(state.shop?.name).toBe("Mala Mafia");
   });
 });

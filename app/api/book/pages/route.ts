@@ -1,4 +1,4 @@
-import { MetaCallError, MetaKeyMissing } from "../../../../lib/ai/meta";
+import { MetaCallError, MetaKeyMissing, MetaParseError, MetaTruncated } from "../../../../lib/ai/meta";
 import { uploadBlock, capStatus } from "../../../../lib/book/caps";
 import { mergeHours, hoursFromOwner, type BookHours } from "../../../../lib/book/hours";
 import { jpegDataUrl, metaJpeg, storedJpeg, StoredTooBig } from "../../../../lib/book/images";
@@ -35,11 +35,13 @@ type Ingested = {
   faceCalls: number;
   brand: BrandTheme | null;
   plans: ShotPlan[];
+  aiError: string | null;
 };
 
 type ShopRow = {
   id: string;
   category: string;
+  name: string | null;
 };
 
 type ExistingBook = {
@@ -103,7 +105,20 @@ function shopOf(data: unknown): ShopRow | null {
   return {
     id: row.id,
     category: typeof row.category === "string" ? row.category : "other",
+    name: typeof row.name === "string" ? row.name : null,
   };
+}
+
+function describesMenu(name: string): boolean {
+  return /\bmenu\b/i.test(name);
+}
+
+function readFailure(error: unknown): string {
+  if (error instanceof MetaTruncated) return error.message;
+  if (error instanceof MetaParseError) return error.message;
+  if (error instanceof MetaCallError) return error.code;
+  if (error instanceof MetaKeyMissing) return error.code;
+  return "upstream";
 }
 
 function existingOf(data: unknown): ExistingBook | null {
@@ -367,7 +382,7 @@ async function runPrepared(
   }
   return {
     ok: true,
-    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls, brand, plans },
+    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls, brand, plans, aiError: null },
   };
 }
 
@@ -492,6 +507,7 @@ async function commitBook(input: {
           images_in_call: meta?.imagesInCall ?? 0,
           call_id: meta?.callId ?? null,
           faces_blurred: page.facesBlurred,
+          ...(group.aiError ? { error: group.aiError } : {}),
         },
       };
     });
@@ -521,10 +537,23 @@ async function commitBook(input: {
 
   const pages = Array.isArray(inserted.data) ? inserted.data : rows;
   const faceCalls = groups.reduce((sum, group) => sum + group.faceCalls, 0);
+  const bodyOf = (extra: Record<string, unknown>) => (summary ? { ...extra, summary } : extra);
+  const seedError = groups.find((group) => group.aiError)?.aiError ?? null;
+  if (seedError) {
+    return json(
+      bodyOf({
+        reading: true,
+        pages,
+        missing,
+        hours: savedHours,
+        theme,
+        ai: { model: null, error: seedError, latency_ms: 0, images_in_call: 0, calls: 0, face_calls: faceCalls, chunks: [] },
+      }),
+    );
+  }
   const resting = groups.some((group) => group.resting);
   const upstream = groups.some((group) => group.upstream || !group.read);
   const ai = aiPayload(null, faceCalls);
-  const bodyOf = (extra: Record<string, unknown>) => (summary ? { ...extra, summary } : extra);
   if (resting) {
     return json(bodyOf({ error: "ai_resting", message: AI_RESTING_MESSAGE, pages, missing, ai }), 503);
   }
@@ -550,6 +579,177 @@ async function commitBook(input: {
   return json(bodyOf({ pages, missing, hours: savedHours, theme, ai: successAi }));
 }
 
+function carriedRead(read: BookPass, primary: boolean): BookPass {
+  if (primary) return read;
+  return { ...read, calls: 0, chunks: [], latencyMs: 0 };
+}
+
+/** One Muse read for the whole seed batch. Photos are kept even when that read throws. */
+async function ingestSeed(
+  service: SupabaseClient,
+  shop: ShopRow,
+  userId: string,
+  livePages: readonly LivePage[],
+  preparedGroups: readonly { kind: UploadKind; prepared: PreparedImage[] }[],
+  fresh: boolean,
+): Promise<NextResponse> {
+  let nextIndex = 1;
+  const flat: { kind: UploadKind; image: PreparedImage }[] = [];
+  for (const group of preparedGroups) {
+    for (const image of group.prepared) {
+      flat.push({ kind: group.kind, image: { ...image, index: nextIndex } });
+      nextIndex += 1;
+    }
+  }
+
+  let read: BookPass | null = null;
+  let aiError: string | null = null;
+  try {
+    if (flat.length > 0) read = await readBook(flat.map((item) => item.image));
+  } catch (error) {
+    aiError = readFailure(error);
+    read = null;
+  }
+
+  const storedByKind = new Map<UploadKind, StoredPage[]>();
+  const uploaded: string[] = [];
+  try {
+    for (const item of flat) {
+      const jpeg = await storedJpeg(item.image.original, []);
+      const id = crypto.randomUUID();
+      const path = shop.id + "/" + id + ".jpg";
+      const uploadedFile = await service.storage.from("shop-book").upload(path, jpeg.bytes, {
+        contentType: "image/jpeg",
+        upsert: false,
+      });
+      if (uploadedFile.error) throw new Error("upload");
+      uploaded.push(path);
+      const list = storedByKind.get(item.kind) ?? [];
+      list.push({
+        id,
+        index: item.image.index,
+        path,
+        width: dimension(jpeg.width),
+        height: dimension(jpeg.height),
+        facesBlurred: 0,
+        bytes: jpeg.bytes,
+      });
+      storedByKind.set(item.kind, list);
+    }
+  } catch (error) {
+    await removePaths(service, uploaded);
+    if (error instanceof StoredTooBig) return json({ error: "too_big" }, 413);
+    return json({ error: "upload_failed" }, 502);
+  }
+
+  const pageByIndex = new Map<number, PageRead>();
+  for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
+  const hasLogo = flat.some((item) => item.kind === "logo");
+  const colors = read?.read.colors ?? [];
+  const brand =
+    colors.length >= 2
+      ? themeFromBrand({ box: [0.1, 0.1, 0.9, 0.9], rotation: 0, colors: colors.slice(0, 3), mood: "bold" })
+      : hasLogo
+        ? themeFromBrand(null)
+        : null;
+  const shopName = read?.read.shopName ?? null;
+  if (fresh && shop.name && describesMenu(shop.name) && shopName && !describesMenu(shopName)) {
+    await service.from("shops").update({ name: shopName }).eq("id", shop.id);
+  }
+
+  const grouped: Ingested[] = [];
+  let primary = true;
+  for (const group of preparedGroups) {
+    const useRead = read && !aiError ? carriedRead(read, primary) : null;
+    if (useRead && primary) primary = false;
+    grouped.push({
+      kind: group.kind,
+      stored: storedByKind.get(group.kind) ?? [],
+      read: useRead,
+      resting: false,
+      upstream: false,
+      pageByIndex,
+      faceCalls: 0,
+      brand: group.kind === "logo" ? brand : null,
+      plans: [],
+      aiError,
+    });
+  }
+  let parts = grouped.flatMap((group) => sessionMenuParts(group, true));
+  if (read && !aiError) {
+    let seen = false;
+    parts = parts.map((part) => {
+      if (part.read && !seen) {
+        seen = true;
+        return part;
+      }
+      return { ...part, read: carriedRead(read, false), aiError };
+    });
+  }
+  return commitBook({ service, shop, userId, livePages, groups: parts, uploaded, summary: null });
+}
+
+async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextResponse> {
+  const listed = await service
+    .from("shop_book_pages")
+    .select("id, image_path, status")
+    .eq("shop_id", shop.id)
+    .eq("status", "live");
+  if (listed.error) return json({ error: "upload_failed" }, 502);
+  const rows = Array.isArray(listed.data) ? listed.data : [];
+  const prepared: PreparedImage[] = [];
+  const targets: { id: string; index: number }[] = [];
+  let index = 1;
+  for (const item of rows) {
+    const row = asRecord(item);
+    const id = typeof row?.id === "string" ? row.id : "";
+    const path = typeof row?.image_path === "string" ? row.image_path : "";
+    if (!id || !path) continue;
+    const bucket = service.storage.from("shop-book") as {
+      download: (path: string) => Promise<{ data: { arrayBuffer: () => Promise<ArrayBuffer> } | null; error: { message?: string } | null }>;
+    };
+    const downloaded = await bucket.download(path);
+    if (downloaded.error || !downloaded.data) continue;
+    try {
+      const bytes = Buffer.from(await downloaded.data.arrayBuffer());
+      const meta = await metaJpeg(bytes);
+      prepared.push({ index, original: bytes, dataUrl: jpegDataUrl(meta) });
+      targets.push({ id, index });
+      index += 1;
+    } catch {
+      continue;
+    }
+  }
+  if (prepared.length === 0) return json({ reading: true, pages: [] });
+  let read: BookPass | null = null;
+  let aiError: string | null = null;
+  try {
+    read = await readBook(prepared);
+  } catch (error) {
+    aiError = readFailure(error);
+  }
+  for (const target of targets) {
+    const page = read?.read.pages.find((item) => item.index === target.index) ?? null;
+    const meta = read?.perPage.get(target.index);
+    await service
+      .from("shop_book_pages")
+      .update({
+        extracted: aiError || !read ? {} : extractedOf(page),
+        language: page?.language ?? null,
+        ai_meta: {
+          model: meta?.model ?? null,
+          latency_ms: meta?.latencyMs ?? 0,
+          images_in_call: meta?.imagesInCall ?? 0,
+          call_id: meta?.callId ?? null,
+          faces_blurred: 0,
+          ...(aiError ? { error: aiError } : {}),
+        },
+      })
+      .eq("id", target.id);
+  }
+  return json({ reading: Boolean(aiError), ai: { model: read?.model ?? null, error: aiError } });
+}
+
 async function handleGroups(
   request: Request,
   userId: string,
@@ -559,6 +759,7 @@ async function handleGroups(
   groups: readonly { kind: UploadKind; files: File[] }[],
   improve = false,
   menuSession = false,
+  fresh = false,
 ): Promise<NextResponse> {
   const preparedGroups: { kind: UploadKind; prepared: PreparedImage[] }[] = [];
   for (const group of groups) {
@@ -568,6 +769,9 @@ async function handleGroups(
   }
   if (!(await allowBook(clientIp(request), userId))) {
     return json({ error: "rate_limited" }, 429);
+  }
+  if (menuSession && !improve) {
+    return ingestSeed(service, shop, userId, livePages, preparedGroups, fresh);
   }
   const ingested: Ingested[] = [];
   const kept: string[] = [];
@@ -602,7 +806,7 @@ async function openShop(
 ): Promise<{ ok: true; shop: ShopRow; livePages: LivePage[] } | { ok: false; response: NextResponse }> {
   const shopResult = await service
     .from("shops")
-    .select("id, category")
+    .select("id, category, name")
     .eq(shopLookupColumn(shopKey), shopKey)
     .maybeSingle();
   if (shopResult.error) return { ok: false, response: json({ error: "upload_failed" }, 502) };
@@ -644,6 +848,21 @@ export async function POST(request: Request) {
   if (!shopKey || shopKey.length > 80) return json({ error: "not_found" }, 404);
   const session = textField(form.get("session")) === "1";
   const improve = textField(form.get("mode")) === "improve";
+  const fresh = textField(form.get("fresh")) === "1";
+  const retrying = textField(form.get("retry")) === "1";
+
+  if (retrying) {
+    let retryService: SupabaseClient;
+    try {
+      retryService = createServiceClient();
+    } catch {
+      return json({ error: "upload_failed" }, 502);
+    }
+    const retryOpened = await openShop(retryService, shopKey);
+    if (!retryOpened.ok) return retryOpened.response;
+    if (!(await allowBook(clientIp(request), userId))) return json({ error: "rate_limited" }, 429);
+    return retrySeed(retryService, retryOpened.shop);
+  }
 
   let groups: { kind: UploadKind; files: File[] }[];
   if (session) {
@@ -682,8 +901,8 @@ export async function POST(request: Request) {
         livePages: opened.livePages,
       });
   if (improve && block === "already_there") {
-    return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, true, session);
+    return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, true, session, fresh);
   }
   if (block) return json({ error: block }, capStatus(block));
-  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, improve, session);
+  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, improve, session, fresh);
 }

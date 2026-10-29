@@ -99,8 +99,14 @@ export async function readBook(
   const perPage = new Map<number, PageMeta>();
   const languages: (string | null)[] = [];
   const taglines: string[] = [];
+  const shopNames: string[] = [];
+  const colorSets: string[][] = [];
   const pass = await readChunked(images, limit, async (chunk) => {
-    const result = await callChunk(bookReadPrompt(chunk.map((image) => image.index)), chunk, call);
+    const result = await call({
+      prompt: bookReadPrompt(chunk.map((image) => image.index)),
+      images: chunk.map((image) => ({ label: imageLabel(image.index), imageDataUrl: image.dataUrl })),
+      maxOutputTokens: 4000,
+    });
     const parsed = parseBookRead(result.raw);
     if (!parsed.ok) throw new MetaParseError(result.model, result.ms);
     const meta: PageMeta = {
@@ -114,6 +120,8 @@ export async function readBook(
     }
     languages.push(parsed.read.shopLanguage);
     if (parsed.read.tagline) taglines.push(parsed.read.tagline);
+    if (parsed.read.shopName) shopNames.push(parsed.read.shopName);
+    if (parsed.read.colors.length > 0 && colorSets.length === 0) colorSets.push(parsed.read.colors);
     return { rows: parsed.read.pages, latencyMs: result.ms };
   });
 
@@ -131,6 +139,8 @@ export async function readBook(
       pages,
       shopLanguage,
       tagline: buildTagline(taglines),
+      shopName: shopNames[0] ?? null,
+      colors: colorSets[0] ?? [],
     },
     model: modelOf(perPage),
     latencyMs: pass.chunks.reduce((sum, chunk) => sum + chunk.latencyMs, 0),

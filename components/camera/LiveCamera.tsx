@@ -244,6 +244,7 @@ export function LiveCamera({
     setNote("");
     try {
       let shop = match;
+      let createdHere = false;
       if (!shop) {
         const name = draftName.trim();
         if (name.length < 2) {
@@ -287,6 +288,7 @@ export function LiveCamera({
             return;
           }
           shop = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name, hasBook: false };
+          createdHere = true;
           setMatch(shop);
         }
       }
@@ -296,13 +298,29 @@ export function LiveCamera({
         const kind = shot.slot === "extras" ? "extra" : bookKind(shot.slot);
         return [{ id: shot.id, kind, file }];
       });
-      const result = await uploadBookSession(shop.id, bookShots, fetch, shop.hasBook ? "improve" : undefined);
+      const result = await uploadBookSession(
+        shop.id,
+        bookShots,
+        fetch,
+        shop.hasBook ? "improve" : undefined,
+        createdHere,
+      );
       if (result.status === 401) {
         setNote("Sign in to save.");
         return;
       }
-      if (result.status >= 400 && result.error !== "upstream") {
-        setNote("The book did not save.");
+      const pages =
+        result.body && typeof result.body === "object" && "pages" in result.body && Array.isArray(result.body.pages)
+          ? result.body.pages
+          : [];
+      const built = pages.some((page) => {
+        if (!page || typeof page !== "object" || !("extracted" in page)) return false;
+        const extracted = page.extracted;
+        if (!extracted || typeof extracted !== "object" || !("items" in extracted)) return false;
+        return Array.isArray(extracted.items) && extracted.items.length > 0;
+      });
+      if (!built) {
+        setNote(result.status >= 400 && result.error !== "upstream" && result.error !== "ai_resting" ? "The book did not save." : "Reading menu…");
         return;
       }
       const summary =

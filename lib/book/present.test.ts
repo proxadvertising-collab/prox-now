@@ -52,6 +52,43 @@ describe("book view", () => {
     expect(view?.pages[1]?.imageUrl).toBe(stored);
   });
 
+  it("renders extracted menu items and a failed read", () => {
+    const view = presentBook(
+      {
+        shop: { id: "shop-1", slug: "mala-mafia", name: "Mala Mafia" },
+        book: { theme: { accent: "#E23D28", ink: "#1C0E05", mood: "bold" } },
+        pages: [
+          {
+            id: "logo",
+            kind: "logo",
+            position: 0,
+            image_path: "shop-1/logo.jpg",
+            extracted: {},
+            ai_meta: {},
+          },
+          {
+            id: "menu",
+            kind: "menu",
+            position: 0,
+            image_path: "shop-1/menu.jpg",
+            extracted: {
+              section: "Skewers",
+              items: [{ name: "หม่าล่า", price: "40", note: "Mala beef" }],
+            },
+            ai_meta: { error: "max_output_tokens" },
+          },
+        ],
+      },
+      "https://example.supabase.co",
+    );
+    expect(view?.name).toBe("Mala Mafia");
+    expect(view?.accent).toBe("#E23D28");
+    expect(view?.logoUrl).toContain("/shop-book/shop-1/logo.jpg");
+    expect(view?.pages[1]?.section).toBe("Skewers");
+    expect(view?.pages[1]?.items).toEqual([{ name: "หม่าล่า", price: "40", note: "Mala beef" }]);
+    expect(view?.reading).toBe(true);
+  });
+
   it("returns nothing when the book payload has no shop", () => {
     expect(presentBook(null, "https://example.supabase.co")).toBeNull();
     expect(presentBook({ pages: [] }, "https://example.supabase.co")).toBeNull();

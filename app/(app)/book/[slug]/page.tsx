@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { POST as postBookPages } from "../../../api/book/pages/route";
 import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
@@ -7,6 +9,17 @@ import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
 
 export const instant = false;
+
+export async function retryReading(formData: FormData) {
+  "use server";
+  const shop = String(formData.get("shop") ?? "");
+  const slug = String(formData.get("slug") ?? "");
+  const form = new FormData();
+  form.set("shop", shop);
+  form.set("retry", "1");
+  await postBookPages(new Request("http://localhost/api/book/pages", { method: "POST", body: form }));
+  redirect("/book/" + encodeURIComponent(slug || shop));
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -122,15 +135,41 @@ export default async function BookPage({
             {t("en", "book.hours")}: {view.hoursLabel}
           </p>
         ) : null}
+        {view.reading ? (
+          <form action={retryReading} className="flex items-center justify-between gap-3">
+            <p className="text-body text-fg">Reading menu…</p>
+            <input type="hidden" name="shop" value={shop?.id ?? key} />
+            <input type="hidden" name="slug" value={view.slug} />
+            <button type="submit" className="min-h-11 rounded-md bg-accent px-4 font-semibold text-accent-ink">
+              Retry
+            </button>
+          </form>
+        ) : null}
         <ul className="flex flex-col gap-3">
           {pages.map((page) => (
-            <li key={page.id} className="overflow-hidden rounded-lg border-4" style={{ borderColor: accent, background: ink, color: accent }}>
+            <li key={page.id} className="flex gap-3 rounded-lg border-4 p-3" style={{ borderColor: accent, background: ink, color: accent }}>
               {page.imageUrl ? (
-                <img src={page.imageUrl} alt={view.name} className="aspect-[4/3] w-full object-cover" />
+                <img src={page.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-md object-cover" />
               ) : (
-                <div className="aspect-[4/3] w-full bg-surface-2" />
+                <div className="h-16 w-16 shrink-0 rounded-md bg-surface-2" />
               )}
-              {page.credit ? <p className="px-3 py-2 text-label">{t("en", "book.credit", { name: page.credit })}</p> : null}
+              <div className="min-w-0 flex-1">
+                {page.section ? <p className="text-label font-semibold">{page.section}</p> : null}
+                {page.items.length > 0 ? (
+                  <ul className="flex flex-col gap-1">
+                    {page.items.map((item, index) => (
+                      <li key={page.id + "-" + index} className="flex items-baseline justify-between gap-3 text-body">
+                        <span>
+                          {item.name}
+                          {item.note ? <span className="ml-2 text-label opacity-80">{item.note}</span> : null}
+                        </span>
+                        {item.price ? <span>{item.price}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {page.credit ? <p className="text-label">{t("en", "book.credit", { name: page.credit })}</p> : null}
+              </div>
             </li>
           ))}
         </ul>
@@ -141,11 +180,11 @@ export default async function BookPage({
             </h2>
             <ul className="flex flex-col gap-3">
               {extras.map((page) => (
-                <li key={page.id} className="overflow-hidden rounded-lg border-4" style={{ borderColor: accent, background: ink, color: accent }}>
+                <li key={page.id} className="flex gap-3 rounded-lg border-4 p-3" style={{ borderColor: accent, background: ink, color: accent }}>
                   {page.imageUrl ? (
-                    <img src={page.imageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                    <img src={page.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-md object-cover" />
                   ) : (
-                    <div className="aspect-[4/3] w-full bg-surface-2" />
+                    <div className="h-16 w-16 shrink-0 rounded-md bg-surface-2" />
                   )}
                 </li>
               ))}
