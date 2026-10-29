@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/client";
-import { activeCouponCount, type WalletCoupon } from "@/lib/wallet/coupons";
+import { activeCouponCount, couponPhase, type WalletCoupon } from "@/lib/wallet/coupons";
+
+type ShownCoupon = WalletCoupon & { offer?: string | null };
 
 export function CouponBadge() {
-  const [count, setCount] = useState(0);
+  const [view, setView] = useState({ count: 0, offer: "", until: "" });
 
   useEffect(() => {
     let stopped = false;
@@ -16,10 +18,15 @@ export function CouponBadge() {
       try {
         const response = await fetch("/api/wallet/coupons");
         if (!response.ok || stopped) return;
-        const body = (await response.json()) as { coupons?: WalletCoupon[] };
-        setCount(activeCouponCount(body.coupons ?? [], Date.now()));
+        const body = (await response.json()) as { coupons?: ShownCoupon[] };
+        const coupons = Array.isArray(body.coupons) ? body.coupons : [];
+        const now = Date.now();
+        const count = activeCouponCount(coupons, now);
+        const coupon = coupons.find((item) => couponPhase(item, now) === "active");
+        const offer = coupon && coupon.offer ? coupon.offer.trim() : "";
+        setView({ count, offer, until: coupon ? coupon.expiresAt.slice(0, 10) : "" });
       } catch {
-        if (!stopped) setCount(0);
+        if (!stopped) setView({ count: 0, offer: "", until: "" });
       }
     }
 
@@ -50,13 +57,17 @@ export function CouponBadge() {
     };
   }, []);
 
-  if (count < 1) return null;
+  if (view.count < 1) return null;
+
   return (
     <a
       href="/wallet"
-      className="absolute right-3 top-3 z-20 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-accent px-3 text-base font-bold text-accent-ink"
+      className="absolute right-3 top-3 z-20 flex max-w-56 flex-col items-end rounded-md bg-accent px-3 py-2 text-sm font-bold text-accent-ink"
     >
-      {count}
+      <span>{view.offer || view.count}</span>
+      {view.until ? (
+        <span className="text-xs font-semibold">{t("en", "loop.validUntil", { date: view.until })}</span>
+      ) : null}
       <span className="sr-only">{t("en", "nav.wallet")}</span>
     </a>
   );

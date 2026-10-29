@@ -76,6 +76,7 @@ export type Coupon = {
   status: CouponStatus;
   used_at: string | null;
   expires_at: string;
+  offer: string | null;
   created_at: string;
 };
 

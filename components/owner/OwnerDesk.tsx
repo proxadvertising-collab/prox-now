@@ -27,6 +27,10 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [arm, setArm] = useState<string | null>(null);
+  const [offerFor, setOfferFor] = useState<string | null>(null);
+  const [offerText, setOfferText] = useState("");
+  const [days, setDays] = useState<1 | 7 | 30>(7);
+  const [suggesting, setSuggesting] = useState(false);
   const startX = useRef<number | null>(null);
   const card = cards[0];
   const verified = (shops ?? []).some((shop) => shop.status === "verified");
@@ -95,7 +99,34 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
     }
   }
 
-  async function act(kind: "keep" | "pass", id: string) {
+  async function openKeep(id: string) {
+    if (busy) return;
+    setOfferFor(id);
+    setDays(7);
+    setOfferText("");
+    setSuggesting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/owner/suggest-coupon", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ post_id: id }),
+      });
+      const body = (await response.json().catch(() => null)) as { offer?: unknown } | null;
+      const offer = body && typeof body.offer === "string" ? body.offer.trim() : "";
+      setOfferText(offer || "10% off your next visit");
+    } catch {
+      setOfferText("10% off your next visit");
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  async function act(
+    kind: "keep" | "pass",
+    id: string,
+    extra?: { offer: string | null; days: 1 | 7 | 30 },
+  ) {
     setBusy(true);
     setError("");
     setNote("");
@@ -103,7 +134,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       const response = await fetch("/api/owner/" + kind, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(kind === "keep" ? { id, offer: extra?.offer ?? null, days: extra?.days ?? 7 } : { id }),
       });
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) {
@@ -114,6 +145,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       if (kind === "keep") setNote(t("en", "loop.sent", { name: card?.authorName || "" }));
       else setNote(t("en", "loop.deleted"));
       setArm(null);
+      setOfferFor(null);
       await load();
     } catch {
       setError(t("en", "loop.fail"));
@@ -171,7 +203,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
             const width = event.currentTarget.clientWidth || 1;
             const delta = (event.clientX - startX.current) / width;
             startX.current = null;
-            if (delta > 0.4) void act("keep", card.id);
+            if (delta > 0.4) void openKeep(card.id);
             if (delta < -0.4) void act("pass", card.id);
           }}
         >
@@ -187,9 +219,53 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
               {item.price != null ? " " + item.price + (item.currency ? " " + item.currency : "") : ""}
             </p>
           ))}
-          <button type="button" className={primary} disabled={busy} onClick={() => void act("keep", card.id)}>
-            {t("en", "loop.keep")}
-          </button>
+          {offerFor === card.id ? (
+            <div className="flex flex-col gap-2">
+              <input
+                className="min-h-11 w-full rounded-md bg-surface-2 px-3 text-body text-fg"
+                maxLength={120}
+                value={offerText}
+                placeholder={suggesting ? t("en", "loop.suggesting") : ""}
+                onChange={(event) => setOfferText(event.target.value)}
+              />
+              <p className="text-label text-fg-muted">{t("en", "loop.validFor")}</p>
+              <div className="flex gap-2">
+                {([1, 7, 30] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={
+                      "inline-flex min-h-11 items-center justify-center rounded-md px-3 text-sm font-semibold " +
+                      (days === value ? "bg-accent text-accent-ink" : "bg-surface-2 text-fg")
+                    }
+                    onClick={() => setDays(value)}
+                  >
+                    {t("en", value === 1 ? "loop.day1" : value === 7 ? "loop.day7" : "loop.day30")}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className={primary}
+                disabled={busy || suggesting}
+                onClick={() => void act("keep", card.id, { offer: offerText.trim() || null, days })}
+              >
+                {t("en", "loop.give")}
+              </button>
+              <button
+                type="button"
+                className={danger}
+                disabled={busy}
+                onClick={() => void act("keep", card.id, { offer: null, days: 7 })}
+              >
+                {t("en", "loop.keepPlain")}
+              </button>
+            </div>
+          ) : (
+            <button type="button" className={primary} disabled={busy} onClick={() => void openKeep(card.id)}>
+              {t("en", "loop.keep")}
+            </button>
+          )}
           <button
             type="button"
             className={danger}

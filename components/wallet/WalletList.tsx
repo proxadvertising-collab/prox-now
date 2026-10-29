@@ -6,6 +6,8 @@ import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/client";
 import { activeCouponCount, couponPhase, type WalletCoupon } from "@/lib/wallet/coupons";
 
+type ShownCoupon = WalletCoupon & { offer?: string | null };
+
 function ScratchCard({
   code,
   revealed,
@@ -93,7 +95,7 @@ function ScratchCard({
 }
 
 export function WalletList() {
-  const [coupons, setCoupons] = useState<WalletCoupon[] | null>(null);
+  const [coupons, setCoupons] = useState<ShownCoupon[] | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [fresh, setFresh] = useState<Record<string, boolean>>({});
@@ -113,7 +115,7 @@ export function WalletList() {
         return;
       }
       if (!response.ok) return;
-      const body = (await response.json()) as { coupons?: WalletCoupon[] };
+      const body = (await response.json()) as { coupons?: ShownCoupon[] };
       const next = Array.isArray(body.coupons) ? body.coupons : [];
       if (primed.current) {
         const arrived: Record<string, boolean> = {};
@@ -199,8 +201,10 @@ export function WalletList() {
               <p className="text-heading font-bold text-fg">{coupon.shopName}</p>
               {phase === "active" ? (
                 <>
-                  <p className="text-body text-fg">{t("en", "loop.offer")}</p>
-                  <p className="text-label text-fg-muted">{coupon.expiresAt.slice(0, 10)}</p>
+                  <p className="text-body text-fg">{coupon.offer?.trim() || t("en", "loop.offer")}</p>
+                  <p className="text-label text-fg-muted">
+                    {t("en", "loop.validUntil", { date: coupon.expiresAt.slice(0, 10) })}
+                  </p>
                   <p className="text-label text-fg-muted">{t("en", "loop.scratch")}</p>
                   <ScratchCard
                     code={coupon.code}
