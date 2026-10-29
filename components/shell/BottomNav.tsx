@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { t, type CopyKey } from "@/lib/copy";
-import { snapRoute, stageSnapFile } from "@/lib/snap/handoff";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
 
@@ -73,36 +72,18 @@ function Glyph({ name }: { name: SlotIcon }) {
 }
 
 function SnapCapture({
-  pathname,
   className,
   current,
   raised,
   style,
 }: {
-  pathname: string;
   className: string;
   current: boolean;
   raised?: boolean;
   style?: { bottom: string };
 }) {
-  const router = useRouter();
   return (
-    <label className={className} aria-current={current ? "page" : undefined} style={style}>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={(event) => {
-          const input = event.currentTarget;
-          const file = input.files?.[0];
-          input.value = "";
-          if (!file) return;
-          stageSnapFile(file);
-          const next = snapRoute(pathname);
-          if (next) router.push(next);
-        }}
-      />
+    <Link href="/snap" className={className} aria-current={current ? "page" : undefined} style={style}>
       <Glyph name="snap" />
       <span className="text-caption font-semibold leading-none">{t("en", "nav.snap")}</span>
       {raised ? (
@@ -110,7 +91,7 @@ function SnapCapture({
       ) : (
         <span className={"h-[3px] w-[3px] rounded-full " + (current ? "bg-accent" : "bg-transparent")} />
       )}
-    </label>
+    </Link>
   );
 }
 
@@ -158,7 +139,6 @@ export function BottomNav() {
             return (
               <SnapCapture
                 key={slot.href}
-                pathname={pathname}
                 current={current}
                 className={rowLink + " cursor-pointer " + (current ? "text-accent" : "text-fg-muted")}
               />
@@ -198,7 +178,6 @@ export function BottomNav() {
             );
           })}
           <SnapCapture
-            pathname={pathname}
             raised
             current={isCurrent(pathname, "/snap")}
             style={{ bottom: "calc(100% - 16px)" }}

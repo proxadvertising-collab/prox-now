@@ -36,21 +36,17 @@ describe("book file input", () => {
     expect(files).toEqual([front, menu]);
   });
 
-  it("copies the file list before clearing every book input", () => {
-    const sources = ["components/book/BookBuilder.tsx", "components/book/BookAddPhotos.tsx"].map((path) =>
-      readFileSync(resolve(root, path), "utf8"),
-    );
-    const handlers = sources.flatMap((source) => source.split("onChange={(event) => {").slice(1));
-    expect(handlers).toHaveLength(3);
-    for (const handler of handlers) {
-      const body = handler.slice(0, handler.indexOf("}"));
-      const copied = body.indexOf("Array.from(event.target.files ?? [])");
-      const cleared = body.indexOf('event.target.value = ""');
-      expect(copied).toBeGreaterThanOrEqual(0);
-      expect(cleared).toBeGreaterThan(copied);
-      expect(body).not.toContain("event.target.files;");
+  it("keeps user photo file inputs off the camera, book, and nav", () => {
+    const files = [
+      "components/book/BookBuilder.tsx",
+      "components/book/BookAddPhotos.tsx",
+      "components/snap/SnapFlow.tsx",
+      "components/shell/BottomNav.tsx",
+      "components/camera/LiveCamera.tsx",
+      "app/(app)/snap/page.tsx",
+    ];
+    for (const path of files) {
+      expect(readFileSync(resolve(root, path), "utf8").includes('type="file"')).toBe(false);
     }
-    expect(sources[0]).toContain("function queue(kind: BookTile, files: File[])");
-    expect(sources[1]).toContain("async function onFiles(files: File[])");
   });
 });

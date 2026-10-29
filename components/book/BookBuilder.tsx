@@ -8,7 +8,6 @@ import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/client";
 import {
   BOOK_CAPTURE_STEPS,
-  addBookShots,
   atThisShop,
   bookBuildHref,
   bookErrorKey,
@@ -118,19 +117,6 @@ export function BookBuilder({
     setAttempt((current) => current + 1);
   }
 
-  function queue(kind: BookTile, files: File[]) {
-    if (files.length === 0) return;
-    const added = addBookShots(
-      shots.map((shot) => ({ id: shot.id, kind: shot.kind, file: shot.file })),
-      kind,
-      files,
-    );
-    if (added.capped) setNote(t("en", "book.cap"));
-    setShots((current) => withUrls(current, added.shots));
-    if (kind === "storefront") setStep("menu");
-    if (kind === "hours") setStep("review");
-  }
-
   function skip() {
     if (step === "storefront") setStep("menu");
     else if (step === "menu") setStep("hours");
@@ -229,36 +215,9 @@ export function BookBuilder({
       ) : null}
       {capture ? (
         <>
-          <label className={primary}>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              disabled={busy}
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                queue(capture, files);
-              }}
-            />
+          <a className={primary} href={"/snap?seed=1&shop=" + encodeURIComponent(slug)}>
             {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
-          </label>
-          <label className={secondary}>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              disabled={busy}
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                queue(capture, files);
-              }}
-            />
-            {t("en", "book.library")}
-          </label>
+          </a>
           {capture === "menu" ? (
             <button type="button" className={secondary} disabled={busy} onClick={() => setStep("hours")}>
               {t("en", "book.stepDone")}

@@ -21,7 +21,6 @@ import {
 } from "@/lib/camera/seed";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
-import { locate } from "@/lib/geo/locate";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import { createClient } from "@/lib/supabase/client";
 
@@ -149,11 +148,23 @@ export function LiveCamera({
     setNote("");
     const fix = await captureFix({
       lookupDemo: lookupDemoPoint,
-      locate: async () => {
-        const located = await locate();
-        if (located.status !== "ok") return null;
-        return { lat: located.point.lat, lng: located.point.lng, accuracy: located.point.accuracy ?? null };
-      },
+      locate: () =>
+        new Promise((resolve) => {
+          if (typeof navigator === "undefined" || !navigator.geolocation) {
+            resolve(null);
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (position) =>
+              resolve({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+              }),
+            () => resolve(null),
+            { enableHighAccuracy: true, maximumAge: 10_000, timeout: 8_000 },
+          );
+        }),
     });
     if (!fix) {
       setNote("Location is required for a shot.");
@@ -246,7 +257,8 @@ export function LiveCamera({
       const bookShots: BookShot[] = tray.shots.flatMap((shot) => {
         const file = files[shot.id];
         if (!file) return [];
-        return [{ id: shot.id, kind: bookKind(shot.slot), file }];
+        const kind = bookKind(shot.slot);
+        return [{ id: shot.id, kind: kind === "logo" ? "storefront" : kind, file }];
       });
       const result = await uploadBookSession(shop.id, bookShots);
       if (result.status >= 400 && result.error !== "upstream") {
@@ -270,7 +282,7 @@ export function LiveCamera({
         <button type="button" className="mb-3 min-h-11 text-label font-semibold text-fg" onClick={() => setLiveFile(null)}>
           ← Camera
         </button>
-        <SnapFlow preselected={preselected} />
+        <SnapFlow preselected={preselected} onRetake={() => setLiveFile(null)} />
       </div>
     );
   }

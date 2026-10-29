@@ -119,9 +119,8 @@ describe("book capture session", () => {
     expect(screen.includes("/api/shops")).toBe(false);
     expect(screen.includes("uploadBookSession")).toBe(true);
     expect(screen.includes('capture="environment"')).toBe(false);
-    expect(screen.match(/type="file"/g)?.length).toBe(2);
-    expect(screen.match(/multiple/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(screen.includes('accept="image/*"')).toBe(true);
+    expect(screen.includes('type="file"')).toBe(false);
+    expect(screen.includes("/snap?seed=1")).toBe(true);
   });
 
   it("checks presence once with the same radius as a live post", () => {
@@ -158,10 +157,8 @@ describe("book capture session", () => {
     expect(sheet).toContain('t("en", "book.build")');
     expect(sheet).toContain("demoSessionCookie()");
     expect(book).toContain("BookAddPhotos");
-    expect(add).toContain('type="file"');
-    expect(add).toContain('accept="image/*"');
-    expect(add).toContain("multiple");
-    expect(add).toContain("uploadBookSession");
+    expect(add).not.toContain('type="file"');
+    expect(add).toContain("/snap?seed=1");
     expect(add).not.toContain("capture=");
   });
 
