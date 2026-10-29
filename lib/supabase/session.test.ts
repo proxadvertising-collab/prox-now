@@ -13,9 +13,9 @@ describe("updateSession", () => {
     expect(response.headers.get("location")).toBeNull();
   });
 
-  it("keeps snap public and still protects wallet and inbox", () => {
-    expect(isProtectedPath("/snap")).toBe(false);
-    expect(isProtectedPath("/snap/now")).toBe(false);
+  it("protects snap, wallet, and inbox, and leaves the map public", () => {
+    expect(isProtectedPath("/snap")).toBe(true);
+    expect(isProtectedPath("/snap/now")).toBe(true);
     expect(isProtectedPath("/map")).toBe(false);
     expect(isProtectedPath("/wallet")).toBe(true);
     expect(isProtectedPath("/inbox/1")).toBe(true);

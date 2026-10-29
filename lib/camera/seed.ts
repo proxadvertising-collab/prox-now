@@ -53,10 +53,11 @@ export function addSeedShot(tray: SeedTray, shot: SeedShot, hasBook: boolean): S
       shots: [...tray.shots.filter((item) => item.slot !== shot.slot), shot],
     };
   }
-  if (shotsFor(tray, shot.slot).length >= MENU_CAP) return { ...tray, armed: null };
+  const count = shotsFor(tray, shot.slot).length;
+  if (count >= MENU_CAP) return { ...tray, armed: null };
   return {
     ...tray,
-    armed: null,
+    armed: count + 1 >= MENU_CAP ? null : shot.slot,
     menuParked: shot.slot === "menu" ? false : tray.menuParked,
     shots: [...tray.shots, shot],
   };

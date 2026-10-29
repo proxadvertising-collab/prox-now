@@ -225,12 +225,57 @@ async function prepareFiles(files: readonly File[]): Promise<PreparedImage[] | n
   }
 }
 
+function pageMap(source: Map<number, PageRead>, indexes: ReadonlySet<number>): Map<number, PageRead> {
+  const map = new Map<number, PageRead>();
+  for (const [index, page] of source) {
+    if (indexes.has(index)) map.set(index, page);
+  }
+  return map;
+}
+
+/** A menu session keeps every frame. Photos the reader does not call a menu stay as extras. */
+function sessionMenuParts(ingested: Ingested, menuSession: boolean): Ingested[] {
+  if (!menuSession || ingested.kind !== "menu" || !ingested.read) return [ingested];
+  const extraIndexes = new Set(
+    ingested.stored
+      .filter((page) => {
+        const item = ingested.pageByIndex.get(page.index);
+        return !item || !item.isMenu;
+      })
+      .map((page) => page.index),
+  );
+  if (extraIndexes.size === 0) return [ingested];
+  const menuStored = ingested.stored.filter((page) => !extraIndexes.has(page.index));
+  const extraStored = ingested.stored.filter((page) => extraIndexes.has(page.index));
+  const extra: Ingested = {
+    ...ingested,
+    kind: "extra",
+    stored: extraStored,
+    pageByIndex: pageMap(ingested.pageByIndex, extraIndexes),
+    plans: ingested.plans.filter((plan) => extraIndexes.has(plan.index)),
+    read: menuStored.length === 0 ? ingested.read : null,
+    faceCalls: menuStored.length === 0 ? ingested.faceCalls : 0,
+  };
+  if (menuStored.length === 0) return [extra];
+  const menuIndexes = new Set(menuStored.map((page) => page.index));
+  return [
+    {
+      ...ingested,
+      stored: menuStored,
+      pageByIndex: pageMap(ingested.pageByIndex, menuIndexes),
+      plans: ingested.plans.filter((plan) => menuIndexes.has(plan.index)),
+    },
+    extra,
+  ];
+}
+
 async function runPrepared(
   service: SupabaseClient,
   shop: ShopRow,
   kind: UploadKind,
   prepared: readonly PreparedImage[],
   improve: { existing: readonly { id: string; extracted: unknown }[] } | null = null,
+  menuSession = false,
 ): Promise<{ ok: true; ingested: Ingested } | { ok: false; response: NextResponse }> {
   let faceCalls = 0;
   let faceBoxes: Map<number, number[][]>;
@@ -296,7 +341,7 @@ async function runPrepared(
     else upstream = true;
   }
 
-  if (read && kind === "menu") {
+  if (read && kind === "menu" && !menuSession) {
     const notMenu = prepared.some((image) => {
       const page = read?.read.pages.find((item) => item.index === image.index);
       return !page || !page.isMenu;
@@ -513,6 +558,7 @@ async function handleGroups(
   livePages: readonly LivePage[],
   groups: readonly { kind: UploadKind; files: File[] }[],
   improve = false,
+  menuSession = false,
 ): Promise<NextResponse> {
   const preparedGroups: { kind: UploadKind; prepared: PreparedImage[] }[] = [];
   for (const group of groups) {
@@ -529,12 +575,19 @@ async function handleGroups(
     const existing = improve
       ? livePages.filter((page) => page.kind === group.kind && page.id).map((page) => ({ id: page.id, extracted: page.extracted }))
       : [];
-    const result = await runPrepared(service, shop, group.kind, group.prepared, improve ? { existing } : null);
+    const result = await runPrepared(
+      service,
+      shop,
+      group.kind,
+      group.prepared,
+      improve ? { existing } : null,
+      menuSession,
+    );
     if (!result.ok) {
       await removePaths(service, kept);
       return result.response;
     }
-    ingested.push(result.ingested);
+    ingested.push(...sessionMenuParts(result.ingested, menuSession));
     kept.push(...result.ingested.stored.map((page) => page.path));
   }
   const summary = improve
@@ -629,8 +682,8 @@ export async function POST(request: Request) {
         livePages: opened.livePages,
       });
   if (improve && block === "already_there") {
-    return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, true);
+    return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, true, session);
   }
   if (block) return json({ error: block }, capStatus(block));
-  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, improve);
+  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, improve, session);
 }

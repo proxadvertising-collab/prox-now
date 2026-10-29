@@ -53,6 +53,42 @@ describe("camera seed", () => {
     expect(bookKind("logo")).toBe("logo");
   });
 
+  it("keeps menu armed across shots until the cap, and a logo shot disarms", () => {
+    let tray = emptyTray();
+    tray = { ...tray, armed: "menu" };
+    tray = addSeedShot(tray, shot("menu", "m1"), false);
+    tray = addSeedShot(tray, shot("menu", "m2"), false);
+    tray = addSeedShot(tray, shot("menu", "m3"), false);
+    expect(tray.armed).toBe("menu");
+    expect(tray.shots).toHaveLength(3);
+    for (let n = 4; n <= 7; n += 1) tray = addSeedShot(tray, shot("menu", "m" + n), false);
+    expect(tray.shots.filter((item) => item.slot === "menu")).toHaveLength(7);
+    expect(tray.armed).toBeNull();
+    const eighth = addSeedShot(tray, shot("menu", "m8"), false);
+    expect(eighth.shots).toHaveLength(7);
+    expect(eighth.armed).toBeNull();
+
+    let logo = emptyTray();
+    logo = { ...logo, armed: "logo" };
+    logo = addSeedShot(logo, shot("logo", "l"), false);
+    expect(logo.armed).toBeNull();
+    expect(logo.shots.map((item) => item.id)).toEqual(["l"]);
+
+    let hours = emptyTray();
+    hours = { ...hours, armed: "hours" };
+    hours = addSeedShot(hours, shot("hours", "h"), false);
+    expect(hours.armed).toBeNull();
+
+    let extras = emptyTray();
+    extras = { ...extras, armed: "extras" };
+    extras = addSeedShot(extras, shot("extras", "e1"), true);
+    extras = addSeedShot(extras, shot("extras", "e2"), true);
+    expect(extras.armed).toBe("extras");
+    extras = parkMenu({ ...extras, shots: [...extras.shots, shot("menu", "pm")] });
+    expect(extras.menuParked).toBe(true);
+    expect(extras.armed).toBeNull();
+  });
+
   it("uses the demo point and otherwise the real GPS fix", async () => {
     const demo = await captureFix({
       now: () => fix.at,

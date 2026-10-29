@@ -124,6 +124,15 @@ export function LiveCamera({
     };
   }, []);
 
+  useEffect(() => {
+    if (liveFile) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    void video.play();
+  }, [liveFile]);
+
   async function grab(fix: CaptureFix): Promise<File> {
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
@@ -255,14 +264,31 @@ export function LiveCamera({
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         });
-        const body = (await response.json().catch(() => null)) as { id?: string; slug?: string; shop?: { id?: string; slug?: string } } | null;
-        const id = body?.shop?.id ?? body?.id;
-        if (!response.ok || !id) {
-          setNote("The shop was not created.");
+        const body = (await response.json().catch(() => null)) as {
+          id?: string;
+          slug?: string;
+          shop?: { id?: string; slug?: string };
+          shops?: { id?: string; slug?: string; name?: string }[];
+        } | null;
+        if (response.status === 401) {
+          setNote("Sign in to save.");
           return;
         }
-        shop = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name, hasBook: false };
-        setMatch(shop);
+        const joined = response.status === 409 ? body?.shops?.[0] : undefined;
+        if (joined?.id) {
+          const book = await shopHasBook(joined.id);
+          shop = { id: joined.id, slug: joined.slug || joined.id, name: joined.name || name, hasBook: book };
+          setHasBook(book);
+          setMatch(shop);
+        } else {
+          const id = body?.shop?.id ?? body?.id;
+          if (!response.ok || !id) {
+            setNote("The shop was not created.");
+            return;
+          }
+          shop = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name, hasBook: false };
+          setMatch(shop);
+        }
       }
       const bookShots: BookShot[] = tray.shots.flatMap((shot) => {
         const file = files[shot.id];
@@ -271,6 +297,10 @@ export function LiveCamera({
         return [{ id: shot.id, kind, file }];
       });
       const result = await uploadBookSession(shop.id, bookShots, fetch, shop.hasBook ? "improve" : undefined);
+      if (result.status === 401) {
+        setNote("Sign in to save.");
+        return;
+      }
       if (result.status >= 400 && result.error !== "upstream") {
         setNote("The book did not save.");
         return;
@@ -350,6 +380,7 @@ export function LiveCamera({
                       const file = last ? files[last.id] : null;
                       if (file) launch(file);
                       setTray((current) => parkMenu(current));
+                      void finish();
                       return;
                     }
                     setTray((current) => ({ ...current, armed: slot }));
@@ -382,10 +413,15 @@ export function LiveCamera({
           }}
         />
       ) : null}
-      {!match && draftName ? (
+      {!match && tray.shots.length > 0 ? (
         <label className="absolute inset-x-4 bottom-28 text-black">
           <span className="text-label text-white">Shop name</span>
-          <input className="mt-1 min-h-11 w-full rounded-md px-3 text-black" value={draftName} onChange={(event) => setDraftName(event.target.value)} />
+          <input
+            className="mt-1 min-h-11 w-full rounded-md px-3 text-black"
+            placeholder="Shop name"
+            value={draftName}
+            onChange={(event) => setDraftName(event.target.value)}
+          />
         </label>
       ) : null}
       <RadarButton

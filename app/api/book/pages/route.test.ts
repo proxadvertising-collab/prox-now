@@ -529,4 +529,15 @@ describe("POST /api/book/pages", () => {
     expect(response.status).toBe(200);
     expect(state.pages.map((page) => page.kind)).toEqual(["extra"]);
   });
+
+  it("keeps a non-menu image in a menu session instead of 409", async () => {
+    mode = "notmenu";
+    const response = await postSession([{ kind: "menu" }]);
+    expect(response.status).toBeGreaterThanOrEqual(200);
+    expect(response.status).toBeLessThan(300);
+    expect(response.status).not.toBe(409);
+    expect(state.removed).toHaveLength(0);
+    expect(state.uploads).toHaveLength(1);
+    expect(state.pages.map((page) => page.kind)).toEqual(["extra"]);
+  });
 });
