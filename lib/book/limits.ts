@@ -22,7 +22,7 @@ export const TAGLINE_MAX = 80;
 
 export const EXTRACTED_JSON_BUDGET = 12_000;
 
-export const UPLOAD_KINDS = ["storefront", "logo", "hours", "menu"] as const;
+export const UPLOAD_KINDS = ["storefront", "logo", "hours", "menu", "extra"] as const;
 
 export type UploadKind = (typeof UPLOAD_KINDS)[number];
 

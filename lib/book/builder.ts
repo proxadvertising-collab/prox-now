@@ -117,7 +117,7 @@ export const BOOK_CAPTURE_STEPS = ["storefront", "menu", "hours"] as const;
 
 export type BookShot = {
   id: string;
-  kind: BookTile | "logo";
+  kind: BookTile | "logo" | "extra";
   file: File;
 };
 
@@ -194,10 +194,11 @@ export const BOOK_REQUEST_BYTES = 4 * 1024 * 1024;
 const BOOK_JPEG_EDGE = 1600;
 const BOOK_JPEG_QUALITY = 0.8;
 
-function sessionForm(shopId: string, shots: readonly BookShot[]): FormData {
+function sessionForm(shopId: string, shots: readonly BookShot[], mode?: "improve"): FormData {
   const form = new FormData();
   form.set("shop", shopId);
   form.set("session", "1");
+  if (mode === "improve") form.set("mode", "improve");
   for (const shot of shots) form.append(shot.kind, shot.file, shot.file.name || "page.jpg");
   return form;
 }
@@ -261,11 +262,13 @@ export async function uploadBookSession(
   shopId: string,
   shots: readonly BookShot[],
   fetchImpl: BookFetch = fetch,
+  mode?: "improve",
 ): Promise<BookUploadResult> {
   const resized: BookShot[] = [];
   for (const shot of shots) resized.push(await shrinkBookShot(shot));
   const batches = packBookShots(resized);
-  const forms = batches.length > 0 ? batches.map((batch) => sessionForm(shopId, batch)) : [sessionForm(shopId, [])];
+  const forms =
+    batches.length > 0 ? batches.map((batch) => sessionForm(shopId, batch, mode)) : [sessionForm(shopId, [], mode)];
   let lastOk: BookUploadResult | null = null;
   let upstream: BookUploadResult | null = null;
   for (const form of forms) {

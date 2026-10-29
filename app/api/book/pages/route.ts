@@ -6,6 +6,7 @@ import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
 import { readLogoFix, straightenLogo, themeFromBrand, type BrandTheme } from "../../../../lib/book/brand";
+import { improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, type BookPass } from "../../../../lib/book/read";
 import { extractedOf, type PageRead } from "../../../../lib/book/schema";
@@ -33,6 +34,7 @@ type Ingested = {
   pageByIndex: Map<number, PageRead>;
   faceCalls: number;
   brand: BrandTheme | null;
+  plans: ShotPlan[];
 };
 
 type ShopRow = {
@@ -116,13 +118,20 @@ function existingOf(data: unknown): ExistingBook | null {
   };
 }
 
-function livePagesOf(data: unknown): { kind: string; status: string }[] {
+type LivePage = { id: string; kind: string; status: string; extracted: unknown };
+
+function livePagesOf(data: unknown): LivePage[] {
   if (!Array.isArray(data)) return [];
-  const pages: { kind: string; status: string }[] = [];
+  const pages: LivePage[] = [];
   for (const item of data) {
     const row = asRecord(item);
     if (!row || typeof row.kind !== "string") continue;
-    pages.push({ kind: row.kind, status: typeof row.status === "string" ? row.status : "live" });
+    pages.push({
+      id: typeof row.id === "string" ? row.id : "",
+      kind: row.kind,
+      status: typeof row.status === "string" ? row.status : "live",
+      extracted: row.extracted ?? {},
+    });
   }
   return pages;
 }
@@ -164,19 +173,19 @@ function shopLookupColumn(key: string): "id" | "slug" {
   return SHOP_ID.test(key) ? "id" : "slug";
 }
 
-type LivePage = { kind: string; status: string };
-
 function sessionGroups(form: FormData): { kind: UploadKind; files: File[] }[] | "empty" | "bad_image" | "page_limit" {
   const storefront = namedFiles(form, "storefront");
   const logo = namedFiles(form, "logo");
   const hours = namedFiles(form, "hours");
   const menu = namedFiles(form, "menu");
+  const extra = namedFiles(form, "extra");
   if (storefront.length > 1 || logo.length > 1 || hours.length > 1) return "bad_image";
-  if (menu.length > MAX_MENU_PAGES) return "page_limit";
+  if (menu.length > MAX_MENU_PAGES || extra.length > MAX_MENU_PAGES) return "page_limit";
   const groups: { kind: UploadKind; files: File[] }[] = [];
   if (storefront.length === 1) groups.push({ kind: "storefront", files: storefront });
   if (logo.length === 1) groups.push({ kind: "logo", files: logo });
   if (menu.length > 0) groups.push({ kind: "menu", files: menu });
+  if (extra.length > 0) groups.push({ kind: "extra", files: extra });
   if (hours.length === 1) groups.push({ kind: "hours", files: hours });
   if (groups.length === 0) return "empty";
   return groups;
@@ -185,14 +194,16 @@ function sessionGroups(form: FormData): { kind: UploadKind; files: File[] }[] | 
 function sessionBlock(
   groups: readonly { kind: UploadKind; files: File[] }[],
   livePages: readonly LivePage[],
+  improve = false,
 ): ReturnType<typeof uploadBlock> {
   for (const group of groups) {
-    if (group.kind === "menu" && group.files.length > MAX_UPLOAD_IMAGES) {
-      const menus = livePages.filter((page) => page.status === "live" && page.kind === "menu").length;
-      if (menus + group.files.length > MAX_MENU_PAGES) return "page_limit";
+    if ((group.kind === "menu" || group.kind === "extra") && group.files.length > MAX_UPLOAD_IMAGES) {
+      const pages = livePages.filter((page) => page.status === "live" && page.kind === group.kind).length;
+      if (pages + group.files.length > MAX_MENU_PAGES) return "page_limit";
       continue;
     }
     const block = uploadBlock({ kind: group.kind, fileCount: group.files.length, livePages });
+    if (improve && block === "already_there") continue;
     if (block) return block;
   }
   return null;
@@ -219,6 +230,7 @@ async function runPrepared(
   shop: ShopRow,
   kind: UploadKind,
   prepared: readonly PreparedImage[],
+  improve: { existing: readonly { id: string; extracted: unknown }[] } | null = null,
 ): Promise<{ ok: true; ingested: Ingested } | { ok: false; response: NextResponse }> {
   let faceCalls = 0;
   let faceBoxes: Map<number, number[][]>;
@@ -297,9 +309,20 @@ async function runPrepared(
 
   const pageByIndex = new Map<number, PageRead>();
   for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
+  const plans: ShotPlan[] = [];
+  if (improve) {
+    for (const page of stored) {
+      const facts = pageFacts(pageByIndex.get(page.index) ?? null);
+      const image = prepared.find((item) => item.index === page.index);
+      const decision = image
+        ? await readImprove({ kind, facts, existing: improve.existing, image })
+        : { action: "add" as const, pageId: null };
+      plans.push({ index: page.index, ...decision });
+    }
+  }
   return {
     ok: true,
-    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls, brand },
+    ingested: { kind, stored, read, resting, upstream, pageByIndex, faceCalls, brand, plans },
   };
 }
 
@@ -310,8 +333,9 @@ async function commitBook(input: {
   livePages: readonly LivePage[];
   groups: readonly Ingested[];
   uploaded: string[];
+  summary: string | null;
 }): Promise<NextResponse> {
-  const { service, shop, userId, livePages, groups, uploaded } = input;
+  const { service, shop, userId, livePages, groups, uploaded, summary } = input;
   const bookResult = await service
     .from("shop_books")
     .select("hours, theme, tagline, source_language, built_by_model, status")
@@ -376,11 +400,31 @@ async function commitBook(input: {
   }
 
   const batchId = crypto.randomUUID();
-  let menuCursor = livePages.filter((page) => page.kind === "menu").length;
+  const nowRemoved = new Date().toISOString();
+  for (const group of groups) {
+    for (const plan of group.plans) {
+      if (plan.action !== "replace" || !plan.pageId) continue;
+      await service
+        .from("shop_book_pages")
+        .update({ status: "removed", removed_at: nowRemoved })
+        .eq("id", plan.pageId);
+    }
+  }
+  const skipped = groups.flatMap((group) =>
+    group.stored.filter((page) => group.plans.some((plan) => plan.index === page.index && plan.action === "skip")),
+  );
+  await removePaths(
+    service,
+    skipped.map((page) => page.path),
+  );
+  let menuCursor = livePages.filter((page) => page.kind === "menu" && page.status === "live").length;
+  let extraCursor = livePages.filter((page) => page.kind === "extra" && page.status === "live").length;
   const rows = groups.flatMap((group) => {
-    const start = menuCursor;
-    if (group.kind === "menu") menuCursor += group.stored.length;
-    return group.stored.map((page, offset) => {
+    const kept = group.stored.filter((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip"));
+    const start = group.kind === "extra" ? extraCursor : menuCursor;
+    if (group.kind === "menu") menuCursor += kept.length;
+    if (group.kind === "extra") extraCursor += kept.length;
+    return kept.map((page, offset) => {
       const meta = group.read?.perPage.get(page.index);
       const extracted =
         group.resting || group.upstream || !group.read ? {} : extractedOf(group.pageByIndex.get(page.index) ?? null);
@@ -388,7 +432,7 @@ async function commitBook(input: {
         id: page.id,
         shop_id: shop.id,
         kind: group.kind,
-        position: group.kind === "menu" ? start + offset : 0,
+        position: group.kind === "menu" || group.kind === "extra" ? start + offset : 0,
         image_path: page.path,
         width: page.width,
         height: page.height,
@@ -408,10 +452,13 @@ async function commitBook(input: {
     });
   });
 
-  const inserted = await service
-    .from("shop_book_pages")
-    .insert(rows)
-    .select("id, kind, position, image_path, width, height, language, extracted, ai_meta");
+  const inserted =
+    rows.length === 0
+      ? { data: [], error: null }
+      : await service
+          .from("shop_book_pages")
+          .insert(rows)
+          .select("id, kind, position, image_path, width, height, language, extracted, ai_meta");
   if (inserted.error) {
     await removePaths(service, uploaded);
     if (duplicatePage(inserted.error)) return json({ error: "already_there" }, 409);
@@ -432,11 +479,12 @@ async function commitBook(input: {
   const resting = groups.some((group) => group.resting);
   const upstream = groups.some((group) => group.upstream || !group.read);
   const ai = aiPayload(null, faceCalls);
+  const bodyOf = (extra: Record<string, unknown>) => (summary ? { ...extra, summary } : extra);
   if (resting) {
-    return json({ error: "ai_resting", message: AI_RESTING_MESSAGE, pages, missing, ai }, 503);
+    return json(bodyOf({ error: "ai_resting", message: AI_RESTING_MESSAGE, pages, missing, ai }), 503);
   }
   if (upstream) {
-    return json({ error: "upstream", pages, missing, ai }, 502);
+    return json(bodyOf({ error: "upstream", pages, missing, ai }), 502);
   }
   const successAi =
     groups.length === 1
@@ -454,7 +502,7 @@ async function commitBook(input: {
             (group.read?.chunks ?? []).map((chunk) => ({ images: chunk.images, latency_ms: chunk.latencyMs })),
           ),
         };
-  return json({ pages, missing, hours: savedHours, theme, ai: successAi });
+  return json(bodyOf({ pages, missing, hours: savedHours, theme, ai: successAi }));
 }
 
 async function handleGroups(
@@ -464,6 +512,7 @@ async function handleGroups(
   shop: ShopRow,
   livePages: readonly LivePage[],
   groups: readonly { kind: UploadKind; files: File[] }[],
+  improve = false,
 ): Promise<NextResponse> {
   const preparedGroups: { kind: UploadKind; prepared: PreparedImage[] }[] = [];
   for (const group of groups) {
@@ -477,7 +526,10 @@ async function handleGroups(
   const ingested: Ingested[] = [];
   const kept: string[] = [];
   for (const group of preparedGroups) {
-    const result = await runPrepared(service, shop, group.kind, group.prepared);
+    const existing = improve
+      ? livePages.filter((page) => page.kind === group.kind && page.id).map((page) => ({ id: page.id, extracted: page.extracted }))
+      : [];
+    const result = await runPrepared(service, shop, group.kind, group.prepared, improve ? { existing } : null);
     if (!result.ok) {
       await removePaths(service, kept);
       return result.response;
@@ -485,7 +537,10 @@ async function handleGroups(
     ingested.push(result.ingested);
     kept.push(...result.ingested.stored.map((page) => page.path));
   }
-  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept });
+  const summary = improve
+    ? improveSummary(ingested.flatMap((group) => group.plans.map((plan) => ({ kind: group.kind, action: plan.action }))))
+    : null;
+  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept, summary });
 }
 
 async function openShop(
@@ -507,7 +562,7 @@ async function openShop(
 
   const pageResult = await service
     .from("shop_book_pages")
-    .select("kind, status")
+    .select("id, kind, status, extracted")
     .eq("shop_id", shop.id)
     .eq("status", "live");
   if (pageResult.error) return { ok: false, response: json({ error: "upload_failed" }, 502) };
@@ -535,6 +590,7 @@ export async function POST(request: Request) {
   const shopKey = textField(form.get("shop"));
   if (!shopKey || shopKey.length > 80) return json({ error: "not_found" }, 404);
   const session = textField(form.get("session")) === "1";
+  const improve = textField(form.get("mode")) === "improve";
 
   let groups: { kind: UploadKind; files: File[] }[];
   if (session) {
@@ -566,12 +622,15 @@ export async function POST(request: Request) {
   const opened = await openShop(service, shopKey);
   if (!opened.ok) return opened.response;
   const block = session
-    ? sessionBlock(groups, opened.livePages)
+    ? sessionBlock(groups, opened.livePages, improve)
     : uploadBlock({
         kind: groups[0]?.kind ?? "menu",
         fileCount: groups[0]?.files.length ?? 0,
         livePages: opened.livePages,
       });
+  if (improve && block === "already_there") {
+    return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, true);
+  }
   if (block) return json({ error: block }, capStatus(block));
-  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups);
+  return handleGroups(request, userId, service, opened.shop, opened.livePages, groups, improve);
 }

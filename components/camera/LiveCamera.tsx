@@ -267,14 +267,20 @@ export function LiveCamera({
       const bookShots: BookShot[] = tray.shots.flatMap((shot) => {
         const file = files[shot.id];
         if (!file) return [];
-        return [{ id: shot.id, kind: bookKind(shot.slot), file }];
+        const kind = shot.slot === "extras" ? "extra" : bookKind(shot.slot);
+        return [{ id: shot.id, kind, file }];
       });
-      const result = await uploadBookSession(shop.id, bookShots);
+      const result = await uploadBookSession(shop.id, bookShots, fetch, shop.hasBook ? "improve" : undefined);
       if (result.status >= 400 && result.error !== "upstream") {
         setNote("The book did not save.");
         return;
       }
+      const summary =
+        result.body && typeof result.body === "object" && "summary" in result.body && typeof result.body.summary === "string"
+          ? result.body.summary
+          : "";
       setSavedSlug(shop.slug);
+      if (summary) setNote(summary);
     } catch {
       setNote("The book did not save.");
     } finally {

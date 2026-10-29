@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { createClient } from "../../../lib/supabase/server";
 
 const META_URL = "https://api.meta.ai/v1/responses";
 const META_MODEL = "muse-spark-1.3";
@@ -42,8 +43,24 @@ function withoutSecret(text: string, secret: string): string {
   return text.split(secret).join("");
 }
 
+async function demoOwnerSession(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return false;
+    const account = await supabase.from("demo_accounts").select("role").limit(1);
+    const row = Array.isArray(account.data) ? account.data[0] : null;
+    return Boolean(row && typeof row === "object" && "role" in row && row.role === "owner");
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   await connection();
+  if (process.env.NODE_ENV !== "development" && !(await demoOwnerSession())) {
+    return new Response(null, { status: 404 });
+  }
   const apiKey = process.env.META_API_KEY;
   if (!apiKey) {
     return Response.json(

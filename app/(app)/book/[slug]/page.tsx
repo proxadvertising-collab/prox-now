@@ -82,8 +82,9 @@ export default async function BookPage({
       );
     }
 
+    const extras = view.pages.filter((page) => page.kind === "extra");
     const shown = view.pages.filter((page) => page.kind === "menu" || page.kind === "hours" || page.kind === "storefront");
-    const pages = shown.length > 0 ? shown : view.pages.filter((page) => page.kind !== "logo");
+    const pages = shown.length > 0 ? shown : view.pages.filter((page) => page.kind !== "logo" && page.kind !== "extra");
     const accent = view.accent ?? "#FF8A3D";
     const ink = view.ink ?? "#1C0E05";
     const mood =
@@ -133,6 +134,24 @@ export default async function BookPage({
             </li>
           ))}
         </ul>
+        {extras.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <h2 className={"text-heading " + mood} style={{ color: accent }}>
+              Extras
+            </h2>
+            <ul className="flex flex-col gap-3">
+              {extras.map((page) => (
+                <li key={page.id} className="overflow-hidden rounded-lg border-4" style={{ borderColor: accent, background: ink, color: accent }}>
+                  {page.imageUrl ? (
+                    <img src={page.imageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                  ) : (
+                    <div className="aspect-[4/3] w-full bg-surface-2" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <BookAddPhotos
           shopId={shop?.id ?? key}
           shop={point}

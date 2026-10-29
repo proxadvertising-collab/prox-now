@@ -16,6 +16,24 @@ export function facePrompt(indexes: readonly number[]): string {
   );
 }
 
+export function improvePrompt(
+  kind: string,
+  existing: readonly { id: string; extracted: unknown }[],
+): string {
+  const lines = existing.map((page) => "id=" + page.id + " " + JSON.stringify(page.extracted ?? {})).join("\n");
+  return (
+    "Compare this new shop photo with the existing " +
+    kind +
+    " pages.\n" +
+    "same info = skip. newer or different (new prices, new hours, new logo) = replace that page. a new item = add.\n" +
+    "Output ONLY JSON. No markdown. No extra keys.\n" +
+    '{"action":"skip","pageId":null}\n' +
+    "action is skip, replace, or add. pageId is the existing id when action is replace.\n" +
+    "Existing pages:\n" +
+    (lines || "(none)")
+  );
+}
+
 export function bookReadPrompt(indexes: readonly number[]): string {
   return (
     "Read the REAL text in these photos for a shop book. Copy text exactly as printed. " +
