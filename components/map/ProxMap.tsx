@@ -8,6 +8,7 @@ import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
 import { pickLanguage } from "@/lib/i18n/viewer";
+import { GoNowSheet } from "./GoNowSheet";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
@@ -169,6 +170,7 @@ export function ProxMap({
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
   const [bookMissing, setBookMissing] = useState<string[] | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [askOpen, setAskOpen] = useState(false);
   const [stackShop, setStackShop] = useState<string | null>(null);
   const historyOn = useRef(false);
   const onArrow = useRef<(key: string) => void>(() => undefined);
@@ -593,6 +595,13 @@ export function ProxMap({
     <div tabIndex={-1} className="prox-map relative h-full w-full outline-none" data-card={sheet ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
       <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center rounded-full bg-accent px-4 text-label font-semibold text-accent-ink shadow-card"
+          onClick={() => setAskOpen(true)}
+        >
+          Ask
+        </button>
         {!fixtures &&
         showExploreChip({
           demoSession,
@@ -647,6 +656,18 @@ export function ProxMap({
           <LocationHelp status={locStatus} onTryAgain={() => void useMyLocation()} />
         ) : null}
       </div>
+      {askOpen ? (
+        <GoNowSheet
+          lat={(userPoint ?? origin)?.lat ?? null}
+          lng={(userPoint ?? origin)?.lng ?? null}
+          onClose={() => setAskOpen(false)}
+          onShowMap={(place) => {
+            setAskOpen(false);
+            setSelectedId(place.shopId);
+            mapRef.current?.flyTo({ center: [place.lng, place.lat], zoom: 16, essential: true });
+          }}
+        />
+      ) : null}
       {sheet && selectedShop ? (
         <PlaceSheet onClose={closeSheet}>
           {stack.length > 0 ? (
