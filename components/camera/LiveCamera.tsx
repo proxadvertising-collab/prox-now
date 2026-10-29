@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SnapFlow } from "@/components/snap/SnapFlow";
+import { RadarButton } from "@/components/ui/RadarButton";
 import {
   addSeedShot,
   bookKind,
@@ -381,10 +382,9 @@ export function LiveCamera({
           <input className="mt-1 min-h-11 w-full rounded-md px-3 text-black" value={draftName} onChange={(event) => setDraftName(event.target.value)} />
         </label>
       ) : null}
-      <button
-        type="button"
-        aria-label="Shutter"
-        className="absolute bottom-8 left-1/2 h-20 w-20 -translate-x-1/2 rounded-full border-4 border-white bg-white/30"
+      <RadarButton
+        label="Take a photo"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2"
         onClick={() => void shoot()}
       />
       {note ? <p className="absolute inset-x-4 bottom-32 text-center text-body">{note}</p> : null}
