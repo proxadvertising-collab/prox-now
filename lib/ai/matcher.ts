@@ -316,6 +316,96 @@ export function decide(result: MatcherResult): Decision {
   return "pick";
 }
 
+/** Exact folded names, and near-misses such as one extra letter. */
+export const SIGN_MATCH_STRONG = 0.85;
+export const SIGN_MATCH_CONFIDENCE = 0.95;
+
+export function compactShopName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0e00-\u0e7f\u4e00-\u9fff]+/g, "");
+}
+
+function editDistance(left: string, right: string): number {
+  if (left === right) return 0;
+  if (left.length === 0) return right.length;
+  if (right.length === 0) return left.length;
+  const row = new Array<number>(right.length + 1);
+  for (let column = 0; column <= right.length; column += 1) row[column] = column;
+  for (let i = 1; i <= left.length; i += 1) {
+    let previous = row[0] ?? 0;
+    row[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const current = row[j] ?? 0;
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const next = Math.min(current + 1, (row[j - 1] ?? 0) + 1, previous + cost);
+      row[j] = next;
+      previous = current;
+    }
+  }
+  return row[right.length] ?? 0;
+}
+
+/** 1 when the names are the same after case and spaces are removed. */
+export function nameMatchScore(readName: string, shopName: string): number {
+  const left = compactShopName(readName);
+  const right = compactShopName(shopName);
+  if (left.length < 4 || right.length < 4) return 0;
+  if (left === right) return 1;
+  const distance = editDistance(left, right);
+  return 1 - distance / Math.max(left.length, right.length);
+}
+
+export function matchShopBySign<T extends { id: string; name: string; nameLocal?: string | null }>(
+  readName: string,
+  shops: readonly T[],
+): { shop: T; score: number } | null {
+  let best: { shop: T; score: number } | null = null;
+  for (const shop of shops) {
+    const score = Math.max(
+      nameMatchScore(readName, shop.name),
+      shop.nameLocal ? nameMatchScore(readName, shop.nameLocal) : 0,
+    );
+    if (score < SIGN_MATCH_STRONG) continue;
+    if (!best || score > best.score) best = { shop, score };
+  }
+  return best;
+}
+
+function signNames(result: MatcherResult): string[] {
+  const names = [result.placeName, result.placeNameLocal];
+  for (const line of result.signText) names.push(line.original, line.translated);
+  return names.filter((name): name is string => Boolean(name && name.trim()));
+}
+
+/**
+ * A strong read of the sign wins over the model id.
+ * The matched shop is moved to the front, including when it sat outside the short list.
+ */
+export function applySignMatch<T extends { id: string; name: string; nameLocal?: string | null }>(
+  result: MatcherResult,
+  shops: readonly T[],
+): { result: MatcherResult; shops: T[]; matched: boolean } {
+  let best: { shop: T; score: number } | null = null;
+  for (const name of signNames(result)) {
+    const hit = matchShopBySign(name, shops);
+    if (hit && (!best || hit.score > best.score)) best = hit;
+  }
+  if (!best) return { result, shops: shops.slice(), matched: false };
+  const rest = shops.filter((shop) => shop.id !== best.shop.id);
+  return {
+    result: {
+      ...result,
+      shopId: best.shop.id,
+      confidence: best.score >= 1 ? SIGN_MATCH_CONFIDENCE : 0.9,
+    },
+    shops: [best.shop, ...rest],
+    matched: true,
+  };
+}
+
 function rank(shops: readonly MatchShop[], origin: LatLng): MatcherCandidate[] {
   return shops
     .map((shop) => ({

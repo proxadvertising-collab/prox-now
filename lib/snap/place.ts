@@ -1,4 +1,5 @@
 import type { PlaceKind } from "../ai/matcher";
+import type { LatLng } from "../geo";
 import { mapCategory, prefillShop, type ShopCategory } from "./prefill";
 
 /**
@@ -50,15 +51,38 @@ export function nearbyCandidates<T>(input: {
 
 export function pickerCandidates<T extends DistanceShop>(
   shops: readonly T[],
-  options?: { radiusM?: number; cap?: number },
+  options?: { radiusM?: number; cap?: number; pinId?: string | null },
 ): T[] {
   const radiusM = options?.radiusM ?? POST_RADIUS_M;
   const cap = options?.cap ?? PICKER_CAP;
-  return shops
+  const picked = shops
     .filter((shop) => Number.isFinite(shop.distanceM) && shop.distanceM >= 0 && shop.distanceM <= radiusM)
     .slice()
     .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id))
     .slice(0, Math.max(0, cap));
+  const pinId = options?.pinId;
+  if (!pinId) return picked;
+  const pinned = shops.find((shop) => shop.id === pinId);
+  if (!pinned) return picked;
+  const rest = picked.filter((shop) => shop.id !== pinned.id);
+  return [pinned, ...rest].slice(0, Math.max(1, cap));
+}
+
+/** Demo accounts and demo mode are already at the demo place, so the GPS gate stays open. */
+export function allowPostDistance(distanceM: number, demo: boolean): boolean {
+  if (demo) return true;
+  return distanceM <= POST_RADIUS_M;
+}
+
+/** Keep a real fix. Demo mode with no fix stands at the demo zone. */
+export function postStandIn(
+  here: LatLng | null,
+  demo: boolean,
+  zone: LatLng,
+): LatLng | null {
+  if (here && Number.isFinite(here.lat) && Number.isFinite(here.lng)) return here;
+  if (demo && Number.isFinite(zone.lat) && Number.isFinite(zone.lng)) return zone;
+  return null;
 }
 
 export type BusinessRead = {

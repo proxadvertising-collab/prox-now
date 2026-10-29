@@ -4,7 +4,7 @@ import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../
 import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
-import { isUnreadablePhoto, POST_RADIUS_M } from "../../../lib/snap/place";
+import { allowPostDistance, isUnreadablePhoto } from "../../../lib/snap/place";
 import { factsWithConsent } from "../../../lib/posts/consent";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
@@ -108,7 +108,14 @@ export async function POST(request: Request) {
   if (!Number.isFinite(shopLat) || !Number.isFinite(shopLng)) return bad("too_far");
   // Measured from the stored shop, not the client's claimed shop. The picker cannot widen this.
   const distanceM = Math.round(haversineMeters({ lat, lng }, { lat: shopLat, lng: shopLng }));
-  if (distanceM > POST_RADIUS_M) return bad("too_far");
+  let demoAccount = false;
+  try {
+    const account = await supabase.from("demo_accounts").select("role").limit(1);
+    demoAccount = !account.error && Array.isArray(account.data) && account.data.length > 0;
+  } catch {
+    demoAccount = false;
+  }
+  if (!allowPostDistance(distanceM, demoAccount)) return bad("too_far");
 
   const bytes = Buffer.from(await image.arrayBuffer());
   const mime = type === "image/jpg" ? "image/jpeg" : type;

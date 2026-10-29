@@ -11,7 +11,9 @@ import {
   isUnreadablePhoto,
   namesCollide,
   nearbyCandidates,
+  allowPostDistance,
   pickerCandidates,
+  postStandIn,
   readBusiness,
   sanitizeShopName,
 } from "./place";
@@ -204,6 +206,16 @@ describe("pickerCandidates", () => {
     { id: "bad", name: "Bad", distanceM: Number.NaN },
     { id: "neg", name: "Neg", distanceM: -1 },
   ];
+
+  it("lets a demo stand-in post and still blocks a real user who is far", () => {
+    expect(allowPostDistance(POST_RADIUS_M + 500, true)).toBe(true);
+    expect(allowPostDistance(POST_RADIUS_M + 500, false)).toBe(false);
+    expect(allowPostDistance(12, false)).toBe(true);
+    const zone = { lat: 12.5684, lng: 99.9577 };
+    expect(postStandIn(null, true, zone)).toEqual(zone);
+    expect(postStandIn(null, false, zone)).toBeNull();
+    expect(postStandIn({ lat: 1, lng: 2 }, false, zone)).toEqual({ lat: 1, lng: 2 });
+  });
 
   it("orders the nearest shops inside the publish radius and caps the list", () => {
     const picked = pickerCandidates(shops);

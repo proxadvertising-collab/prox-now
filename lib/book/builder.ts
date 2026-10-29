@@ -129,12 +129,29 @@ export const BOOK_UPLOAD_PATH = "/api/book/pages";
 export function atThisShop(
   here: LatLng | null,
   shop: LatLng | null,
+  demo = false,
 ): "ok" | "need_location" | "too_far" | "unknown_shop" {
   if (!shop || !Number.isFinite(shop.lat) || !Number.isFinite(shop.lng)) return "unknown_shop";
+  if (demo) return "ok";
   if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lng)) return "need_location";
   const distanceM = Math.round(haversineMeters(here, shop));
   if (distanceM > POST_RADIUS_M) return "too_far";
   return "ok";
+}
+
+/** Fixture demo mode has no shop env. A demo account row is the judge shopper or owner. */
+export async function viewerUsesDemoLocation(input: {
+  hasEnv: boolean;
+  lookup: () => Promise<{ error: unknown; count: number }>;
+}): Promise<boolean> {
+  if (!input.hasEnv) return true;
+  try {
+    const account = await input.lookup();
+    if (account.error) return false;
+    return account.count > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function addBookShots(

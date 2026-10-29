@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_CENTER, FIXTURE_SHOPS } from "../fixtures/shops";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
+  applySignMatch,
   buildMatcherPrompt,
   decide,
   emptyMatcherResult,
   parseMatcherResult,
   selectCandidates,
+  SIGN_MATCH_CONFIDENCE,
 } from "./matcher";
+import { pickerCandidates } from "../snap/place";
 
 const base = emptyMatcherResult();
 
@@ -158,5 +163,39 @@ describe("matcher", () => {
     const missing = selectCandidates(null, FIXTURE_SHOPS, { max: 3 });
     expect(missing.demo).toBe(true);
     expect(missing.candidates).toHaveLength(3);
+  });
+
+  it("matches PAK KAPI to Pak Kapi and pins that shop when it is outside the short list", () => {
+    const shops = [
+      { id: "near", name: "Mala Mafia", nameLocal: null, distanceM: 12 },
+      { id: "next", name: "Coconut shake stand", nameLocal: null, distanceM: 20 },
+      { id: "third", name: "Krua Mae Yen", nameLocal: null, distanceM: 30 },
+      { id: "fourth", name: "Thuk Jai Chieo", nameLocal: null, distanceM: 40 },
+      { id: "fifth", name: "Clean Together", nameLocal: null, distanceM: 50 },
+      { id: "pak-kapi", name: "Pak Kapi", nameLocal: "ปากกะปิ", distanceM: 420 },
+    ];
+    const read = {
+      ...base,
+      placeName: "PAK KAPI",
+      placeNameLocal: null,
+      signText: [{ original: "PAK KAPI", translated: "PAK KAPI" }],
+    };
+    const named = applySignMatch(read, shops);
+    expect(named.matched).toBe(true);
+    expect(named.result.shopId).toBe("pak-kapi");
+    expect(named.result.confidence).toBe(SIGN_MATCH_CONFIDENCE);
+    expect(named.shops[0]?.id).toBe("pak-kapi");
+    const picker = pickerCandidates(named.shops, { pinId: named.result.shopId });
+    expect(picker[0]?.id).toBe("pak-kapi");
+    expect(picker.some((shop) => shop.id === "near")).toBe(true);
+  });
+});
+
+describe("add this shop", () => {
+  it("shows Add this shop under the picker", () => {
+    const screen = readFileSync(resolve(import.meta.dirname, "../../components/snap/SnapFlow.tsx"), "utf8");
+    const pick = screen.slice(screen.indexOf('phase === "pick"'));
+    expect(pick).toContain('t("en", "add.title")');
+    expect(pick).not.toContain("SAME_PLACE_M");
   });
 });

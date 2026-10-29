@@ -11,7 +11,7 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
-import { SAME_PLACE_M } from "@/lib/snap/place";
+import { postStandIn } from "@/lib/snap/place";
 import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
@@ -48,6 +48,7 @@ type AnalyzeBody = {
     shopId: string | null;
     confidence: number;
     category?: string;
+    placeName?: string | null;
     signText?: SignLine[];
     faces?: unknown;
   };
@@ -186,6 +187,7 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
   const [friendAgrees, setFriendAgrees] = useState(false);
   const [scene, setScene] = useState<SceneReport | null>(null);
   const [behindOn, setBehindOn] = useState(false);
+  const [readName, setReadName] = useState("");
 
   function forgetOriginal() {
     const dropped = dropOriginalMemory(blobsRef.current, (url) => URL.revokeObjectURL(url));
@@ -371,6 +373,19 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
     setPhase("away");
   }
 
+  function addThisShop() {
+    const label = (proposed?.name || readName).trim();
+    if (demo && !pointRef.current) {
+      rememberPoint({ lat: DEMO_ZONE_FALLBACK.lat, lng: DEMO_ZONE_FALLBACK.lng });
+    }
+    openProposed({
+      name: label,
+      nameLocal: proposed?.nameLocal ?? null,
+      category: proposed && SHOP_CATEGORIES.includes(proposed.category) ? proposed.category : "other",
+      confidence: proposed?.confidence ?? 0.6,
+    });
+  }
+
   function openProposed(place: ProposedPlace) {
     const local = place.nameLocal ?? "";
     const nextCategory = SHOP_CATEGORIES.includes(place.category) ? place.category : "other";
@@ -416,6 +431,7 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
     setPicker([]);
     setAskWhich(false);
     setProposed(null);
+    setReadName("");
     setAwayKind("not");
     setAlreadyHere(false);
     setGuessId(null);
@@ -559,6 +575,14 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
       setPicker(choices);
       const place = body.place && body.place.name ? body.place : null;
       setProposed(place);
+      const sign = body.result.signText?.[0];
+      setReadName(
+        place?.name?.trim() ||
+          (typeof body.result.placeName === "string" ? body.result.placeName.trim() : "") ||
+          sign?.translated?.trim() ||
+          sign?.original?.trim() ||
+          "",
+      );
       setAlreadyHere(false);
       setDemo((current) => current || Boolean(body.demo));
       setTotalSeconds(Math.max(1, Math.round((Date.now() - startedRef.current) / 1000)));
@@ -658,7 +682,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
   }
 
   async function saveShop() {
-    const here = pointRef.current;
+    const here =
+      pointRef.current ??
+      (demo ? { lat: DEMO_ZONE_FALLBACK.lat, lng: DEMO_ZONE_FALLBACK.lng } : null);
     if (!here) return;
     const trimmed = name.trim();
     if (trimmed.length < 2) {
@@ -789,7 +815,11 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
       setPostError(t("en", "post.needPhoto"));
       return;
     }
-    if (!here) {
+    const postHere = postStandIn(here, demo, {
+      lat: DEMO_ZONE_FALLBACK.lat,
+      lng: DEMO_ZONE_FALLBACK.lng,
+    });
+    if (!postHere) {
       setPostError(t("en", "post.tooFar"));
       return;
     }
@@ -801,8 +831,8 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
       const form = new FormData();
       form.set("image", jpeg, "snap.jpg");
       form.set("shopId", shop.id);
-      form.set("lat", String(here.lat));
-      form.set("lng", String(here.lng));
+      form.set("lat", String(postHere.lat));
+      form.set("lng", String(postHere.lng));
       const chosenFaces = showFacesPayload(faceBoxes, shown);
       if (chosenFaces.length > 0) form.set("showFaces", JSON.stringify(chosenFaces));
       const response = await fetch("/api/posts", { method: "POST", body: form });
@@ -1005,11 +1035,9 @@ export function SnapFlow({ preselected = null }: { preselected?: { id: string; n
               </li>
             ))}
           </ul>
-          {picker.every((shop) => shop.distanceM > SAME_PLACE_M) ? (
-            <button type="button" className={secondary} onClick={() => (proposed ? openProposed(proposed) : showAway("not"))}>
-              {t("en", "snap.addDifferent")}
-            </button>
-          ) : null}
+          <button type="button" className={secondary} onClick={addThisShop}>
+            {t("en", "add.title")}
+          </button>
         </div>
       ) : null}
 

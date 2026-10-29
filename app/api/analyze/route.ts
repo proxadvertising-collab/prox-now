@@ -1,4 +1,5 @@
 import {
+  applySignMatch,
   buildMatcherPrompt,
   decide,
   emptyMatcherResult,
@@ -94,8 +95,9 @@ function pack(input: {
   ms: number;
   hasFix: boolean;
   scene: SceneReport;
+  pinId?: string | null;
 }) {
-  const offered = pickerCandidates(input.shops).map(toCard);
+  const offered = pickerCandidates(input.shops, { pinId: input.pinId }).map(toCard);
   const business = readBusiness(input.result);
   const noMatch = classifySnap({
     confident: input.decision === "confirm",
@@ -163,9 +165,11 @@ export async function POST(request: Request) {
 
   try {
     const spark = await callSpark({ prompt, imageDataUrl });
-    const result = parseMatcherResult(spark.raw, ids);
+    const parsed = parseMatcherResult(spark.raw, ids);
+    const named = applySignMatch(parsed, forUser);
+    const result = named.result;
     const decision = decide(result);
-    const ordered = orderCandidates(forUser, result.shopId);
+    const ordered = orderCandidates(named.shops, result.shopId);
     const scene = buildScene({
       model: spark.model,
       result,
@@ -185,6 +189,7 @@ export async function POST(request: Request) {
         ms: spark.ms,
         hasFix: point !== null,
         scene,
+        pinId: named.matched ? result.shopId : null,
       }),
     );
   } catch (error) {

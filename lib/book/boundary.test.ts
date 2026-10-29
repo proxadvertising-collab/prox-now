@@ -22,7 +22,7 @@ describe("service role boundary", () => {
     expect(route).toContain("createServiceClient");
     const clientFiles = [
       ...filesUnder(join(root, "components")),
-      ...filesUnder(join(root, "app")).filter((path) => !relative(root, path).startsWith("app/api/")),
+      ...filesUnder(join(root, "app")).filter((path) => !relative(root, path).replaceAll("\\", "/").startsWith("app/api/")),
     ];
     for (const path of clientFiles) {
       const text = readFileSync(path, "utf8");

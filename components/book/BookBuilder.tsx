@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { t, type CopyKey } from "@/lib/copy";
+import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { locate } from "@/lib/geo/locate";
+import { hasShopEnv } from "@/lib/shops/source";
+import { createClient } from "@/lib/supabase/client";
 import {
   BOOK_CAPTURE_STEPS,
   addBookShots,
@@ -12,6 +15,7 @@ import {
   bookUploadState,
   removeBookShot,
   uploadBookSession,
+  viewerUsesDemoLocation,
   type BookShot,
   type BookTile,
 } from "@/lib/book/builder";
@@ -82,11 +86,26 @@ export function BookBuilder({
   useEffect(() => {
     let cancel = false;
     void (async () => {
+      const shop = lat != null && lng != null ? { lat, lng } : null;
+      const demo = await viewerUsesDemoLocation({
+        hasEnv: hasShopEnv(),
+        lookup: async () => {
+          const supabase = createClient();
+          const account = await supabase.from("demo_accounts").select("role").limit(1);
+          return { error: account.error, count: account.data?.length ?? 0 };
+        },
+      });
+      if (cancel) return;
+      if (demo) {
+        const stand = shop ?? { lat: DEMO_ZONE_FALLBACK.lat, lng: DEMO_ZONE_FALLBACK.lng };
+        pointRef.current = stand;
+        setGate(atThisShop(stand, shop, true));
+        return;
+      }
       const located = await locate();
       if (cancel) return;
       const here = located.status === "ok" ? located.point : null;
       pointRef.current = here;
-      const shop = lat != null && lng != null ? { lat, lng } : null;
       setGate(atThisShop(here, shop));
     })();
     return () => {

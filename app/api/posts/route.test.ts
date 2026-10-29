@@ -5,22 +5,26 @@ import { blurFaces } from "../../../lib/image/blur";
 import { POST_RADIUS_M } from "../../../lib/snap/place";
 import { DELETE, POST } from "./route";
 
-const { getUser, maybeSingle, upload, remove, rpc } = vi.hoisted(() => ({
+const { getUser, maybeSingle, upload, remove, rpc, demoLimit } = vi.hoisted(() => ({
   getUser: vi.fn(),
   maybeSingle: vi.fn(),
   upload: vi.fn(),
   remove: vi.fn(),
   rpc: vi.fn(),
+  demoLimit: vi.fn(),
 }));
 
 vi.mock("../../../lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser },
-    from: () => ({
-      select: () => ({
-        eq: () => ({ maybeSingle }),
-      }),
-    }),
+    from: (table: string) => {
+      if (table === "demo_accounts") return { select: () => ({ limit: demoLimit }) };
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle }),
+        }),
+      };
+    },
     storage: {
       from: () => ({ upload, remove }),
     },
@@ -95,6 +99,8 @@ describe("POST /api/posts", () => {
     upload.mockReset();
     remove.mockReset();
     rpc.mockReset();
+    demoLimit.mockReset();
+    demoLimit.mockResolvedValue({ data: [], error: null });
     getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
     maybeSingle.mockResolvedValue({
       data: {
@@ -137,6 +143,20 @@ describe("POST /api/posts", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "too_far" });
     expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("does not call a demo account too far", async () => {
+    demoLimit.mockResolvedValue({ data: [{ role: "owner" }], error: null });
+    maybeSingle.mockResolvedValue({
+      data: { id: SHOP, name: "Far", name_local: null, category: "other", lat: 0, lng: 0 },
+      error: null,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("spark down");
+    }));
+    const response = await postImage(await checkerJpeg());
+    expect(response.status).not.toBe(400);
+    expect((await response.json()).error).not.toBe("too_far");
   });
 
   it("returns 503 and uploads nothing when Spark fails", async () => {

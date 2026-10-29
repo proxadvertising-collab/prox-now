@@ -11,6 +11,7 @@ import {
   BOOK_UPLOAD_PATH,
   addBookShots,
   atThisShop,
+  viewerUsesDemoLocation,
   bookBuildHref,
   bookErrorKey,
   bookNeedsBuild,
@@ -115,6 +116,18 @@ describe("book capture session", () => {
     expect(atThisShop(shop, null)).toBe("unknown_shop");
     const far = { lat: shop.lat + (POST_RADIUS_M + 40) / 111_320, lng: shop.lng };
     expect(atThisShop(far, shop)).toBe("too_far");
+    expect(atThisShop(null, shop, true)).toBe("ok");
+    expect(atThisShop(far, shop, true)).toBe("ok");
+    expect(atThisShop(far, shop, false)).toBe("too_far");
+  });
+
+  it("treats demo mode and a demo account as on site, and keeps a real user on GPS", async () => {
+    expect(await viewerUsesDemoLocation({ hasEnv: false, lookup: async () => ({ error: null, count: 0 }) })).toBe(true);
+    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: null, count: 1 }) })).toBe(true);
+    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: null, count: 0 }) })).toBe(false);
+    expect(await viewerUsesDemoLocation({ hasEnv: true, lookup: async () => ({ error: new Error("no"), count: 1 }) })).toBe(
+      false,
+    );
   });
 
   it("sends storefront, three menu photos, and hours as one upload for that shop id", () => {
