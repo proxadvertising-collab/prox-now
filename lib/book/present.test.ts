@@ -226,7 +226,8 @@ describe("book swiper", () => {
     const html = renderToStaticMarkup(createElement(BookSwiper, null, "Cover", "Info", "Menu"));
     expect(html).toContain('data-count="3"');
     expect(html).toContain("Cover");
-    expect(html).toContain("Info");
+    expect(html).not.toContain("Info");
+    expect(html).not.toContain("Menu");
     expect(swipeStep(0, 3, -60)).toBe(1);
     expect(swipeStep(1, 3, 60)).toBe(0);
     expect(swipeStep(0, 3, 10)).toBe(0);

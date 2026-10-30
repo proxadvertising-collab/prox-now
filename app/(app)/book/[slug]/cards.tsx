@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { MenuBoard } from "../../../../components/menu/MenuBoard";
+import { bookText, displayName, parseHours } from "../../../../lib/book/display";
 import { t } from "../../../../lib/copy";
 import type { ShopInfo } from "../../../../lib/book/present";
 
@@ -10,6 +12,7 @@ export type MenuTileData = {
   price: string | null;
   photo: string | null;
   category?: string | null;
+  tags?: string[];
 };
 
 export type DealTile = {
@@ -268,7 +271,10 @@ export function CoverCard({
   style: CSSProperties;
   liveLabel?: string | null;
 }) {
-  const letter = name.trim().slice(0, 1).toUpperCase() || "?";
+  const shown = displayName(name);
+  const shownEn = nameEn ? displayName(nameEn) : null;
+  const shownTag = bookText(tagline);
+  const letter = shown.trim().slice(0, 1).toUpperCase() || "?";
   const photoHero = coverUsesPhoto(heroUrl, logoUrl);
   return (
     <article className={"book-card book-cover" + (photoHero ? "" : " book-cover-fallback")} style={style}>
@@ -286,9 +292,9 @@ export function CoverCard({
         ) : (
           <div className="book-logo book-logo-letter">{letter}</div>
         )}
-        <h1 className={"book-shop-name " + mood}>{name}</h1>
-        {nameEn ? <p className="book-name-en">{nameEn}</p> : null}
-        {tagline ? <p className="book-tags">{tagline}</p> : null}
+        <h1 className={"book-shop-name " + mood}>{shown}</h1>
+        {shownEn ? <p className="book-name-en">{shownEn}</p> : null}
+        {shownTag ? <p className="book-tags">{shownTag}</p> : null}
       </div>
     </article>
   );
@@ -325,7 +331,9 @@ export function InfoCard({
   style: CSSProperties;
 }) {
   const rows: ReactNode[] = [];
-  if (hours) rows.push(<Row key="hours" icon="clock" label={t("en", "book.hours") + ": " + hours} />);
+  const safeHours = bookText(hours);
+  const hourRows = safeHours ? parseHours(safeHours) : null;
+  const place = bookText(info.address?.value ?? null);
   for (const phone of info.phones) {
     rows.push(<Row key={"tel-" + phone.page + phone.value} icon="phone" label={"Call " + phone.value} href={telHref(phone.value)} />);
   }
@@ -342,7 +350,7 @@ export function InfoCard({
   if (info.tiktok) rows.push(<Row key="tt" icon="link" label={"TikTok " + info.tiktok.value} href={tiktokHref(info.tiktok.value)} />);
   if (info.website) rows.push(<Row key="web" icon="link" label={info.website.value} href={siteHref(info.website.value)} />);
   if (info.email) rows.push(<Row key="mail" icon="mail" label={info.email.value} href={"mailto:" + info.email.value} />);
-  if (mapUrl) rows.push(<Row key="map" icon="pin" label={info.address?.value ?? t("en", "book.maps")} href={mapUrl} />);
+  if (mapUrl) rows.push(<Row key="map" icon="pin" label={place ?? t("en", "book.maps")} href={mapUrl} />);
   if (info.lineQrPage != null) rows.push(<Row key="qr" icon="chat" label="LINE QR" />);
   if (info.delivery.length > 0) {
     rows.push(
@@ -355,28 +363,30 @@ export function InfoCard({
     );
   }
   if (info.wifi) rows.push(<Row key="wifi" icon="link" label={"Wi-Fi " + info.wifi.value} />);
-  if (info.address && !mapUrl) rows.push(<Row key="address" icon="pin" label={info.address.value} />);
+  if (place && !mapUrl) rows.push(<Row key="address" icon="pin" label={place} />);
 
   return (
-    <article className="book-card" style={style}>
-      <h2 className="book-card-title">{t("en", "book.about")}</h2>
+    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "#FFF4E8" }}>
+      <h2 className="book-card-title text-fg">{t("en", "book.about")}</h2>
       <div className="book-card-body">
-        {rows.length > 0 ? <div className="book-rows">{rows}</div> : <p className="book-row-label">Hours and location coming soon</p>}
+        {safeHours ? (
+          hourRows ? (
+            <div className="mb-3 flex flex-col gap-1">
+              {hourRows.map((row) => (
+                <p key={row.days + row.time} className="flex gap-3 text-fg">
+                  {row.days ? <span className="text-fg-muted">{row.days}</span> : null}
+                  <span>{row.time}</span>
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mb-3 text-fg">{safeHours}</p>
+          )
+        ) : null}
+        {rows.length > 0 ? <div className="book-rows">{rows}</div> : safeHours ? null : <p className="book-row-label">Hours and location coming soon</p>}
       </div>
     </article>
   );
-}
-
-function cutoutPhoto(photo: string | null): string | null {
-  if (!photo || !photo.includes("book-cutouts/")) return null;
-  const at = photo.indexOf("/shop-book/");
-  if (at >= 0 && !photo.slice(at + "/shop-book/".length).startsWith("book-cutouts/")) return null;
-  return photo;
-}
-
-function baht(price: string): string {
-  if (/[฿$€£]|thb/i.test(price)) return price;
-  return "฿" + price;
 }
 
 export function MenuCard({
@@ -384,46 +394,24 @@ export function MenuCard({
   total,
   items,
   style,
-  category = null,
+  slug = "shop",
 }: {
   index: number;
   total: number;
   items: readonly MenuTileData[];
   style: CSSProperties;
   category?: string | null;
+  slug?: string;
 }) {
-  const title = category ?? t("en", "book.menuOf", { n: String(index + 1), total: String(total) });
-  const photos = items.filter((item) => cutoutPhoto(item.photo));
-  const text = items.filter((item) => !cutoutPhoto(item.photo));
   return (
-    <article className="book-card" style={style}>
-      <h2 className="book-card-title">{title}</h2>
+    <article
+      className="book-card"
+      data-menu-page={index + 1}
+      data-menu-total={total}
+      style={{ ...style, aspectRatio: "auto", height: "min(78dvh, 760px)", overflow: "hidden", color: "#FFF4E8" }}
+    >
       <div className="book-card-body">
-        {photos.length > 0 ? (
-          <div className="book-cutout-grid">
-            {photos.map((item, itemIndex) => (
-              <div key={item.name + "-" + itemIndex} className="book-cutout">
-                <img src={cutoutPhoto(item.photo) ?? ""} alt="" className="book-cutout-photo" />
-                <p className="book-cutout-name">{item.name}</p>
-                {item.nameEn ? <p className="book-cutout-en">{item.nameEn}</p> : null}
-                {item.price ? <span className="book-menu-price">{baht(item.price)}</span> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {text.length > 0 ? (
-          <div className="book-menu-list">
-            {text.map((item, itemIndex) => (
-              <div key={item.name + "-" + itemIndex} className="book-menu-row">
-                <div className="book-menu-copy">
-                  <p className="book-menu-name">{item.name}</p>
-                  {item.nameEn ? <p className="book-menu-en">{item.nameEn}</p> : null}
-                </div>
-                {item.price ? <span className="book-menu-price">{baht(item.price)}</span> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <MenuBoard slug={slug} items={items} />
       </div>
     </article>
   );
@@ -445,18 +433,22 @@ export function ExtraCard({
   style: CSSProperties;
 }) {
   return (
-    <article className="book-card" style={style}>
-      <h2 className="book-card-title">{title}</h2>
+    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "#FFF4E8" }}>
+      <h2 className="book-card-title text-fg">{title}</h2>
       <div className="book-card-body book-extra">
         {imageUrl ? <img src={imageUrl} alt="" className="book-extra-photo" width="320" height="240" /> : null}
-        {section ? <p className="book-row-label">{section}</p> : null}
-        {items.map((item, index) => (
-          <p key={item.name + "-" + index} className="book-row">
-            <span className="book-row-label">{item.name}</span>
-            {item.price ? <span className="book-tile-price">{item.price}</span> : null}
-          </p>
-        ))}
-        {credit ? <p className="book-tile-en">{t("en", "book.credit", { name: credit })}</p> : null}
+        {bookText(section) ? <p className="book-row-label text-fg">{bookText(section)}</p> : null}
+        {items.map((item, index) => {
+          const label = bookText(item.name);
+          if (!label) return null;
+          return (
+            <p key={label + "-" + index} className="book-row">
+              <span className="book-row-label text-fg">{displayName(label)}</span>
+              {item.price ? <span className="book-tile-price text-fg">{item.price}</span> : null}
+            </p>
+          );
+        })}
+        {bookText(credit) ? <p className="book-tile-en text-fg">{t("en", "book.credit", { name: bookText(credit) ?? "" })}</p> : null}
       </div>
     </article>
   );

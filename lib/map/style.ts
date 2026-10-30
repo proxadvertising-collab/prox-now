@@ -1,7 +1,7 @@
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 
 /** Canvas brightness on the dark base style. */
-export const MAP_BRIGHTNESS = 0.85;
+export const MAP_BRIGHTNESS = 1.15;
 
 export const MAP_DEFAULTS = {
   center: [99.9577, 12.5684] as [number, number],

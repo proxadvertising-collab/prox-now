@@ -237,7 +237,10 @@
 
 .prox-map .maplibregl-ctrl-attrib {
   font-size: 10px;
-  opacity: 0.6;
+  background: rgb(0 0 0 / 0.4);
+  border-radius: 9999px;
+  padding: 0 0.5rem;
+  opacity: 1;
 }
 .prox-map .maplibregl-ctrl-bottom-left {
   bottom: 10.5rem;

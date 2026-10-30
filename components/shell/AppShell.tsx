@@ -4,11 +4,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { t } from "@/lib/copy";
+import { useOrderSnap } from "../order/OrderUi";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const wide = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const isMap = pathname === "/map";
+  const onBook = pathname.startsWith("/book");
+  const order = useOrderSnap();
   const [ownsShop, setOwnsShop] = useState(false);
 
   useEffect(() => {
@@ -32,9 +35,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     "mx-auto flex min-h-dvh w-full flex-col pt-[env(safe-area-inset-top)]",
     wide ? "max-w-[960px]" : "max-w-[480px]",
   ].join(" ");
+  const bookPad =
+    order && order.count > 0
+      ? "pb-[calc(156px+env(safe-area-inset-bottom))]"
+      : "pb-[calc(92px+env(safe-area-inset-bottom))]";
   const mainClass = isMap
     ? "flex min-h-0 flex-1 flex-col"
-    : "flex flex-1 flex-col px-4 pb-[calc(120px+env(safe-area-inset-bottom))] pt-4 md:pb-8";
+    : "flex flex-1 flex-col px-4 pt-4 md:pb-8 " + (onBook ? bookPad : "pb-[calc(120px+env(safe-area-inset-bottom))]");
 
   return (
     <div className={shellClass}>

@@ -61,6 +61,7 @@ export type BookView = {
   pages: BookPageView[];
   info: ShopInfo;
   reading: boolean;
+  sourceLanguage: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -246,6 +247,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
   const pages: BookPageView[] = [];
   const contactRows: { page: number; contacts: PageContacts }[] = [];
   let logoCutout: string | null = null;
+  let pageLanguage: string | null = null;
   if (Array.isArray(root.pages)) {
     for (const item of root.pages) {
       const page = asRecord(item);
@@ -253,6 +255,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
       const pageId = text(page.id, 80);
       const kind = text(page.kind, 20);
       if (!pageId || !kind) continue;
+      if (!pageLanguage) pageLanguage = text(page.language, 16);
       const position = typeof page.position === "number" && Number.isFinite(page.position) ? page.position : pages.length;
       const menu = menuLines(page.extracted, supabaseUrl);
       const extracted = asRecord(page.extracted);
@@ -314,5 +317,6 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     pages,
     info: mergeContacts(contactRows),
     reading: pages.some((page) => page.failed),
+    sourceLanguage: text(book?.source_language, 16) ?? pageLanguage,
   };
 }

@@ -9,7 +9,7 @@ describe("map style", () => {
     expect(MAP_DEFAULTS.minZoom).toBe(13);
     expect(MAP_DEFAULTS.maxZoom).toBe(19);
     expect(MAP_DEFAULTS.pitch).toBe(0);
-    expect(MAP_BRIGHTNESS).toBe(0.85);
+    expect(MAP_BRIGHTNESS).toBe(1.15);
   });
 
   it("paints only layers the style actually has", () => {

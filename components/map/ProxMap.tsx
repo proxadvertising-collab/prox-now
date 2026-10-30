@@ -160,7 +160,7 @@ export function ProxMap({
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [posts, setPosts] = useState<LivePost[]>(livePosts);
   const [userPoint, setUserPoint] = useState<LatLng | null>(null);
-  const [locMessage, setLocMessage] = useState(t("en", "loc.why"));
+  const [locMessage, setLocMessage] = useState(t("en", "loc.deals"));
   const [locProblem, setLocProblem] = useState(false);
   const [locBusy, setLocBusy] = useState(false);
   const [locStatus, setLocStatus] = useState<LocateResult["status"] | null>(null);
@@ -514,7 +514,7 @@ export function ProxMap({
       setUserPoint(result.point);
       setWalkOrigin(result.point);
       setLocProblem(false);
-      setLocMessage(t("en", "loc.why"));
+      setLocMessage(t("en", "loc.deals"));
       mapRef.current?.flyTo({ center: [result.point.lng, result.point.lat], essential: true });
     } catch {
       setLocStatus("unavailable");

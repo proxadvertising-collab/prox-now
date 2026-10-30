@@ -125,7 +125,7 @@ describe("tidy book cards", () => {
     );
     expect(html).not.toContain("<img");
     expect(html).not.toContain("book-menu-banner");
-    expect(html).toContain("book-menu-list");
+    expect(html).toContain("rounded-2xl");
     expect(html).toContain("Tea");
     expect(html).toContain("฿40");
     expect(html).not.toContain("shop-book/shop/menu.jpg");
@@ -145,8 +145,8 @@ describe("tidy book cards", () => {
       }),
     );
     expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain("book-cutout-photo");
-    expect(html).toContain("book-menu-row");
+    expect(html).toContain("h-28");
+    expect(html).toContain("Coffee");
     expect(html).not.toContain("book-menu-banner");
   });
 

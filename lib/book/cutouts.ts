@@ -162,7 +162,7 @@ export function containsSourceUpload(value: unknown): boolean {
 export type BookSurface = {
   heroUrl: string | null;
   logoUrl: string | null;
-  menu: { name: string; nameEn: string | null; price: string | null; photo: string | null; category: string | null }[];
+  menu: { name: string; nameEn: string | null; price: string | null; photo: string | null; category: string | null; tags?: string[] }[];
   extras: { id: string; imageUrl: null }[];
 };
 
@@ -174,7 +174,7 @@ export function bookSurface(view: {
     kind: string;
     imageUrl: string | null;
     section: string | null;
-    items: readonly { name: string; nameEn?: string | null; price: string | null; photoUrl?: string | null }[];
+    items: readonly { name: string; nameEn?: string | null; price: string | null; photoUrl?: string | null; tags?: readonly string[] }[];
   }[];
 }): BookSurface {
   const menuBoards = new Set(
@@ -191,13 +191,16 @@ export function bookSurface(view: {
     }
     if (page.kind !== "menu" && page.items.length === 0) continue;
     for (const item of page.items) {
-      menu.push({
+      const row: BookSurface["menu"][number] = {
         name: item.name,
         nameEn: item.nameEn ?? null,
         price: item.price,
         photo: displayPhoto(item.photoUrl ?? null),
         category: page.section,
-      });
+      };
+      const tags = (item.tags ?? []).filter((tag) => tag === "spicy" || tag === "vegan");
+      if (tags.length > 0) row.tags = tags;
+      menu.push(row);
     }
   }
   return { heroUrl, logoUrl: displayPhoto(view.logoUrl), menu, extras };

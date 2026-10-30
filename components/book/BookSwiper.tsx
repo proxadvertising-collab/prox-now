@@ -16,7 +16,7 @@ export function BookSwiper({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [origin, setOrigin] = useState<number | null>(null);
   const safe = count === 0 ? 0 : Math.min(Math.max(index, 0), count - 1);
-  const behind = [2, 1].filter((step) => safe + step < count);
+  const behind: number[] = [];
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.pointerType === "mouse" && event.button !== 0) return;

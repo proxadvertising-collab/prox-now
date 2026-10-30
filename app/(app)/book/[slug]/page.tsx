@@ -195,13 +195,15 @@ export default async function BookPage({
               return <DealsCard key="deals" deals={card.deals} style={cardStyle} />;
             }
             if (card.type === "menu") {
+              if (card.index > 0) return null;
               return (
                 <MenuCard
-                  key={"menu-" + card.index}
-                  index={card.index}
-                  total={card.total}
-                  items={card.items}
+                  key="menu"
+                  index={0}
+                  total={1}
+                  items={surface.menu}
                   category={card.category}
+                  slug={view.slug}
                   style={cardStyle}
                 />
               );

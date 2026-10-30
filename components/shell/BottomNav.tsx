@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { t, type CopyKey } from "@/lib/copy";
+import { OrderBar, useOrderSnap } from "../order/OrderUi";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
 
@@ -117,6 +118,8 @@ function ItemLink({
 
 export function BottomNav() {
   const pathname = usePathname() ?? "";
+  const onBook = pathname.startsWith("/book");
+  const order = useOrderSnap();
   const rowLink =
     "flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-md px-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
@@ -163,9 +166,14 @@ export function BottomNav() {
               />
             );
           })}
-          <SnapCapture raised current={isCurrent(pathname, "/snap")} />
+          {onBook || (order && order.count > 0) ? null : (
+            <SnapCapture raised current={isCurrent(pathname, "/snap")} />
+          )}
         </div>
       </nav>
+      {order && order.count > 0 ? (
+        <OrderBar count={order.count} href={"/book/" + encodeURIComponent(order.slug) + "/order"} label={order.label} />
+      ) : null}
     </>
   );
 }
