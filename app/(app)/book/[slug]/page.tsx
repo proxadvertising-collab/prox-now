@@ -13,7 +13,7 @@ import {
   InfoCard,
   MenuCard,
   bookFontFamily,
-  buildDeck,
+  assembleDeck,
   liveLeftLabel,
 } from "./cards";
 import { hasShopEnv } from "@/lib/shops/source";
@@ -145,10 +145,17 @@ export default async function BookPage({
       view.maps && /^https?:\/\//i.test(view.maps) ? view.maps : mapHref(info.address?.value ?? null, point);
     const cardStyle = { background: "var(--book-ink)", color: "var(--book-accent)", fontFamily: "var(--book-font)" };
     const coverStyle = { color: "#fff", fontFamily: "var(--book-font)" };
-    const deck = buildDeck({
+    const deck = assembleDeck({
       menuItems: surface.menu,
-      extras: extraPages.map((page) => page.id),
+      extras: extraPages.map((page) => ({
+        id: page.id,
+        section: page.section,
+        credit: page.credit,
+        items: page.items,
+      })),
       deals: view.deals,
+      hours,
+      info,
     });
 
     return (

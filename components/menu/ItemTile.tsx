@@ -106,7 +106,7 @@ export function ItemTile({
         </div>
       )}
       <div className="min-w-0 flex-1 overflow-hidden">
-        <p className="truncate text-base font-bold text-fg">{copy.title}</p>
+        <p className="line-clamp-2 text-base font-bold leading-snug text-fg">{copy.title}</p>
         {copy.subtitle ? <p className="truncate text-sm text-fg-subtle">{copy.subtitle}</p> : null}
         {priceLabel ? (
           <span className="mt-1 inline-flex rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-accent-ink">{priceLabel}</span>

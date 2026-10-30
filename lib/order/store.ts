@@ -113,6 +113,50 @@ export function orderBarCaption(lang: "en" | "th", summary: { unpriced: number }
   return summary.unpriced > 0 ? t(lang, "order.unlisted") : null;
 }
 
+const COUNTRY_LANG: Record<string, string> = {
+  TH: "th",
+  US: "en",
+  GB: "en",
+  AU: "en",
+  NZ: "en",
+  CA: "en",
+  JP: "ja",
+  KR: "ko",
+  CN: "zh",
+  TW: "zh",
+  VN: "vi",
+  LA: "lo",
+  KH: "km",
+  MM: "my",
+  MY: "ms",
+  ID: "id",
+  FR: "fr",
+  DE: "de",
+  ES: "es",
+  IT: "it",
+  RU: "ru",
+  IN: "hi",
+};
+
+/** Shop country/locale decides the staff language. Thailand and unknown shops use Thai. */
+export function shopStaffLanguage(country: string | null | undefined): string {
+  const code = (country ?? "").trim().toUpperCase();
+  if (!code || code === "TH") return "th";
+  return COUNTRY_LANG[code] ?? "th";
+}
+
+export function staffNoteTarget(note: string, country: string | null | undefined): string | null {
+  const text = note.trim();
+  if (!text) return null;
+  const to = shopStaffLanguage(country);
+  const thai = /[\u0E00-\u0E7F]/.test(text);
+  const latin = /[A-Za-z]/.test(text);
+  if (!thai && !latin) return null;
+  if (to === "th" && thai && !latin) return null;
+  if (to === "en" && latin && !thai) return null;
+  return to;
+}
+
 export function orderBarFor(
   pathname: string,
   storage: OrderStorage,

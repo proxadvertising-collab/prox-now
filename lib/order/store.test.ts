@@ -15,6 +15,7 @@ import {
   removeLine,
   setLineQty,
   setOrderNote,
+  staffNoteTarget,
   writeOrder,
   type OrderStorage,
 } from "./store";
@@ -100,6 +101,14 @@ describe("order store", () => {
     expect(orderBarLabel("en", { count: 4, amount: 640, unpriced: 0 })).toBe("View order · 4 items · ฿640");
     expect(orderBarLabel("en", { count: 4, amount: 0, unpriced: 4 })).toBe("View order · 4 items");
     expect(orderBarCaption("en", { unpriced: 0 })).toBeNull();
+  });
+});
+
+describe("staff language", () => {
+  it("translates an English note to Thai for a Thai shop", () => {
+    expect(staffNoteTarget("no tomatoes", "TH")).toBe("th");
+    expect(staffNoteTarget("no tomatoes", null)).toBe("th");
+    expect(staffNoteTarget("ไม่ใส่มะเขือเทศ", "TH")).toBeNull();
   });
 });
 

@@ -92,6 +92,94 @@ export function bookCardCount(menuPages: number, extras: number, deals = 0): num
   return 2 + (deals > 0 ? 1 : 0) + menuPages + extras;
 }
 
+export type ExtraPageInput = {
+  id: string;
+  section: string | null;
+  credit: string | null;
+  items: readonly { name: string; price: string | null }[];
+};
+
+export function extraContentKey(page: ExtraPageInput): string | null {
+  const section = bookText(page.section) ?? "";
+  const credit = bookText(page.credit) ?? "";
+  const items = page.items
+    .map((item) => {
+      const name = bookText(item.name);
+      if (!name) return "";
+      return displayName(name) + "|" + (item.price ?? "");
+    })
+    .filter(Boolean);
+  if (!section && !credit && items.length === 0) return null;
+  return section + "\n" + items.join("\n") + "\n" + credit;
+}
+
+export function keptExtras(pages: readonly ExtraPageInput[]): ExtraPageInput[] {
+  const seen = new Set<string>();
+  const kept: ExtraPageInput[] = [];
+  for (const page of pages) {
+    const key = extraContentKey(page);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    kept.push(page);
+  }
+  return kept;
+}
+
+export function infoHasContent(hours: string | null, info: ShopInfo): boolean {
+  if (bookText(hours) || bookText(info.hoursText?.value ?? null) || bookText(info.address?.value ?? null)) return true;
+  if (info.phones.length > 0 || info.delivery.length > 0 || info.payment.length > 0) return true;
+  if (info.lineQrPage != null) return true;
+  return Boolean(
+    info.lineId || info.whatsapp || info.facebook || info.instagram || info.tiktok || info.website || info.email || info.wifi,
+  );
+}
+
+function uniqueMenu(items: readonly MenuTileData[]): MenuTileData[] {
+  const seen = new Set<string>();
+  const kept: MenuTileData[] = [];
+  for (const item of items) {
+    if (!bookText(item.name)) continue;
+    const key = [item.name.trim(), item.nameEn ?? "", item.price ?? "", item.category ?? ""].join("\n");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(item);
+  }
+  return kept;
+}
+
+/** Cover stays. Empty and duplicate pages are left out, so the progress bar matches what you can swipe. */
+export function assembleDeck(input: {
+  menuItems: readonly MenuTileData[];
+  extras: readonly ExtraPageInput[];
+  deals?: readonly DealTile[];
+  hours: string | null;
+  info: ShopInfo;
+}): DeckCard[] {
+  const extras = keptExtras(input.extras);
+  const deals = (input.deals ?? []).filter((deal) => bookText(deal.title));
+  const cards = buildDeck({
+    menuItems: uniqueMenu(input.menuItems),
+    extras: extras.map((page) => page.id),
+    deals,
+  });
+  const showInfo = infoHasContent(input.hours, input.info);
+  const seen = new Set<string>();
+  const kept: DeckCard[] = [];
+  for (const card of cards) {
+    if (card.type === "info" && !showInfo) continue;
+    if (card.type === "menu" && card.index > 0) continue;
+    if (card.type === "menu" && card.items.length === 0) continue;
+    const key =
+      card.type === "extra"
+        ? (extraContentKey(extras.find((page) => page.id === card.id) ?? { id: card.id, section: null, credit: null, items: [] }) ?? card.id)
+        : card.type;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(card);
+  }
+  return kept;
+}
+
 export function bookFallbackPhoto(
   hero: string | null,
   pages: readonly { kind: string; imageUrl: string | null }[],
@@ -405,7 +493,7 @@ export function MenuCard({
       className="book-card"
       data-menu-page={index + 1}
       data-menu-total={total}
-      style={{ ...style, aspectRatio: "auto", height: "min(78dvh, 760px)", overflow: "hidden", color: "#FFF4E8" }}
+      style={{ ...style, aspectRatio: "auto", height: "calc(min(78dvh, 760px) - var(--order-bar, 0px))", overflow: "hidden", color: "#FFF4E8" }}
     >
       <div className="book-card-body">
         <MenuBoard slug={slug} items={items} />

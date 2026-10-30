@@ -13,6 +13,7 @@ import {
   notifyOrder,
   orderBarFor,
   orderSummary,
+  staffNoteTarget,
   readOrder,
   setLineQty,
   setOrderNote,
@@ -46,15 +47,22 @@ export function OrderBar({
   if (count < 1) return null;
   return (
     <div className="fixed inset-x-4 z-40 bottom-[calc(84px+env(safe-area-inset-bottom)+8px)] md:bottom-4">
-      {caption ? <p className="mb-1 text-center text-[11px] text-fg-muted">{caption}</p> : null}
       <a
-        className="flex h-14 w-full items-center justify-center overflow-hidden whitespace-nowrap rounded-2xl bg-accent px-4 text-center text-base font-bold text-accent-ink no-underline"
+        className="flex h-14 w-full flex-col items-center justify-center overflow-hidden whitespace-nowrap rounded-2xl bg-accent px-4 text-center font-bold text-accent-ink no-underline"
         href={href}
       >
-        <span className="block max-w-full truncate">{label}</span>
+        <span className="block max-w-full truncate text-base leading-tight">{label}</span>
+        {caption ? <span className="block max-w-full truncate text-[11px] font-semibold leading-none">{caption}</span> : null}
       </a>
     </div>
   );
+}
+
+/** Extra space under the book, equal to the order bar plus a gap, only while that bar is showing. */
+export function bookBarPadClass(showBar: boolean): string {
+  return showBar
+    ? "pb-[calc(84px+3.5rem+12px+env(safe-area-inset-bottom))]"
+    : "pb-[calc(92px+env(safe-area-inset-bottom))]";
 }
 
 export function useOrderSnap(pathname: string): { slug: string; count: number; label: string; caption: string | null } | null {
@@ -227,13 +235,13 @@ export function OrderClient({
   shopName,
   logoUrl,
   address,
-  menuLanguage,
+  shopCountry,
 }: {
   slug: string;
   shopName: string;
   logoUrl: string | null;
   address: string | null;
-  menuLanguage: string;
+  shopCountry: string | null;
 }) {
   const [state, setState] = useState<OrderState>(emptyOrder);
   const [lang, setLang] = useState<"en" | "th">("en");
@@ -256,13 +264,17 @@ export function OrderClient({
 
   async function translate(text: string) {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    const to = staffNoteTarget(trimmed, shopCountry);
+    if (!trimmed || !to) {
+      if (trimmed) commit(setOrderTranslation(readOrder(slug, browserStorage()), trimmed));
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch("/api/order/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: trimmed, to: menuLanguage || "th" }),
+        body: JSON.stringify({ text: trimmed, to }),
       });
       if (!response.ok) return;
       const body = (await response.json()) as { translation?: unknown };

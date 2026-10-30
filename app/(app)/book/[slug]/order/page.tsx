@@ -17,7 +17,7 @@ export default async function OrderPage({ params }: { params: Promise<{ slug: st
   const key = decodeURIComponent(raw);
   if (!hasShopEnv()) return <p className="text-body text-fg">{t("en", "book.empty")}</p>;
   const supabase = await createClient();
-  const query = supabase.from("shops").select("id, slug, name");
+  const query = supabase.from("shops").select("id, slug, name, country_code");
   const result = UUID.test(key) ? await query.eq("id", key).maybeSingle() : await query.eq("slug", key).maybeSingle();
   const shop = result.data;
   const slug = shop && typeof shop.slug === "string" ? shop.slug : key;
@@ -32,7 +32,7 @@ export default async function OrderPage({ params }: { params: Promise<{ slug: st
       shopName={shopName}
       logoUrl={surface?.logoUrl ?? null}
       address={bookText(view?.info.address?.value ?? null)}
-      menuLanguage={view?.sourceLanguage || "th"}
+      shopCountry={shop && typeof shop.country_code === "string" ? shop.country_code : null}
     />
   );
 }

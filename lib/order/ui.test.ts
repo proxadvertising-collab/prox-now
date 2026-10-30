@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OrderBar, OrderClient, OrderSheet } from "../../components/order/OrderUi";
+import { OrderBar, OrderClient, OrderSheet, bookBarPadClass } from "../../components/order/OrderUi";
 
 const line = {
   id: "tea",
@@ -69,7 +69,7 @@ describe("order page", () => {
         shopName: "Mala Mafia",
         logoUrl: null,
         address: null,
-        menuLanguage: "th",
+        shopCountry: "TH",
       }),
     );
     expect(html).toContain("Mala Mafia");
@@ -90,5 +90,8 @@ describe("order bar", () => {
     expect(filled).toContain('href="/book/mala/order"');
     expect(filled).toContain("h-14");
     expect(filled).toContain("rounded-2xl");
+    expect(bookBarPadClass(true)).toContain("3.5rem+12px");
+    expect(bookBarPadClass(false)).toBe("pb-[calc(92px+env(safe-area-inset-bottom))]");
+    expect(bookBarPadClass(true)).not.toBe(bookBarPadClass(false));
   });
 });

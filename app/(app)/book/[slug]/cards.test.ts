@@ -1,10 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { BookSwiper } from "../../../../components/book/BookSwiper";
+import type { ShopInfo } from "../../../../lib/book/present";
 import {
   CoverCard,
   MenuCard,
   MenuTile,
+  assembleDeck,
   bookCardCount,
   bookFallbackPhoto,
   buildDeck,
@@ -16,6 +19,23 @@ import {
 function tile(index: number): MenuTileData {
   return { name: "Item " + index, nameEn: "Item " + index, price: null, photo: null };
 }
+
+const blankInfo: ShopInfo = {
+  phones: [],
+  lineId: null,
+  lineQrPage: null,
+  whatsapp: null,
+  facebook: null,
+  instagram: null,
+  tiktok: null,
+  website: null,
+  email: null,
+  delivery: [],
+  payment: [],
+  hoursText: null,
+  address: null,
+  wifi: null,
+};
 
 describe("tidy book cards", () => {
   it("splits the menu into pages of at most 6 items", () => {
@@ -109,6 +129,36 @@ describe("tidy book cards", () => {
       deals: [{ title: "10% off", provider: "SCB", discount: "10%", conditions: null }],
     });
     expect(withDeals.map((card) => card.type)).toEqual(["cover", "deals", "info"]);
+  });
+
+  it("renders none of five empty extra pages", () => {
+    const extras = Array.from({ length: 5 }, (_, index) => ({
+      id: "extra-" + index,
+      section: index === 2 ? "12.5684, 99.9577" : null,
+      credit: null,
+      items: [] as { name: string; price: string | null }[],
+    }));
+    const deck = assembleDeck({ menuItems: [], extras, hours: null, info: blankInfo });
+    expect(deck.some((card) => card.type === "extra")).toBe(false);
+    const html = renderToStaticMarkup(
+      createElement(
+        BookSwiper,
+        null,
+        ...deck.map((card) => createElement("div", { key: card.type }, card.type === "extra" ? "Extras" : card.type)),
+      ),
+    );
+    expect(html).not.toContain("Extras");
+    expect(html).toContain('data-count="1"');
+    const duplicated = assembleDeck({
+      menuItems: [],
+      extras: [
+        { id: "a", section: "Our story", credit: null, items: [{ name: "Soup", price: "40" }] },
+        { id: "b", section: "Our story", credit: null, items: [{ name: "Soup", price: "40" }] },
+      ],
+      hours: null,
+      info: blankInfo,
+    });
+    expect(duplicated.filter((card) => card.type === "extra")).toHaveLength(1);
   });
 
   it("lists items with no cutout as text and never repeats a source photo", () => {
