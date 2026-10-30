@@ -26,7 +26,7 @@ export type DeckCard =
   | { type: "cover" }
   | { type: "info" }
   | { type: "deals"; deals: DealTile[] }
-  | { type: "menu"; index: number; total: number; items: MenuTileData[]; category: string | null }
+  | { type: "menu"; index: number; total: number; items: MenuTileData[]; category: string | null; continued: boolean }
   | { type: "extra"; id: string };
 
 export function bookFontFamily(font: string | null): string {
@@ -78,10 +78,21 @@ export function buildDeck(input: {
   const cards: DeckCard[] = [{ type: "cover" }];
   if (input.deals && input.deals.length > 0) cards.push({ type: "deals", deals: [...input.deals] });
   const menus = groupMenu(input.menuItems).flatMap((group) =>
-    chunkMenu(group.items).map((items) => ({ items, category: group.category })),
+    chunkMenu(group.items).map((items, chunk) => ({
+      items,
+      category: group.category,
+      continued: chunk > 0,
+    })),
   );
   menus.forEach((group, index) => {
-    cards.push({ type: "menu", index, total: menus.length, items: group.items, category: group.category });
+    cards.push({
+      type: "menu",
+      index,
+      total: menus.length,
+      items: group.items,
+      category: group.category,
+      continued: group.continued,
+    });
   });
   cards.push({ type: "info" });
   for (const id of input.extras) cards.push({ type: "extra", id });
@@ -125,7 +136,8 @@ export function keptExtras(pages: readonly ExtraPageInput[]): ExtraPageInput[] {
   return kept;
 }
 
-export function infoHasContent(hours: string | null, info: ShopInfo): boolean {
+export function infoHasContent(hours: string | null, info: ShopInfo, mapUrl?: string | null): boolean {
+  if (typeof mapUrl === "string" && mapUrl.trim()) return true;
   if (bookText(hours) || bookText(info.hoursText?.value ?? null) || bookText(info.address?.value ?? null)) return true;
   if (info.phones.length > 0 || info.delivery.length > 0 || info.payment.length > 0) return true;
   if (info.lineQrPage != null) return true;
@@ -154,6 +166,7 @@ export function assembleDeck(input: {
   deals?: readonly DealTile[];
   hours: string | null;
   info: ShopInfo;
+  mapUrl?: string | null;
 }): DeckCard[] {
   const extras = keptExtras(input.extras);
   const deals = (input.deals ?? []).filter((deal) => bookText(deal.title));
@@ -162,17 +175,18 @@ export function assembleDeck(input: {
     extras: extras.map((page) => page.id),
     deals,
   });
-  const showInfo = infoHasContent(input.hours, input.info);
+  const showInfo = infoHasContent(input.hours, input.info, input.mapUrl);
   const seen = new Set<string>();
   const kept: DeckCard[] = [];
   for (const card of cards) {
     if (card.type === "info" && !showInfo) continue;
-    if (card.type === "menu" && card.index > 0) continue;
     if (card.type === "menu" && card.items.length === 0) continue;
     const key =
       card.type === "extra"
         ? (extraContentKey(extras.find((page) => page.id === card.id) ?? { id: card.id, section: null, credit: null, items: [] }) ?? card.id)
-        : card.type;
+        : card.type === "menu"
+          ? "menu:" + card.index
+          : card.type;
     if (seen.has(key)) continue;
     seen.add(key);
     kept.push(card);
@@ -380,6 +394,11 @@ export function CoverCard({
         <h1 className={"book-shop-name text-[32px] font-extrabold " + mood}>{shown}</h1>
         {shownEn ? <p className="book-name-en">{shownEn}</p> : null}
         {shownTag ? <p className="book-tags">{shownTag}</p> : null}
+        {name.trim() === "New shop" ? (
+          <a className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold underline" href="?edit=name">
+            {t("en", "book.editName")}
+          </a>
+        ) : null}
       </div>
     </article>
   );
@@ -474,11 +493,19 @@ export function InfoCard({
   );
 }
 
+export function menuPageTitle(category: string | null | undefined, continued: boolean): string | null {
+  const label = (category ?? "").trim();
+  if (!label) return null;
+  return continued ? t("en", "book.continued", { name: label }) : label;
+}
+
 export function MenuCard({
   index,
   total,
   items,
   style,
+  category = null,
+  continued = false,
   slug = "shop",
 }: {
   index: number;
@@ -486,8 +513,10 @@ export function MenuCard({
   items: readonly MenuTileData[];
   style: CSSProperties;
   category?: string | null;
+  continued?: boolean;
   slug?: string;
 }) {
+  const title = menuPageTitle(category, continued);
   return (
     <article
       className="book-card"
@@ -495,6 +524,7 @@ export function MenuCard({
       data-menu-total={total}
       style={{ ...style, aspectRatio: "auto", height: "calc(min(78dvh, 760px) - var(--order-bar, 0px))", overflow: "hidden", color: "#FFF4E8" }}
     >
+      {title ? <h2 className="book-card-title text-fg">{title}</h2> : null}
       <div className="book-card-body">
         <MenuBoard slug={slug} items={items} />
       </div>

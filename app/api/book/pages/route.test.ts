@@ -14,7 +14,7 @@ type Row = Record<string, unknown>;
 
 const { getUser, state, service } = vi.hoisted(() => {
   const state = {
-    shop: null as { id: string; category: string; name?: string } | null,
+    shop: null as { id: string; category: string; name?: string; slug?: string; name_local?: string | null } | null,
     book: null as Row | null,
     pages: [] as Row[],
     uploads: [] as { path: string; bytes: Buffer }[],
@@ -614,6 +614,27 @@ describe("POST /api/book/pages", () => {
     expect(state.removed).toHaveLength(0);
     expect(state.pages[0]?.extracted).toEqual({});
     expect(state.pages[0]?.ai_meta).toMatchObject({ model: null, images_in_call: 0, error: "busy" });
+  });
+
+  it("names a fresh New shop from the reader and does not rename a real name", async () => {
+    state.shop = { id: SHOP, category: "other", name: "New shop", slug: "new-shop-abc" };
+    state.pages = [];
+    state.book = null;
+    mode = "named";
+    const response = await postSession([{ kind: "menu" }], SHOP, undefined, true);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.slug).toBe("mala-mafia-111111");
+    expect(state.shop?.name).toBe("Mala Mafia");
+    expect(state.shop?.slug).toBe("mala-mafia-111111");
+
+    state.shop = { id: SHOP, category: "street_food", name: "Blended fruit juice menu", slug: "juice-menu" };
+    state.pages = [];
+    state.book = null;
+    const kept = await postSession([{ kind: "menu" }], SHOP, undefined, true);
+    expect(kept.status).toBe(200);
+    expect(state.shop?.name).toBe("Blended fruit juice menu");
+    expect(state.shop?.slug).toBe("juice-menu");
   });
 
   it("never renames a shop and sets category only from other", async () => {

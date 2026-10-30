@@ -104,7 +104,8 @@ export function orderSummary(state: OrderState): { count: number; amount: number
 }
 
 export function orderBarLabel(lang: "en" | "th", summary: { count: number; amount: number; unpriced: number }): string {
-  const line = t(lang, "order.view") + " · " + t(lang, "order.items", { n: String(summary.count) });
+  const countLabel = summary.count === 1 ? t(lang, "order.item") : t(lang, "order.items", { n: String(summary.count) });
+  const line = t(lang, "order.view") + " · " + countLabel;
   if (summary.amount > 0) return line + " · " + (formatPrice(summary.amount) ?? "฿0");
   return line;
 }

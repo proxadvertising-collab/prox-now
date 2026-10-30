@@ -100,6 +100,10 @@ describe("order store", () => {
     expect(orderSummary(state)).toEqual({ count: 2, amount: 80, unpriced: 0 });
     expect(orderBarLabel("en", { count: 4, amount: 640, unpriced: 0 })).toBe("View order · 4 items · ฿640");
     expect(orderBarLabel("en", { count: 4, amount: 0, unpriced: 4 })).toBe("View order · 4 items");
+    expect(orderBarLabel("en", { count: 1, amount: 0, unpriced: 1 })).toBe("View order · 1 item");
+    expect(orderBarLabel("en", { count: 1, amount: 40, unpriced: 0 })).toBe("View order · 1 item · ฿40");
+    expect(orderBarLabel("en", { count: 2, amount: 0, unpriced: 2 })).toBe("View order · 2 items");
+    expect(orderBarLabel("th", { count: 1, amount: 0, unpriced: 0 })).toBe("ดูออเดอร์ · 1 รายการ");
     expect(orderBarCaption("en", { unpriced: 0 })).toBeNull();
   });
 });

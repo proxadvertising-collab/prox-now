@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { redirect } from "next/navigation";
 import { retryReading } from "@/lib/book/retry";
 import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { BookSwiper } from "@/components/book/BookSwiper";
@@ -91,6 +92,16 @@ export default async function BookPage({
     const lookup = shop?.slug ?? (UUID.test(key) ? null : key);
     const result = lookup ? await supabase.rpc("book_public", { p_slug: lookup }) : { data: null };
     const view = presentBook(result.data, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+    if (view?.slug && view.slug !== key) {
+      const params = new URLSearchParams();
+      if (seeded) params.set("seeded", "1");
+      if (here) {
+        params.set("lat", String(here.lat));
+        params.set("lng", String(here.lng));
+      }
+      const extra = params.toString();
+      redirect("/book/" + encodeURIComponent(view.slug) + (extra ? "?" + extra : ""));
+    }
     const name = view?.name ?? shop?.name ?? key;
     const point = shop?.lat != null && shop.lng != null ? { lat: shop.lat, lng: shop.lng } : null;
 
@@ -156,6 +167,7 @@ export default async function BookPage({
       deals: view.deals,
       hours,
       info,
+      mapUrl,
     });
 
     return (
@@ -202,14 +214,14 @@ export default async function BookPage({
               return <DealsCard key="deals" deals={card.deals} style={cardStyle} />;
             }
             if (card.type === "menu") {
-              if (card.index > 0) return null;
               return (
                 <MenuCard
-                  key="menu"
-                  index={0}
-                  total={1}
-                  items={surface.menu}
+                  key={"menu-" + card.index}
+                  index={card.index}
+                  total={card.total}
+                  items={card.items}
                   category={card.category}
+                  continued={card.continued}
                   slug={view.slug}
                   style={cardStyle}
                 />

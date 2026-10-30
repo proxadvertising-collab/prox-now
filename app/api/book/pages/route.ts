@@ -11,6 +11,7 @@ import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
 import { applyCutouts } from "../../../../lib/book/cutouts";
 import { categoryFromOther, extractedOf, type PageRead } from "../../../../lib/book/schema";
+import { isPlaceholderShopName, seedBrand, seedSlug } from "../../../../lib/book/seedName";
 import { allowBook, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
 import { createClient } from "../../../../lib/supabase/server";
@@ -43,6 +44,7 @@ type ShopRow = {
   id: string;
   category: string;
   name: string | null;
+  slug: string | null;
 };
 
 type ExistingBook = {
@@ -107,6 +109,7 @@ function shopOf(data: unknown): ShopRow | null {
     id: row.id,
     category: typeof row.category === "string" ? row.category : "other",
     name: typeof row.name === "string" ? row.name : null,
+    slug: typeof row.slug === "string" ? row.slug : null,
   };
 }
 
@@ -415,8 +418,9 @@ async function commitBook(input: {
   groups: readonly Ingested[];
   uploaded: string[];
   summary: string | null;
+  fresh?: boolean;
 }): Promise<NextResponse> {
-  const { service, shop, userId, livePages, groups, uploaded, summary } = input;
+  const { service, shop, userId, livePages, groups, uploaded, summary, fresh = false } = input;
   const bookResult = await service
     .from("shop_books")
     .select("hours, theme, tagline, source_language, built_by_model, status")
@@ -462,6 +466,27 @@ async function commitBook(input: {
       theme = await paletteFromImage(cover.stored[0].bytes);
     } catch {
       theme = fallbackTheme();
+    }
+  }
+
+  let publishedSlug = shop.slug;
+  if (fresh && isPlaceholderShopName(shop.name)) {
+    const found = groups.map((group) => group.read?.read).find((read) => read && (read.shopName || read.nameEn));
+    const brand = seedBrand(found?.shopName, found?.nameEn ?? null);
+    if (brand) {
+      const slug = seedSlug(brand.nameEn, brand.name, shop.id);
+      const renamed = await service
+        .from("shops")
+        .update({ name: brand.name, name_local: brand.nameLocal, slug })
+        .eq("id", shop.id);
+      if (renamed.error) {
+        await service.from("shops").update({ name: brand.name, name_local: brand.nameLocal }).eq("id", shop.id);
+      } else {
+        publishedSlug = slug;
+      }
+      if (brand.nameEn && theme && typeof theme === "object" && !Array.isArray(theme)) {
+        theme = { ...(theme as Record<string, unknown>), nameEn: brand.nameEn };
+      }
     }
   }
 
@@ -586,7 +611,8 @@ async function commitBook(input: {
 
   const pages = Array.isArray(inserted.data) ? inserted.data : rows;
   const faceCalls = groups.reduce((sum, group) => sum + group.faceCalls, 0);
-  const bodyOf = (extra: Record<string, unknown>) => (summary ? { ...extra, summary } : extra);
+  const bodyOf = (extra: Record<string, unknown>) =>
+    summary ? { ...extra, summary, slug: publishedSlug } : { ...extra, slug: publishedSlug };
   const seedError = groups.find((group) => group.aiError)?.aiError ?? null;
   if (seedError) {
     return json(
@@ -772,7 +798,7 @@ async function ingestSeed(
       return { ...part, read: carriedRead(read, false), aiError };
     });
   }
-  return commitBook({ service, shop, userId, livePages, groups: parts, uploaded, summary: null });
+  return commitBook({ service, shop, userId, livePages, groups: parts, uploaded, summary: null, fresh });
 }
 
 async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextResponse> {
@@ -883,7 +909,7 @@ async function handleGroups(
   const summary = improve
     ? improveSummary(ingested.flatMap((group) => group.plans.map((plan) => ({ kind: group.kind, action: plan.action }))))
     : null;
-  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept, summary });
+  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept, summary, fresh });
 }
 
 async function openShop(
@@ -892,7 +918,7 @@ async function openShop(
 ): Promise<{ ok: true; shop: ShopRow; livePages: LivePage[] } | { ok: false; response: NextResponse }> {
   const shopResult = await service
     .from("shops")
-    .select("id, category, name")
+    .select("id, category, name, slug")
     .eq(shopLookupColumn(shopKey), shopKey)
     .maybeSingle();
   if (shopResult.error) return { ok: false, response: json({ error: "upload_failed" }, 502) };

@@ -20,6 +20,7 @@ import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
+import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import {
@@ -33,7 +34,7 @@ import {
 } from "@/lib/seed/coach";
 import { createClient } from "@/lib/supabase/client";
 
-type Phase = "camera" | "pick" | "seed" | "name" | "building";
+type Phase = "camera" | "pick" | "seed" | "building";
 type Lang = "en" | "th";
 type Picked = { id: string; slug: string; name: string };
 type NearShop = Picked & { distanceM: number };
@@ -116,7 +117,6 @@ export function LiveCamera({
   const alive = useRef(true);
   const shotsRef = useRef<SeedShot[]>([]);
   const fixRef = useRef<CaptureFix | null>(null);
-  const nameGuessRef = useRef("");
   const langRef = useRef<Lang>("en");
   const boot = useRef(false);
   const facedSeed = useRef(false);
@@ -128,7 +128,6 @@ export function LiveCamera({
   const [picked, setPicked] = useState<Picked | null>(null);
   const [shots, setShots] = useState<SeedShot[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [draftName, setDraftName] = useState(preselected?.name ?? "");
   const [lang, setLang] = useState<Lang>("en");
   const [liveFile, setLiveFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
@@ -299,7 +298,6 @@ export function LiveCamera({
         commitShots(
           shotsRef.current.map((item) => (item.id === shot.id ? { ...item, contains: read.contains } : item)),
         );
-        if (read.name_guess) nameGuessRef.current = read.name_guess;
         const next = coachToast(read, langRef.current);
         setToast(next ? { ...next, shotId: shot.id } : null);
       })
@@ -364,11 +362,6 @@ export function LiveCamera({
 
   function finishSeed() {
     if (busy || !doneEnabled(shotsRef.current.length)) return;
-    if (!picked) {
-      setDraftName((current) => nameGuessRef.current || current.trim());
-      setPhase("name");
-      return;
-    }
     void save(picked);
   }
 
@@ -381,12 +374,7 @@ export function LiveCamera({
       let target = shop;
       let createdHere = false;
       if (!target) {
-        const name = draftName.trim() || nameGuessRef.current.trim();
-        if (name.length < 2) {
-          setNote("Name the shop before Done.");
-          setPhase("name");
-          return;
-        }
+        const name = PLACEHOLDER_SHOP_NAME;
         const place = fixRef.current ?? shotsRef.current[0]?.fix;
         if (!place) return;
         const response = await fetch("/api/shops", {
@@ -409,7 +397,7 @@ export function LiveCamera({
         } | null;
         if (response.status === 401) {
           setNote("Sign in to save.");
-          setPhase("name");
+          setPhase("seed");
           return;
         }
         const joined = response.status === 409 ? body?.shops?.[0] : undefined;
@@ -419,7 +407,7 @@ export function LiveCamera({
           const id = body?.shop?.id ?? body?.id;
           if (!response.ok || !id) {
             setNote("The shop was not created.");
-            setPhase("name");
+            setPhase("seed");
             return;
           }
           target = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name };
@@ -435,18 +423,26 @@ export function LiveCamera({
       const result = await uploadBookSession(target.id, bookShots, fetch, undefined, createdHere);
       if (result.status === 401) {
         setNote("Sign in to save.");
-        setPhase(shop ? "seed" : "name");
+        setPhase("seed");
         return;
       }
       if (result.status >= 400) {
         setNote("The book did not save.");
-        setPhase(shop ? "seed" : "name");
+        setPhase("seed");
         return;
       }
-      window.location.assign("/book/" + encodeURIComponent(target.slug));
+      const body = result.body as { slug?: unknown } | null;
+      const readSlug = body && typeof body.slug === "string" ? body.slug : null;
+      const next = seedBookPath(target.id, target.slug, readSlug);
+      if (!next) {
+        setNote("The book did not save.");
+        setPhase("seed");
+        return;
+      }
+      window.location.assign(next);
     } catch {
       setNote("The book did not save.");
-      setPhase(shop ? "seed" : "name");
+      setPhase("seed");
     } finally {
       setBusy(false);
     }
@@ -541,23 +537,6 @@ export function LiveCamera({
           onDelete={removeShot}
           onDone={finishSeed}
         />
-      ) : null}
-      {phase === "name" ? (
-        <form
-          className="seed-name"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save(null);
-          }}
-        >
-          <label>
-            <span>{t(lang, "seed.name")}</span>
-            <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
-          </label>
-          <button type="submit" disabled={busy}>
-            {t(lang, "seed.done").replace("{n}", String(shots.length))}
-          </button>
-        </form>
       ) : null}
       {phase === "building" ? (
         <div className="seed-build">

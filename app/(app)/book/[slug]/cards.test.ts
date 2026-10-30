@@ -9,6 +9,7 @@ import {
   MenuTile,
   assembleDeck,
   bookCardCount,
+  infoHasContent,
   bookFallbackPhoto,
   buildDeck,
   chunkMenu,
@@ -46,6 +47,60 @@ describe("tidy book cards", () => {
     expect(pages[2]).toHaveLength(1);
     expect(pages.every((page) => page.length <= 6)).toBe(true);
     expect(chunkMenu(Array.from({ length: 6 }, (_, index) => tile(index)))).toHaveLength(1);
+  });
+
+  it("keeps a 20-item menu as category pages of 6 or fewer", () => {
+    const drinks = Array.from({ length: 8 }, (_, index) => ({ ...tile(index), name: "Drink " + index, category: "Drinks" }));
+    const food = Array.from({ length: 12 }, (_, index) => ({ ...tile(index + 8), name: "Food " + index, category: "Food" }));
+    const deck = assembleDeck({ menuItems: [...drinks, ...food], extras: [], hours: null, info: blankInfo });
+    const menus = deck.filter((card) => card.type === "menu");
+    expect(menus).toHaveLength(4);
+    expect(menus.every((card) => card.type === "menu" && card.items.length > 0 && card.items.length <= 6)).toBe(true);
+    expect(menus.map((card) => (card.type === "menu" ? card.category : null))).toEqual(["Drinks", "Drinks", "Food", "Food"]);
+    expect(menus[1]).toMatchObject({ continued: true });
+    const continued = renderToStaticMarkup(
+      createElement(MenuCard, { index: 1, total: 4, style: {}, category: "Drinks", continued: true, items: [tile(0)] }),
+    );
+    expect(continued).toContain("Drinks, continued");
+  });
+
+  it("keeps About when the only detail is a map, address, or contact link", () => {
+    expect(infoHasContent(null, blankInfo)).toBe(false);
+    expect(infoHasContent(null, blankInfo, "https://maps.google.com/maps?q=12,99")).toBe(true);
+    const mapOnly = assembleDeck({
+      menuItems: [],
+      extras: [],
+      hours: null,
+      info: blankInfo,
+      mapUrl: "https://maps.google.com/maps?q=12,99",
+    });
+    expect(mapOnly.some((card) => card.type === "info")).toBe(true);
+    const address = assembleDeck({
+      menuItems: [],
+      extras: [],
+      hours: null,
+      info: { ...blankInfo, address: { value: "Soi 1", page: 1 } },
+    });
+    expect(address.some((card) => card.type === "info")).toBe(true);
+    const phone = assembleDeck({
+      menuItems: [],
+      extras: [],
+      hours: null,
+      info: { ...blankInfo, phones: [{ value: "0812345678", page: 1 }] },
+    });
+    expect(phone.some((card) => card.type === "info")).toBe(true);
+  });
+
+  it("shows Edit name on the cover only while the shop is still New shop", () => {
+    const placeholder = renderToStaticMarkup(
+      createElement(CoverCard, { name: "New shop", logoUrl: null, heroUrl: null, tagline: null, mood: "", style: {} }),
+    );
+    expect(placeholder).toContain("Edit name");
+    expect(placeholder).toContain("?edit=name");
+    const named = renderToStaticMarkup(
+      createElement(CoverCard, { name: "Hard Rock", logoUrl: null, heroUrl: null, tagline: null, mood: "", style: {} }),
+    );
+    expect(named).not.toContain("Edit name");
   });
 
   it("uses a shop photo instead of an empty tile", () => {
