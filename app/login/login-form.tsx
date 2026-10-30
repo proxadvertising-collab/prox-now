@@ -11,11 +11,8 @@ import {
   shouldClearTabSession,
 } from "@/lib/supabase/client";
 
-const primary =
-  "inline-flex min-h-14 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
-
-const field =
-  "min-h-12 w-full rounded-md border border-border bg-surface-1 px-3 text-base text-fg";
+const primary = "btn-primary";
+const field = "field";
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -133,6 +130,7 @@ export function LoginForm({ dest, failed }: { dest: string; failed: boolean }) {
       <label className="flex min-h-11 items-center gap-3 text-label text-fg">
         <input
           type="checkbox"
+          className="field-check"
           name="keep"
           checked={keep}
           onChange={(event) => setKeep(event.target.checked)}

@@ -5,7 +5,18 @@ import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
 import { presentBook } from "@/lib/book/present";
-import { CoverCard, DealsCard, ExtraCard, InfoCard, MenuCard, bookFontFamily, buildDeck } from "./cards";
+import {
+  CoverCard,
+  DealsCard,
+  ExtraCard,
+  InfoCard,
+  MenuCard,
+  bookFallbackPhoto,
+  bookFontFamily,
+  buildDeck,
+  coverPhoto,
+  liveLeftLabel,
+} from "./cards";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
 
@@ -101,8 +112,27 @@ export default async function BookPage({
 
     const menuPages = view.pages.filter((page) => page.kind === "menu");
     const extraPages = view.pages.filter((page) => page.kind === "extra");
-    const accent = view.accent ?? "#FF8A3D";
-    const ink = view.ink ?? "#1C0E05";
+    const accent = view.accent ?? "#FF8A2B";
+    const ink = view.ink ?? "#1A120B";
+    let liveLabel: string | null = null;
+    if (shop?.id) {
+      try {
+        const live = await supabase
+          .from("posts")
+          .select("expires_at")
+          .eq("shop_id", shop.id)
+          .gt("expires_at", new Date().toISOString())
+          .order("expires_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const expires = live.data && typeof live.data.expires_at === "string" ? live.data.expires_at : null;
+        liveLabel = liveLeftLabel(expires, Date.now());
+      } catch {
+        liveLabel = null;
+      }
+    }
+    const photoFallback = bookFallbackPhoto(view.heroUrl, view.pages);
+    const hero = coverPhoto(view.heroUrl, view.pages);
     const mood =
       view.mood === "elegant"
         ? "font-serif tracking-wide"
@@ -116,14 +146,14 @@ export default async function BookPage({
     const mapUrl =
       view.maps && /^https?:\/\//i.test(view.maps) ? view.maps : mapHref(info.address?.value ?? null, point);
     const cardStyle = { background: "var(--book-ink)", color: "var(--book-accent)", fontFamily: "var(--book-font)" };
-    const coverStyle = { background: "var(--book-accent)", color: "var(--book-ink)", fontFamily: "var(--book-font)" };
+    const coverStyle = { color: "#fff", fontFamily: "var(--book-font)" };
     const deck = buildDeck({
       menuItems: menuPages.flatMap((page) =>
         page.items.map((item) => ({
           name: item.name,
           nameEn: item.nameEn ?? null,
           price: item.price,
-          photo: page.imageUrl,
+          photo: page.imageUrl || photoFallback,
           category: page.section,
         })),
       ),
@@ -160,10 +190,11 @@ export default async function BookPage({
                   name={view.name}
                   nameEn={view.nameEn}
                   logoUrl={view.logoUrl}
-                  heroUrl={view.heroUrl}
+                  heroUrl={hero}
                   tagline={view.tagline}
                   mood={mood}
                   style={coverStyle}
+                  liveLabel={liveLabel}
                 />
               );
             }
@@ -191,7 +222,7 @@ export default async function BookPage({
               <ExtraCard
                 key={page.id}
                 title={kindLabel(page.kind)}
-                imageUrl={page.imageUrl}
+                imageUrl={page.imageUrl || photoFallback}
                 section={page.section}
                 items={page.items}
                 credit={page.credit}

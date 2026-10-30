@@ -30,7 +30,7 @@ export const DARK_OVERRIDES: PaintOverride[] = [
   { id: "waterway", property: "line-color", value: "#12171B" },
   { id: "landuse_park", property: "fill-color", value: "#14170F" },
   { id: "landcover_wood", property: "fill-color", value: "#14170F" },
-  { id: "landuse_residential", property: "fill-color", value: "#0F0D0C" },
+  { id: "landuse_residential", property: "fill-color", value: "#14100D" },
   { id: "building", property: "fill-color", value: "#171311" },
   { id: "building", property: "fill-outline-color", value: "#211D1A" },
   { id: "highway_path", property: "line-color", value: "#2B2623" },

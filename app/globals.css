@@ -2,18 +2,18 @@
 
 @theme {
   /* colour */
-  --color-bg: #0F0D0C;
-  --color-surface-1: #181513;
-  --color-surface-2: #211D1A;
-  --color-surface-3: #2B2621;
-  --color-border: #3B342E;
-  --color-border-strong: #7A6F64;
-  --color-fg: #F7F0E8;
-  --color-fg-muted: #BDB2A6;
-  --color-fg-subtle: #A39888;
-  --color-accent: #FF8A3D;
+  --color-bg: #14100D;
+  --color-surface-1: #1E1611;
+  --color-surface-2: #241A14;
+  --color-surface-3: #241A14;
+  --color-border: #3A2C22;
+  --color-border-strong: #4A3A2D;
+  --color-fg: #FFF4E8;
+  --color-fg-muted: #C8B6A6;
+  --color-fg-subtle: #8A7A6D;
+  --color-accent: #FF8A2B;
   --color-accent-pressed: #E8701F;
-  --color-accent-ink: #1C0E05;
+  --color-accent-ink: #1A120B;
   --color-accent-soft: #33200F;
   --color-success: #5BD18B;
   --color-success-soft: #12261B;
@@ -23,7 +23,7 @@
   --color-danger-soft: #2E1414;
   --color-info: #7DB8FF;
   --color-info-soft: #111F30;
-  --color-ink: #0F0D0C;
+  --color-ink: #14100D;
   --color-pin-aging: #C99A4E;
   --color-pin-last: #FF5D5D;
 
@@ -39,18 +39,26 @@
   --shadow-glow: 0 0 0 6px rgb(255 138 61 / 0.18), 0 8px 28px rgb(255 138 61 / 0.35);
 
   /* type scale */
-  --text-caption: 0.75rem;
+  --text-caption: 13px;
   --text-caption--line-height: 1.4;
-  --text-label: 0.875rem;
+  --text-caption--font-weight: 500;
+  --text-label: 13px;
   --text-label--line-height: 1.4;
-  --text-body: 1rem;
+  --text-label--font-weight: 500;
+  --text-body: 16px;
   --text-body--line-height: 1.5;
-  --text-heading: 1.125rem;
+  --text-body--font-weight: 400;
+  --text-heading: 16px;
   --text-heading--line-height: 1.35;
-  --text-title: 1.5rem;
-  --text-title--line-height: 1.25;
-  --text-display: 2.125rem;
+  --text-heading--font-weight: 700;
+  --text-title: 32px;
+  --text-title--line-height: 1.15;
+  --text-title--font-weight: 800;
+  --text-title--letter-spacing: -0.5px;
+  --text-display: 32px;
   --text-display--line-height: 1.15;
+  --text-display--font-weight: 800;
+  --text-display--letter-spacing: -0.5px;
   --text-timer: 2.5rem;
   --text-timer--line-height: 1;
 
@@ -113,7 +121,8 @@
   body {
     min-height: 100dvh;
     font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: var(--text-body);
+    font-weight: 400;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
     overscroll-behavior-y: none;
@@ -177,13 +186,55 @@
   flex: 1;
   overflow-y: auto;
 }
+.book-cover {
+  position: relative;
+  padding: 0;
+  background: #14100D;
+  color: #fff;
+}
+.book-cover-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.book-cover-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0.28));
+}
 .book-cover-body {
+  position: relative;
+  z-index: 1;
   display: flex;
+  height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 16px;
   text-align: center;
+}
+.book-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background: #FF2E2E;
+  color: #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.book-live-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: #7A0000;
 }
 .book-theme { font-family: var(--book-font, inherit); }
 .book-hero {
@@ -198,21 +249,35 @@
   width: 96px;
   height: 96px;
   flex: none;
-  border-radius: 12px;
-  background: rgb(255 255 255 / 0.35);
-  object-fit: contain;
+  border-radius: 1.5rem;
+  background: var(--color-accent);
+  object-fit: cover;
+  box-shadow: 0 20px 25px rgb(0 0 0 / 0.35);
+}
+.book-logo-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1A120B;
+  font-size: 40px;
+  font-weight: 800;
 }
 .book-shop-name {
   margin: 0;
   max-width: 100%;
-  font-size: var(--text-title);
-  line-height: 1.25;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
 }
 .book-tags {
   max-width: 100%;
-  min-height: 1.5em;
   margin: 0;
   overflow: hidden;
+  color: #FFE0C2;
+  font-size: 16px;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -235,24 +300,57 @@
   gap: 8px;
   align-items: stretch;
 }
-.book-tile { display: flex; min-width: 0; height: 100%; flex-direction: column; gap: 4px; }
+.book-tile {
+  position: relative;
+  display: block;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 1rem;
+}
 .book-tile-photo {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  background: var(--color-surface-3);
+  height: 100%;
   object-fit: cover;
 }
-.book-tile-head { display: flex; min-height: 2.8em; align-items: flex-start; gap: 6px; }
+.book-tile::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 58%;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.7), transparent);
+  pointer-events: none;
+}
 .book-tile-name {
-  display: -webkit-box;
-  flex: 1;
-  max-height: 2.8em;
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 1;
+  margin: 0;
   overflow: hidden;
-  line-height: 1.4;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-price-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  border-radius: 999px;
+  background: #FFC38A;
+  color: #1A120B;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 .book-tile-en {
   min-height: 1.4em;
@@ -270,8 +368,39 @@
   width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: 8px;
-  background: var(--color-surface-3);
   object-fit: cover;
+}
+.field {
+  height: 3.5rem;
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid #4A3A2D;
+  background: #1E1611;
+  padding: 0 1rem;
+  color: #FFF4E8;
+  font-size: 16px;
+  font-weight: 400;
+}
+.field::placeholder { color: #8A7A6D; }
+.btn-primary {
+  display: inline-flex;
+  height: 60px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  background: #FF8A2B;
+  color: #1A120B;
+  font-size: 18px;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+.btn-primary:active { transform: scale(0.95); }
+.btn-primary:disabled { opacity: 0.6; }
+.field-check {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: #FF8A2B;
 }
 .book-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 .book-nav-btn {

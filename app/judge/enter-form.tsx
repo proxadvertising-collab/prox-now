@@ -3,11 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { t } from "@/lib/copy";
 
-const primary =
-  "inline-flex min-h-14 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink touch-manipulation disabled:opacity-60";
-
-const field =
-  "min-h-12 w-full rounded-md border border-border bg-surface-1 px-3 text-base text-fg";
+const primary = "btn-primary";
+const field = "field";
 
 function noteFor(status: number, error: string | undefined): string {
   if (status === 503 || error === "demo_not_ready") return t("en", "judge.missing");

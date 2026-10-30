@@ -43,7 +43,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center gap-6 px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div>
-        <h1 className="text-display font-bold text-fg">{t("en", "auth.title")}</h1>
+        <h1 className="text-title text-fg">Prox Now</h1>
         <p className="mt-2 text-body text-fg-muted">{t("en", "auth.tagline")}</p>
       </div>
       <LoginForm dest={signedInDest(params.next)} failed={params.error === "auth"} />
