@@ -142,8 +142,9 @@ describe("callSparkImages", () => {
     expect(result.model).toBe("muse-spark-1.3-live");
     expect(result.callId).toBe("call_live");
     expect(JSON.stringify(result).includes(SECRET)).toBe(false);
-    expect(bookReadPrompt([1])).toContain("price may be empty");
-    expect(bookReadPrompt([1])).toContain("every dish");
+    expect(bookReadPrompt([1])).toContain("Never invent anything not visible");
+    expect(bookReadPrompt([1])).toContain("street_food");
+    expect(bookReadPrompt([1], true)).toContain("shorter");
   });
 
   it("rejects a body that hit max_output_tokens even when the JSON parses", async () => {

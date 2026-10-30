@@ -5,6 +5,7 @@ import { SnapFlow } from "@/components/snap/SnapFlow";
 import {
   adoptFacing,
   cameraConstraints,
+  captureSize,
   drawUnmirrored,
   facingForSession,
   flipControl,
@@ -208,13 +209,15 @@ export function LiveCamera({
 
   async function grab(fix: CaptureFix): Promise<File> {
     const video = videoRef.current;
+    const fitted = captureSize(video?.videoWidth ?? 0, video?.videoHeight ?? 0);
     const canvas = document.createElement("canvas");
-    const width = video?.videoWidth || 1280;
-    const height = video?.videoHeight || 720;
+    const width = fitted.width;
+    const height = fitted.height;
+    if (!video || width < 1 || height < 1) throw new Error("frame");
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
-    if (!context || !video) throw new Error("frame");
+    if (!context) throw new Error("frame");
     drawUnmirrored(context, video, width, height);
     const line = stampLine(fix);
     context.fillStyle = "rgba(0,0,0,0.55)";

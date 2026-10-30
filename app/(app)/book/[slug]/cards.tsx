@@ -9,13 +9,30 @@ export type MenuTileData = {
   nameEn: string | null;
   price: string | null;
   photo: string | null;
+  category?: string | null;
+};
+
+export type DealTile = {
+  title: string;
+  provider: string | null;
+  discount: string | null;
+  conditions: string | null;
 };
 
 export type DeckCard =
   | { type: "cover" }
   | { type: "info" }
-  | { type: "menu"; index: number; total: number; items: MenuTileData[] }
+  | { type: "deals"; deals: DealTile[] }
+  | { type: "menu"; index: number; total: number; items: MenuTileData[]; category: string | null }
   | { type: "extra"; id: string };
+
+export function bookFontFamily(font: string | null): string {
+  const key = (font ?? "").toLowerCase();
+  if (key.includes("hand")) return '"Segoe Script", "Comic Sans MS", cursive';
+  if (key.includes("serif")) return 'Georgia, "Times New Roman", serif';
+  if (key.includes("rounded") || key.includes("sans")) return 'ui-rounded, "Segoe UI", sans-serif';
+  return "inherit";
+}
 
 const DELIVERY_LABEL: Record<string, string> = {
   grab: "Grab",
@@ -39,18 +56,36 @@ export function chunkMenu<T>(items: readonly T[], size = MENU_PAGE_SIZE): T[][] 
   return pages;
 }
 
-export function buildDeck(input: { menuItems: readonly MenuTileData[]; extras: readonly string[] }): DeckCard[] {
-  const menus = chunkMenu(input.menuItems);
+function groupMenu(items: readonly MenuTileData[]): { category: string | null; items: MenuTileData[] }[] {
+  const groups: { category: string | null; items: MenuTileData[] }[] = [];
+  for (const item of items) {
+    const category = item.category ?? null;
+    const last = groups[groups.length - 1];
+    if (last && last.category === category) last.items.push(item);
+    else groups.push({ category, items: [item] });
+  }
+  return groups;
+}
+
+export function buildDeck(input: {
+  menuItems: readonly MenuTileData[];
+  extras: readonly string[];
+  deals?: readonly DealTile[];
+}): DeckCard[] {
   const cards: DeckCard[] = [{ type: "cover" }, { type: "info" }];
-  menus.forEach((items, index) => {
-    cards.push({ type: "menu", index, total: menus.length, items });
+  if (input.deals && input.deals.length > 0) cards.push({ type: "deals", deals: [...input.deals] });
+  const menus = groupMenu(input.menuItems).flatMap((group) =>
+    chunkMenu(group.items).map((items) => ({ items, category: group.category })),
+  );
+  menus.forEach((group, index) => {
+    cards.push({ type: "menu", index, total: menus.length, items: group.items, category: group.category });
   });
   for (const id of input.extras) cards.push({ type: "extra", id });
   return cards;
 }
 
-export function bookCardCount(menuPages: number, extras: number): number {
-  return 2 + menuPages + extras;
+export function bookCardCount(menuPages: number, extras: number, deals = 0): number {
+  return 2 + (deals > 0 ? 1 : 0) + menuPages + extras;
 }
 
 function Glyph({ name }: { name: string }) {
@@ -174,27 +209,53 @@ export function MenuTile({ name, nameEn, price, photo }: MenuTileData) {
 
 export function CoverCard({
   name,
+  nameEn,
   logoUrl,
+  heroUrl,
   tagline,
   mood,
   style,
 }: {
   name: string;
+  nameEn?: string | null;
   logoUrl: string | null;
+  heroUrl?: string | null;
   tagline: string | null;
   mood: string;
   style: CSSProperties;
 }) {
+  const logo = logoUrl ?? heroUrl ?? null;
   return (
     <article className="book-card book-cover" style={style}>
       <div className="book-card-body book-cover-body">
-        {logoUrl ? (
-          <img src={logoUrl} alt="" className="book-logo" width="96" height="96" />
+        {heroUrl ? <img src={heroUrl} alt="" className="book-hero" width="320" height="180" /> : null}
+        {logo ? (
+          <img src={logo} alt="" className="book-logo" width="96" height="96" />
         ) : (
           <div className="book-logo" data-placeholder="logo" />
         )}
         <h1 className={"book-shop-name " + mood}>{name}</h1>
+        {nameEn ? <p className="book-name-en">{nameEn}</p> : null}
         <p className="book-tags">{tagline ?? ""}</p>
+      </div>
+    </article>
+  );
+}
+
+export function DealsCard({ deals, style }: { deals: readonly DealTile[]; style: CSSProperties }) {
+  return (
+    <article className="book-card" style={style}>
+      <h2 className="book-card-title">{t("en", "book.deals")}</h2>
+      <div className="book-card-body">
+        <div className="book-rows">
+          {deals.map((deal) => (
+            <p key={deal.title} className="book-row">
+              <span className="book-row-label">
+                {[deal.title, deal.provider, deal.discount, deal.conditions].filter(Boolean).join(" · ")}
+              </span>
+            </p>
+          ))}
+        </div>
       </div>
     </article>
   );
@@ -229,7 +290,7 @@ export function InfoCard({
   if (info.tiktok) rows.push(<Row key="tt" icon="link" label={"TikTok " + info.tiktok.value} href={tiktokHref(info.tiktok.value)} />);
   if (info.website) rows.push(<Row key="web" icon="link" label={info.website.value} href={siteHref(info.website.value)} />);
   if (info.email) rows.push(<Row key="mail" icon="mail" label={info.email.value} href={"mailto:" + info.email.value} />);
-  if (mapUrl) rows.push(<Row key="map" icon="pin" label={info.address?.value ?? "Map"} href={mapUrl} />);
+  if (mapUrl) rows.push(<Row key="map" icon="pin" label={info.address?.value ?? t("en", "book.maps")} href={mapUrl} />);
   if (info.lineQrPage != null) rows.push(<Row key="qr" icon="chat" label="LINE QR" />);
   if (info.delivery.length > 0) {
     rows.push(
@@ -246,7 +307,7 @@ export function InfoCard({
 
   return (
     <article className="book-card" style={style}>
-      <h2 className="book-card-title">{t("en", "book.shopInfo")}</h2>
+      <h2 className="book-card-title">{t("en", "book.about")}</h2>
       <div className="book-card-body">
         {rows.length > 0 ? <div className="book-rows">{rows}</div> : <p className="book-row-label">{t("en", "book.noContact")}</p>}
       </div>
@@ -259,15 +320,18 @@ export function MenuCard({
   total,
   items,
   style,
+  category = null,
 }: {
   index: number;
   total: number;
   items: readonly MenuTileData[];
   style: CSSProperties;
+  category?: string | null;
 }) {
+  const title = category ?? t("en", "book.menuOf", { n: String(index + 1), total: String(total) });
   return (
     <article className="book-card" style={style}>
-      <h2 className="book-card-title">{t("en", "book.menuOf", { n: String(index + 1), total: String(total) })}</h2>
+      <h2 className="book-card-title">{title}</h2>
       <div className="book-card-body">
         <div className="book-tile-grid">
           {items.map((item, itemIndex) => (

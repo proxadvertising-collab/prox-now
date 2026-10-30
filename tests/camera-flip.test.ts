@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   adoptFacing,
   cameraConstraints,
+  captureSize,
   drawUnmirrored,
   flipControl,
   flipStream,
@@ -70,7 +71,23 @@ describe("camera flip", () => {
     const camera = readFileSync(resolve(root, "components/camera/LiveCamera.tsx"), "utf8");
     expect(camera).toContain("previewClass(facing)");
     expect(camera).toContain("drawUnmirrored");
+    expect(camera).toContain("captureSize");
+    expect(camera).toContain('toBlob(resolve, "image/jpeg", 0.85)');
+    expect(camera).not.toContain("|| 1280");
     expect(camera).not.toContain("scaleX(-1)");
+  });
+
+  it("requests 1920x1440 and keeps the full frame unless the long side exceeds 2000", () => {
+    expect(cameraConstraints("environment")).toEqual({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+      audio: false,
+    });
+    expect(cameraConstraints("user").video).toMatchObject({ width: { ideal: 1920 }, height: { ideal: 1440 } });
+    expect(captureSize(480, 640)).toEqual({ width: 480, height: 640 });
+    expect(captureSize(1920, 1440)).toEqual({ width: 1920, height: 1440 });
+    expect(captureSize(100, 100)).toEqual({ width: 100, height: 100 });
+    expect(captureSize(3000, 2000)).toEqual({ width: 2000, height: 1333 });
+    expect(captureSize(0, 0)).toEqual({ width: 0, height: 0 });
   });
 
   it("keeps the old stream when the flip fails", async () => {

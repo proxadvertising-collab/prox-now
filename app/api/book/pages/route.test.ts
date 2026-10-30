@@ -191,6 +191,31 @@ function installFetch() {
         }),
       );
     }
+    if (mode === "rich") {
+      return metaResponse(
+        JSON.stringify({
+          brand: {
+            name: "Cafe Amazon",
+            name_en: "drinks",
+            tagline: "Coffee",
+            phones: [],
+            logo: { index: indexes[0] ?? 1, box: [0.1, 0.1, 0.4, 0.4] },
+          },
+          style: { primary: "#0B6B3A", secondary: "#F7F0E8", font: "rounded sans", vibe: "green cafe morning" },
+          menu: [
+            {
+              category: "Coffee",
+              items: [{ name: "Americano", name_en: "restaurant", price: "45", currency: "THB", photo: indexes[0] ?? 1 }],
+            },
+          ],
+          deals: [{ title: "Weekday 10%", provider: "SCB", discount: "10%", conditions: "Weekdays" }],
+          info: { hours_text: "Daily 7-19", address: "Soi 1", maps: null, language: "th" },
+          photos: indexes.map((index) => ({ index, kind: "menu" })),
+          hero: indexes[0] ?? 1,
+          category: "drinks",
+        }),
+      );
+    }
     return metaResponse(
       JSON.stringify({
         pages: indexes.map((index) => ({
@@ -238,7 +263,7 @@ function contentCalls(fetchMock: ReturnType<typeof vi.fn>) {
   return fetchMock.mock.calls.filter((call) => {
     const sent = JSON.parse(String(call[1]?.body));
     const prompt = sent.input[0].content[0].text as string;
-    return prompt.startsWith("Read the REAL text");
+    return prompt.startsWith("You are building a digital book");
   });
 }
 
@@ -467,7 +492,7 @@ describe("POST /api/book/pages", () => {
         ?.text ?? "";
       expect(prompt.includes("shop_id")).toBe(false);
       expect(prompt.includes("GPS fix")).toBe(false);
-      expect(prompt.startsWith("Read the REAL text") || prompt.startsWith("Find every human face")).toBe(true);
+      expect(prompt.startsWith("You are building a digital book") || prompt.startsWith("Find every human face")).toBe(true);
     }
   });
 
@@ -498,19 +523,19 @@ describe("POST /api/book/pages", () => {
     expect(state.pages.some((page) => page.kind === "storefront" || page.kind === "hours")).toBe(false);
   });
 
-  it("batches a menu over 8 images into Muse calls and still writes the book once", async () => {
+  it("reads a seed batch over 8 images in one Muse call and still writes the book once", async () => {
     const items = Array.from({ length: 9 }, () => ({ kind: "menu" as const }));
     const response = await postSession(items);
     expect(response.status).toBe(200);
     expect(state.bookWrites).toBe(1);
     expect(state.pages).toHaveLength(9);
     const reads = contentCalls(vi.mocked(fetch));
-    expect(reads).toHaveLength(2);
+    expect(reads).toHaveLength(1);
     const sizes = reads.map((call) => {
       const sent = JSON.parse(String(call[1]?.body));
       return sent.input[0].content.filter((part: { type: string }) => part.type === "input_image").length;
     });
-    expect(sizes).toEqual([8, 1]);
+    expect(sizes).toEqual([9]);
   });
 
   it("improve mode skips a duplicate, replaces a changed page, and adds a new one", async () => {
@@ -591,22 +616,28 @@ describe("POST /api/book/pages", () => {
     expect(state.pages[0]?.ai_meta).toMatchObject({ model: null, images_in_call: 0, error: "busy" });
   });
 
-  it("renames only a fresh shop whose name looks like a menu description", async () => {
+  it("never renames a shop and sets category only from other", async () => {
     state.shop = { id: SHOP, category: "street_food", name: "Blended fruit juice menu" };
     mode = "named";
     const renamed = await postSession([{ kind: "logo" }, { kind: "menu" }], SHOP, undefined, true);
     expect(renamed.status).toBe(200);
-    expect(state.shop?.name).toBe("Mala Mafia");
+    expect(state.shop?.name).toBe("Blended fruit juice menu");
+    expect(state.shop?.category).toBe("street_food");
     const menu = state.pages.find((page) => page.kind === "menu");
     expect(menu?.extracted).toMatchObject({
       items: [{ name: "หม่าล่า", price: "40", currency: "THB", note: "Mala beef" }],
     });
 
-    state.shop = { id: SHOP, category: "street_food", name: "Mala Mafia" };
+    state.shop = { id: SHOP, category: "other", name: "Mala Mafia" };
     state.pages = [];
     state.book = null;
-    const kept = await postSession([{ kind: "menu" }], SHOP, undefined, true);
-    expect(kept.status).toBe(200);
+    mode = "rich";
+    const categorized = await postSession([{ kind: "extra" }], SHOP, undefined, true);
+    expect(categorized.status).toBe(200);
     expect(state.shop?.name).toBe("Mala Mafia");
+    expect(state.shop?.category).toBe("drinks");
+    expect(state.pages.map((page) => page.kind)).toEqual(["menu"]);
+    const item = (state.pages[0]?.extracted as { items?: { nameEn?: string }[] } | undefined)?.items?.[0];
+    expect(item?.nameEn).toBeUndefined();
   });
 });

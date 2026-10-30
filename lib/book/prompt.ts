@@ -34,48 +34,30 @@ export function improvePrompt(
   );
 }
 
+const SHOP_CATEGORY_LIST = "street_food, drinks, restaurant, fruit, laundry, home_services, barber, other";
+
 export function bookReadPrompt(indexes: readonly number[], brief = false): string {
-  const rules =
-    "Read the REAL text in these photos for a shop book. Copy text exactly as printed. " +
-    "Do not translate. Do not convert currency. Do not invent items, prices, hours, dishes, or contact details. " +
-    "Fill a field only when that text is visible in the photo. If it is not visible, use null or an empty array. " +
-    "If a word is unreadable, use null and leave that item out only when the name itself cannot be read. " +
-    "A price may be empty. Still list every dish, including dishes with no price. " +
-    "Do not drop a dish because it has no price. " +
-    "Do not redraw, clean, or describe a logo. The photograph is the logo. " +
-    "When a dish shows two names, put the printed local name in name and the printed English name in name_en. " +
-    "Put a short printed description in note. tags may include spicy or vegan only when the photo shows that mark.\n";
-  const tail =
-    "kind_guess is storefront, logo, hours, menu, qr, or other. " +
-    "is_menu is true only when the photo is a menu or a price list. " +
-    "price is the printed text, or null when no price is printed. " +
-    "hours.days use d as sun, mon, tue, wed, thu, fri, or sat, and open/close as HH:MM in 24-hour local time. " +
-    "Omit hours when the photo shows none. " +
-    "tagline_facts are short facts that are actually visible. No praise and no claims. " +
-    "shop_language is a short language code such as th or en, or null. " +
-    "shop_name is the real shop name printed on the logo or sign, or null. " +
-    "colors are up to 3 hex colours actually visible in the logo.\n" +
+  const briefLine = brief ? "This is a shorter read. Leave descriptions and deals empty.\n" : "";
+  return (
+    "You are building a digital book for a local business from these photos only. Never invent anything not visible.\n" +
+    "1. Brand: business name (as printed, plus English if different), tagline, contact info (phone, LINE, WhatsApp, Facebook, Instagram, TikTok, website, email), delivery apps (Grab, foodpanda, LINE MAN, Uber Eats), and payment badges. Logo: give the photo index and bounding box [x,y,w,h] as 0-1 fractions of the clearest logo.\n" +
+    "2. Style: primary and secondary colors as hex, the closest font style (e.g. rounded sans, bold serif, handwritten), and a 3-5 word vibe.\n" +
+    "3. Info: rebuild the full menu grouped into categories. Each item has its name as printed (with typos fixed), an English name if the original is not English, a short description only if one is printed or obvious, a price with currency, and the photo index. Also pull deals and promos (title, provider such as a bank, telco or app, discount, conditions), hours, address, and a Google Maps link or plus code only if visible. Keep the original language and add an English translation.\n" +
+    "4. Book: choose the hero photo index for the cover, and give a kind for every photo (logo, menu, hours, deal, product, storefront, other). Set the shop category from: " +
+    SHOP_CATEGORY_LIST +
+    ".\n" +
+    briefLine +
+    "Output ONLY JSON. No markdown. No extra keys.\n" +
+    '{"brand":{"name":null,"name_en":null,"tagline":null,"phones":[],"line_id":null,"line_qr":false,"whatsapp":null,"facebook":null,"instagram":null,"tiktok":null,"website":null,"email":null,"delivery":[],"payment":[],"logo":{"index":1,"box":[0.1,0.1,0.2,0.2]}},"style":{"primary":null,"secondary":null,"font":null,"vibe":null},"menu":[{"category":"","items":[{"name":"","name_en":null,"note":null,"price":null,"currency":null,"photo":1}]}],"deals":[{"title":"","provider":null,"discount":null,"conditions":null}],"info":{"hours_text":null,"hours":null,"address":null,"maps":null,"language":null},"photos":[{"index":1,"kind":"menu"}],"hero":1,"category":"other"}\n' +
+    "logo.box is [x,y,w,h], origin top-left, each value from 0 to 1. " +
+    "photos.kind is logo, menu, hours, deal, product, storefront, or other. " +
+    "category is one of: " +
+    SHOP_CATEGORY_LIST +
+    ". delivery uses Grab, foodpanda, LINE MAN, or Uber Eats. payment uses PromptPay QR, cards, or cash only. " +
+    "hours.days use d as sun, mon, tue, wed, thu, fri, or sat, and open/close as HH:MM. " +
     "The images are numbered: " +
     numbered(indexes) +
-    ". Return one pages entry for each number, with index set to that number.";
-  if (brief) {
-    return (
-      rules +
-      "This is a shorter read. Skip contacts and tags. Leave name_en null.\n" +
-      "Output ONLY this JSON. No markdown. No extra keys.\n" +
-      '{"pages":[{"index":1,"kind_guess":"menu","is_menu":true,"language":"th","section":null,"items":[{"name":"","name_en":null,"price":null,"currency":null,"note":null}],"hours":{"days":[{"d":"mon","open":"08:00","close":"17:00"}],"raw":null}}],"shop_language":null,"tagline_facts":[],"shop_name":null,"colors":[]}\n' +
-      tail
-    );
-  }
-  return (
-    rules +
-    "Also copy contact details printed or shown as a logo anywhere in the photo: phone numbers, a LINE ID, whether a LINE QR is visible, a WhatsApp number, Facebook, Instagram, TikTok, website, email, delivery apps shown (Grab, foodpanda, LINE MAN, Robinhood, ShopeeFood, Uber Eats), payment marks shown (PromptPay QR, cards, cash only), hours text, address text, and a Wi-Fi name when a sign shows one. Never guess a handle or a number.\n" +
-    "Output ONLY this JSON. No markdown. No extra keys.\n" +
-    '{"pages":[{"index":1,"kind_guess":"menu","is_menu":true,"language":"th","section":null,"items":[{"name":"","name_en":null,"price":null,"currency":null,"note":null,"tags":[]}],"hours":{"days":[{"d":"mon","open":"08:00","close":"17:00"}],"raw":null},"contacts":{"phones":[],"line_id":null,"line_qr":false,"whatsapp":null,"facebook":null,"instagram":null,"tiktok":null,"website":null,"email":null,"delivery":[],"payment":[],"hours_text":null,"address":null,"wifi":null}}],"shop_language":null,"tagline_facts":[],"shop_name":null,"colors":[]}\n' +
-    "contacts.delivery uses only Grab, foodpanda, LINE MAN, Robinhood, ShopeeFood, or Uber Eats. " +
-    "contacts.payment uses only PromptPay QR, cards, or cash only. " +
-    "line_qr is true only when a LINE QR code is visible.\n" +
-    tail
+    ". Return one photos entry for each number, with index set to that number."
   );
 }
 

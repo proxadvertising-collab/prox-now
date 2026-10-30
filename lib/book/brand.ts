@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { callSparkImages } from "../ai/meta";
-import { fallbackTheme, themeFromSwatches, type BookTheme } from "./palette";
+import { contrastRatio, fallbackTheme, MIN_CONTRAST, parseHex, pickInk, themeFromSwatches, type BookTheme } from "./palette";
 import { logoFixPrompt } from "./prompt";
 
 export const FONT_MOODS = ["bold", "elegant", "playful", "street"] as const;
@@ -14,7 +14,36 @@ export type LogoFix = {
   mood: FontMood;
 };
 
-export type BrandTheme = BookTheme & { mood: FontMood; colors: string[] };
+export type BrandTheme = BookTheme & {
+  mood: FontMood;
+  colors: string[];
+  font?: string | null;
+  vibe?: string | null;
+  deals?: { title: string; provider: string | null; discount: string | null; conditions: string | null }[];
+  maps?: string | null;
+  nameEn?: string | null;
+  heroPath?: string | null;
+};
+
+export function themeIfReadable(primary: string | null, secondary: string | null): { accent: string; ink: string } | null {
+  if (!primary || !parseHex(primary)) return null;
+  const accent = "#" + primary.trim().slice(1).toUpperCase();
+  const ink = secondary && parseHex(secondary) ? "#" + secondary.trim().slice(1).toUpperCase() : pickInk(accent);
+  if (contrastRatio(accent, ink) < MIN_CONTRAST) return null;
+  return { accent, ink };
+}
+
+export async function cropFraction(bytes: Buffer, box: [number, number, number, number]): Promise<Buffer> {
+  const meta = await sharp(bytes, { failOn: "none" }).metadata();
+  const width = meta.width ?? 0;
+  const height = meta.height ?? 0;
+  if (width < 2 || height < 2) return bytes;
+  const left = Math.min(width - 1, Math.max(0, Math.round(box[0] * width)));
+  const top = Math.min(height - 1, Math.max(0, Math.round(box[1] * height)));
+  const cropW = Math.min(width - left, Math.max(1, Math.round(box[2] * width)));
+  const cropH = Math.min(height - top, Math.max(1, Math.round(box[3] * height)));
+  return sharp(bytes, { failOn: "none" }).extract({ left, top, width: cropW, height: cropH }).jpeg({ quality: 85 }).toBuffer();
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

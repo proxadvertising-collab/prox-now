@@ -4,7 +4,29 @@ import { buildTagline } from "./tagline";
 
 const TOP_KEYS = new Set(["pages", "shop_language", "tagline_facts", "shop_name", "colors"]);
 const PAGE_KEYS = new Set(["index", "kind_guess", "is_menu", "language", "section", "items", "hours", "contacts"]);
-const ITEM_KEYS = new Set(["name", "name_en", "price", "currency", "note", "tags"]);
+const ITEM_KEYS = new Set(["name", "name_en", "price", "currency", "note", "tags", "photo"]);
+const SHOP_CATEGORIES = new Set([
+  "street_food",
+  "drinks",
+  "restaurant",
+  "fruit",
+  "laundry",
+  "home_services",
+  "barber",
+  "other",
+]);
+const CATEGORY_LABELS = new Set([
+  "street_food",
+  "street food",
+  "drinks",
+  "restaurant",
+  "fruit",
+  "laundry",
+  "home_services",
+  "home services",
+  "barber",
+  "other",
+]);
 const CONTACT_KEYS = new Set([
   "phones",
   "line_id",
@@ -38,6 +60,26 @@ export type MenuItem = {
   note: string | null;
   nameEn?: string;
   tags?: string[];
+  photo?: number;
+};
+
+export type BookDeal = {
+  title: string;
+  provider: string | null;
+  discount: string | null;
+  conditions: string | null;
+};
+
+export type BookStyle = {
+  primary: string | null;
+  secondary: string | null;
+  font: string | null;
+  vibe: string | null;
+};
+
+export type BookLogo = {
+  index: number;
+  box: [number, number, number, number] | null;
 };
 
 export type PageContacts = {
@@ -112,7 +154,56 @@ export type BookRead = {
   tagline: string | null;
   shopName: string | null;
   colors: string[];
+  nameEn?: string | null;
+  deals?: BookDeal[];
+  style?: BookStyle | null;
+  logo?: BookLogo | null;
+  hero?: number | null;
+  category?: string | null;
+  maps?: string | null;
+  rich?: boolean;
 };
+
+export function cleanNameEn(value: string | null, section?: string | null): string | null {
+  if (!value) return null;
+  const key = value.trim().toLowerCase();
+  if (!key || CATEGORY_LABELS.has(key)) return null;
+  if (section && key === section.trim().toLowerCase()) return null;
+  return value.trim();
+}
+
+export function categoryFromOther(current: string, suggested: string | null): string | null {
+  if (current !== "other" || !suggested) return null;
+  const key = suggested.trim().toLowerCase();
+  if (!SHOP_CATEGORIES.has(key) || key === "other") return null;
+  return key;
+}
+
+export function validLogoBox(value: unknown): [number, number, number, number] | null {
+  if (!Array.isArray(value) || value.length !== 4) return null;
+  const nums: number[] = [];
+  for (const part of value) {
+    if (typeof part !== "number" || !Number.isFinite(part)) return null;
+    nums.push(part);
+  }
+  const x = nums[0] ?? 0;
+  const y = nums[1] ?? 0;
+  const w = nums[2] ?? 0;
+  const h = nums[3] ?? 0;
+  if (x < 0 || y < 0 || w <= 0 || h <= 0) return null;
+  if (x > 1 || y > 1 || x + w > 1 || y + h > 1) return null;
+  return [x, y, w, h];
+}
+
+export function logoOrHero(
+  logoIndex: number | null,
+  box: unknown,
+  hero: number | null,
+): { index: number | null; box: [number, number, number, number] | null } {
+  const valid = validLogoBox(box);
+  if (valid && logoIndex != null) return { index: logoIndex, box: valid };
+  return { index: hero, box: null };
+}
 
 export type SchemaFailure = { ok: false; reason: "invented_key" | "bad_shape" };
 
@@ -169,7 +260,12 @@ function parseItem(value: unknown): MenuItem | "bad" | "invented" {
   let nameEn: string | null = null;
   if (record.name_en !== undefined && record.name_en !== null && record.name_en !== "") {
     if (typeof record.name_en !== "string") return "bad";
-    nameEn = clip(record.name_en, 80);
+    nameEn = cleanNameEn(clip(record.name_en, 80));
+  }
+  let photo: number | null = null;
+  if (record.photo !== undefined && record.photo !== null) {
+    if (typeof record.photo !== "number" || !Number.isInteger(record.photo) || record.photo < 1) return "bad";
+    photo = record.photo;
   }
   const tags: string[] = [];
   if (record.tags !== undefined && record.tags !== null) {
@@ -184,6 +280,7 @@ function parseItem(value: unknown): MenuItem | "bad" | "invented" {
   const item: MenuItem = { name, price, currency, note };
   if (nameEn) item.nameEn = nameEn;
   if (tags.length > 0) item.tags = tags;
+  if (photo != null) item.photo = photo;
   return item;
 }
 
@@ -303,9 +400,251 @@ function fitItems(items: MenuItem[]): MenuItem[] {
   return next;
 }
 
+function hexOf(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
+  return match ? "#" + match[1].toUpperCase() : null;
+}
+
+function isRichRecord(record: Record<string, unknown>): boolean {
+  return "brand" in record || "style" in record || "menu" in record || "deals" in record || "photos" in record || "hero" in record || "info" in record;
+}
+
+function plainItem(item: MenuItem, section: string | null): MenuItem {
+  const nameEn = item.nameEn ? cleanNameEn(item.nameEn, section) : null;
+  const next: MenuItem = { name: item.name, price: item.price, currency: item.currency, note: item.note };
+  if (nameEn) next.nameEn = nameEn;
+  if (item.tags && item.tags.length > 0) next.tags = item.tags;
+  return next;
+}
+
+function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookRead } | SchemaFailure {
+  const top = new Set(["brand", "style", "menu", "deals", "info", "photos", "hero", "category"]);
+  if (unknownKey(record, top)) return { ok: false, reason: "invented_key" };
+  const brandKeys = new Set([
+    "name",
+    "name_en",
+    "tagline",
+    "phones",
+    "line_id",
+    "line_qr",
+    "whatsapp",
+    "facebook",
+    "instagram",
+    "tiktok",
+    "website",
+    "email",
+    "delivery",
+    "payment",
+    "logo",
+  ]);
+  let shopName: string | null = null;
+  let nameEn: string | null = null;
+  let tagline: string | null = null;
+  let contacts = emptyContacts();
+  let logoIndex: number | null = null;
+  let logoBox: unknown = null;
+  if (record.brand !== undefined && record.brand !== null) {
+    const brand = asRecord(record.brand);
+    if (!brand || unknownKey(brand, brandKeys)) return { ok: false, reason: brand ? "invented_key" : "bad_shape" };
+    shopName = clip(brand.name, 80);
+    nameEn = cleanNameEn(clip(brand.name_en, 80));
+    tagline = clip(brand.tagline, 140);
+    const parsedContacts = parseContacts({
+      phones: brand.phones,
+      line_id: brand.line_id,
+      line_qr: brand.line_qr,
+      whatsapp: brand.whatsapp,
+      facebook: brand.facebook,
+      instagram: brand.instagram,
+      tiktok: brand.tiktok,
+      website: brand.website,
+      email: brand.email,
+      delivery: brand.delivery,
+      payment: brand.payment,
+    });
+    if (parsedContacts === "invented") return { ok: false, reason: "invented_key" };
+    if (parsedContacts === "bad") return { ok: false, reason: "bad_shape" };
+    contacts = parsedContacts;
+    if (brand.logo !== undefined && brand.logo !== null) {
+      const logo = asRecord(brand.logo);
+      if (!logo || unknownKey(logo, new Set(["index", "box"]))) return { ok: false, reason: logo ? "invented_key" : "bad_shape" };
+      if (typeof logo.index !== "number" || !Number.isInteger(logo.index)) return { ok: false, reason: "bad_shape" };
+      logoIndex = logo.index;
+      logoBox = logo.box;
+    }
+  }
+  let style: BookStyle | null = null;
+  if (record.style !== undefined && record.style !== null) {
+    const row = asRecord(record.style);
+    if (!row || unknownKey(row, new Set(["primary", "secondary", "font", "vibe"]))) {
+      return { ok: false, reason: row ? "invented_key" : "bad_shape" };
+    }
+    style = { primary: hexOf(row.primary), secondary: hexOf(row.secondary), font: clip(row.font, 40), vibe: clip(row.vibe, 80) };
+  }
+  const groups: { category: string | null; items: MenuItem[] }[] = [];
+  if (record.menu !== undefined && record.menu !== null) {
+    if (!Array.isArray(record.menu)) return { ok: false, reason: "bad_shape" };
+    for (const group of record.menu) {
+      const row = asRecord(group);
+      if (!row || unknownKey(row, new Set(["category", "items"]))) return { ok: false, reason: row ? "invented_key" : "bad_shape" };
+      if (!Array.isArray(row.items)) return { ok: false, reason: "bad_shape" };
+      const category = clip(row.category, 80);
+      const items: MenuItem[] = [];
+      for (const item of row.items) {
+        const parsed = parseItem(item);
+        if (parsed === "invented") return { ok: false, reason: "invented_key" };
+        if (parsed === "bad") continue;
+        items.push(parsed);
+      }
+      groups.push({ category, items });
+    }
+  }
+  const deals: BookDeal[] = [];
+  if (record.deals !== undefined && record.deals !== null) {
+    if (!Array.isArray(record.deals)) return { ok: false, reason: "bad_shape" };
+    for (const deal of record.deals) {
+      const row = asRecord(deal);
+      if (!row || unknownKey(row, new Set(["title", "provider", "discount", "conditions"]))) {
+        return { ok: false, reason: row ? "invented_key" : "bad_shape" };
+      }
+      const title = clip(row.title, 80);
+      if (!title) continue;
+      deals.push({
+        title,
+        provider: clip(row.provider, 80),
+        discount: clip(row.discount, 40),
+        conditions: clip(row.conditions, 160),
+      });
+    }
+  }
+  let hours: BookHours | null = null;
+  let hoursText: string | null = null;
+  let address: string | null = null;
+  let maps: string | null = null;
+  let language: string | null = null;
+  if (record.info !== undefined && record.info !== null) {
+    const info = asRecord(record.info);
+    if (!info || unknownKey(info, new Set(["hours_text", "hours", "address", "maps", "language"]))) {
+      return { ok: false, reason: info ? "invented_key" : "bad_shape" };
+    }
+    hoursText = clip(info.hours_text, 160);
+    address = clip(info.address, 160);
+    maps = clip(info.maps, 200);
+    language = languageOf(info.language);
+    if (info.hours !== undefined && info.hours !== null) {
+      const hoursRecord = asRecord(info.hours);
+      if (!hoursRecord || unknownKey(hoursRecord, HOURS_KEYS)) return { ok: false, reason: "invented_key" };
+      if (hoursRecord.days !== undefined && !Array.isArray(hoursRecord.days)) return { ok: false, reason: "bad_shape" };
+      hours = parseHours(hoursRecord);
+    }
+  }
+  const photoKinds = new Map<number, string>();
+  if (record.photos !== undefined && record.photos !== null) {
+    if (!Array.isArray(record.photos)) return { ok: false, reason: "bad_shape" };
+    for (const photo of record.photos) {
+      const row = asRecord(photo);
+      if (!row || unknownKey(row, new Set(["index", "kind"]))) return { ok: false, reason: row ? "invented_key" : "bad_shape" };
+      if (typeof row.index !== "number" || !Number.isInteger(row.index) || row.index < 1) return { ok: false, reason: "bad_shape" };
+      const kind = clip(row.kind, 20);
+      if (kind) photoKinds.set(row.index, kind);
+    }
+  }
+  let hero: number | null = null;
+  if (record.hero !== undefined && record.hero !== null) {
+    if (typeof record.hero !== "number" || !Number.isInteger(record.hero)) return { ok: false, reason: "bad_shape" };
+    hero = record.hero;
+  }
+  let category: string | null = null;
+  if (record.category !== undefined && record.category !== null) {
+    if (typeof record.category !== "string") return { ok: false, reason: "bad_shape" };
+    const key = record.category.trim().toLowerCase();
+    if (SHOP_CATEGORIES.has(key)) category = key;
+  }
+  const logo = logoOrHero(logoIndex, logoBox, hero);
+  const indexes = new Set<number>(photoKinds.keys());
+  if (logo.index != null) indexes.add(logo.index);
+  if (hero != null) indexes.add(hero);
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (item.photo) indexes.add(item.photo);
+    }
+  }
+  if (indexes.size === 0) indexes.add(hero ?? 1);
+  const itemsByIndex = new Map<number, { section: string | null; items: MenuItem[] }>();
+  const loose: { section: string | null; items: MenuItem[] }[] = [];
+  for (const group of groups) {
+    const placed = new Map<number, MenuItem[]>();
+    const rest: MenuItem[] = [];
+    for (const item of group.items) {
+      const cleaned = plainItem(item, group.category);
+      if (item.photo && indexes.has(item.photo)) {
+        const list = placed.get(item.photo) ?? [];
+        list.push(cleaned);
+        placed.set(item.photo, list);
+      } else rest.push(cleaned);
+    }
+    for (const [index, list] of placed) {
+      const bucket = itemsByIndex.get(index) ?? { section: group.category, items: [] };
+      bucket.items.push(...list);
+      if (!bucket.section) bucket.section = group.category;
+      itemsByIndex.set(index, bucket);
+    }
+    if (rest.length > 0) loose.push({ section: group.category, items: rest });
+  }
+  const sorted = [...indexes].sort((a, b) => a - b);
+  const home = hero != null && indexes.has(hero) ? hero : sorted[0];
+  for (const group of loose) {
+    const bucket = itemsByIndex.get(home) ?? { section: group.section, items: [] };
+    bucket.items.push(...group.items);
+    if (!bucket.section) bucket.section = group.section;
+    itemsByIndex.set(home, bucket);
+  }
+  const contactIndex = home;
+  if (hoursText) contacts = { ...contacts, hoursText };
+  if (address) contacts = { ...contacts, address };
+  const pages: PageRead[] = sorted.map((index) => {
+    const bucket = itemsByIndex.get(index);
+    const kind = photoKinds.get(index) ?? null;
+    const isMenu = kind === "menu" || kind === "product";
+    return {
+      index,
+      kindGuess: kind,
+      isMenu,
+      language,
+      section: bucket?.section ?? null,
+      items: fitItems(bucket?.items ?? []),
+      hours: index === contactIndex ? hours : null,
+      contacts: index === contactIndex ? contacts : emptyContacts(),
+    };
+  });
+  const colors: string[] = [];
+  if (style?.primary) colors.push(style.primary);
+  if (style?.secondary && style.secondary !== style.primary) colors.push(style.secondary);
+  return {
+    ok: true,
+    read: {
+      pages,
+      shopLanguage: language,
+      tagline,
+      shopName,
+      colors,
+      nameEn,
+      deals,
+      style,
+      logo: logo.index != null ? { index: logo.index, box: logo.box } : null,
+      hero,
+      category,
+      maps,
+      rich: true,
+    },
+  };
+}
+
 export function parseBookRead(value: unknown): { ok: true; read: BookRead } | SchemaFailure {
   const record = asRecord(value);
   if (!record) return { ok: false, reason: "bad_shape" };
+  if (isRichRecord(record)) return parseRichBook(record);
   if (unknownKey(record, TOP_KEYS)) return { ok: false, reason: "invented_key" };
   if (!Array.isArray(record.pages)) return { ok: false, reason: "bad_shape" };
 

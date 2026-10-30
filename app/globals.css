@@ -185,6 +185,15 @@
   gap: 12px;
   text-align: center;
 }
+.book-theme { font-family: var(--book-font, inherit); }
+.book-hero {
+  width: 100%;
+  max-height: 42%;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.book-name-en { margin: 0; font-size: 0.95rem; }
 .book-logo {
   width: 96px;
   height: 96px;

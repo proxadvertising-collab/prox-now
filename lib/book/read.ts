@@ -120,6 +120,7 @@ export async function readBook(
   const taglines: string[] = [];
   const shopNames: string[] = [];
   const colorSets: string[][] = [];
+  const carried: { rich: BookRead | null } = { rich: null };
   const pass = await readChunked(images, limit, async (chunk) => {
     const indexes = chunk.map((image) => image.index);
     const result = await readMenu(
@@ -143,6 +144,7 @@ export async function readBook(
     if (parsed.read.tagline) taglines.push(parsed.read.tagline);
     if (parsed.read.shopName) shopNames.push(parsed.read.shopName);
     if (parsed.read.colors.length > 0 && colorSets.length === 0) colorSets.push(parsed.read.colors);
+    if (parsed.read.rich && !carried.rich) carried.rich = parsed.read;
     return { rows: parsed.read.pages, latencyMs: result.ms };
   });
 
@@ -162,11 +164,64 @@ export async function readBook(
       tagline: buildTagline(taglines),
       shopName: shopNames[0] ?? null,
       colors: colorSets[0] ?? [],
+      ...(carried.rich
+        ? {
+            nameEn: carried.rich.nameEn ?? null,
+            deals: carried.rich.deals ?? [],
+            style: carried.rich.style ?? null,
+            logo: carried.rich.logo ?? null,
+            hero: carried.rich.hero ?? null,
+            category: carried.rich.category ?? null,
+            maps: carried.rich.maps ?? null,
+            rich: true as const,
+          }
+        : {}),
     },
     model: modelOf(perPage),
     latencyMs: pass.chunks.reduce((sum, chunk) => sum + chunk.latencyMs, 0),
     calls: pass.calls,
     chunks: pass.chunks,
+    perPage,
+  };
+}
+
+/** One Muse call for a seed batch, then one shorter retry. Does not split the batch. */
+export async function readSeedBatch(
+  images: readonly IndexedImage[],
+  call: Call = callSparkImages,
+): Promise<BookPass> {
+  const indexes = images.map((image) => image.index);
+  const labeled = images.map((image) => ({ label: imageLabel(image.index), imageDataUrl: image.dataUrl }));
+  let result: SparkImagesResult;
+  let calls = 1;
+  try {
+    result = await call({ prompt: bookReadPrompt(indexes), images: labeled, maxOutputTokens: 8000 });
+  } catch (error) {
+    if (!(error instanceof MetaTruncated)) throw error;
+    calls = 2;
+    try {
+      result = await call({ prompt: bookReadPrompt(indexes, true), images: labeled, maxOutputTokens: 4000 });
+    } catch (again) {
+      if (again instanceof MetaTruncated) throw new Error("max_output_tokens");
+      throw again;
+    }
+  }
+  const parsed = parseBookRead(result.raw);
+  if (!parsed.ok) throw new MetaParseError(result.model, result.ms);
+  const perPage = new Map<number, PageMeta>();
+  const meta: PageMeta = {
+    model: result.model,
+    latencyMs: result.ms,
+    imagesInCall: images.length,
+    callId: result.callId,
+  };
+  for (const image of images) perPage.set(image.index, meta);
+  return {
+    read: parsed.read,
+    model: result.model,
+    latencyMs: result.ms,
+    calls,
+    chunks: [{ images: images.length, latencyMs: result.ms }],
     perPage,
   };
 }

@@ -1,5 +1,6 @@
 import { photoPublicUrl } from "../posts/source";
-import type { PageContacts } from "./schema";
+import { contrastRatio, MIN_CONTRAST } from "./palette";
+import { cleanNameEn, type PageContacts } from "./schema";
 
 export type BookLine = {
   name: string;
@@ -51,6 +52,11 @@ export type BookView = {
   ink: string | null;
   mood: "bold" | "elegant" | "playful" | "street" | null;
   logoUrl: string | null;
+  heroUrl: string | null;
+  font: string | null;
+  nameEn: string | null;
+  maps: string | null;
+  deals: { title: string; provider: string | null; discount: string | null; conditions: string | null }[];
   pages: BookPageView[];
   info: ShopInfo;
   reading: boolean;
@@ -253,6 +259,27 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     }
   }
   const logo = pages.find((page) => page.kind === "logo" && page.imageUrl);
+  let accentOut = accent && /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent.toUpperCase() : null;
+  let inkOut = ink && /^#[0-9A-Fa-f]{6}$/.test(ink) ? ink.toUpperCase() : null;
+  if (accentOut && inkOut && contrastRatio(accentOut, inkOut) < MIN_CONTRAST) {
+    accentOut = null;
+    inkOut = null;
+  }
+  const deals: BookView["deals"] = [];
+  if (Array.isArray(theme?.deals)) {
+    for (const item of theme.deals) {
+      const row = asRecord(item);
+      const title = text(row?.title, 80);
+      if (!title) continue;
+      deals.push({
+        title,
+        provider: text(row?.provider, 80),
+        discount: text(row?.discount, 40),
+        conditions: text(row?.conditions, 160),
+      });
+      if (deals.length >= 12) break;
+    }
+  }
   return {
     id,
     slug,
@@ -261,10 +288,15 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     tagline: text(book?.tagline, 140),
     hoursLabel: hoursLabel(book?.hours),
     swatches,
-    accent: accent && /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent.toUpperCase() : null,
-    ink: ink && /^#[0-9A-Fa-f]{6}$/.test(ink) ? ink.toUpperCase() : null,
+    accent: accentOut,
+    ink: inkOut,
     mood,
     logoUrl: logo?.imageUrl ?? null,
+    heroUrl: bookImageUrl(supabaseUrl, typeof theme?.heroPath === "string" ? theme.heroPath : null),
+    font: text(theme?.font, 40),
+    nameEn: cleanNameEn(text(theme?.nameEn, 80)),
+    maps: text(theme?.maps, 200),
+    deals,
     pages,
     info: mergeContacts(contactRows),
     reading: pages.some((page) => page.failed),

@@ -86,7 +86,8 @@ describe("book view", () => {
       "https://example.supabase.co",
     );
     expect(view?.name).toBe("Mala Mafia");
-    expect(view?.accent).toBe("#E23D28");
+    expect(view?.accent).toBeNull();
+    expect(view?.ink).toBeNull();
     expect(view?.logoUrl).toContain("/shop-book/shop-1/logo.jpg");
     expect(view?.pages[1]?.section).toBe("Skewers");
     expect(view?.pages[1]?.items).toEqual([{ name: "หม่าล่า", price: "40", note: "Mala beef" }]);

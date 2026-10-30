@@ -42,5 +42,11 @@ describe("tidy book cards", () => {
     expect(deck.filter((card) => card.type === "extra")).toHaveLength(2);
     expect(deck).toHaveLength(bookCardCount(menuPages.length, 2));
     expect(deck).toHaveLength(7);
+    const withDeals = buildDeck({
+      menuItems: [],
+      extras: [],
+      deals: [{ title: "10% off", provider: "SCB", discount: "10%", conditions: null }],
+    });
+    expect(withDeals.map((card) => card.type)).toEqual(["cover", "info", "deals"]);
   });
 });

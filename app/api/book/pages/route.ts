@@ -5,11 +5,11 @@ import { jpegDataUrl, metaJpeg, storedJpeg, StoredTooBig } from "../../../../lib
 import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from "../../../../lib/book/limits";
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
-import { readLogoFix, straightenLogo, themeFromBrand, type BrandTheme } from "../../../../lib/book/brand";
+import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReadable, type BrandTheme } from "../../../../lib/book/brand";
 import { improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
-import { detectFaces, readBook, type BookPass } from "../../../../lib/book/read";
-import { extractedOf, type PageRead } from "../../../../lib/book/schema";
+import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
+import { categoryFromOther, extractedOf, type PageRead } from "../../../../lib/book/schema";
 import { allowBook, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
 import { createClient } from "../../../../lib/supabase/server";
@@ -109,8 +109,19 @@ function shopOf(data: unknown): ShopRow | null {
   };
 }
 
-function describesMenu(name: string): boolean {
-  return /\bmenu\b/i.test(name);
+function fileKind(kind: string | null): UploadKind {
+  if (kind === "logo" || kind === "menu" || kind === "hours" || kind === "storefront") return kind;
+  if (kind === "product") return "menu";
+  return "extra";
+}
+
+function heroPathOf(groups: readonly Ingested[], hero: number | null): string | null {
+  if (hero == null) return null;
+  for (const group of groups) {
+    const found = group.stored.find((page) => page.index === hero);
+    if (found) return found.path;
+  }
+  return null;
 }
 
 function readFailure(error: unknown): string {
@@ -416,9 +427,26 @@ async function commitBook(input: {
   const hours = hoursFromOwner(existing?.hours) ? null : mergeHours(pageReads.map((page) => page.hours));
   const savedHours: BookHours | Record<string, never> | unknown = hours ?? existing?.hours ?? {};
   let theme: BookTheme | unknown = existing?.theme ?? {};
+  const richRead = groups.find((group) => group.read?.read.rich)?.read?.read ?? null;
+  const readable = richRead ? themeIfReadable(richRead.style?.primary ?? null, richRead.style?.secondary ?? null) : null;
   const branded = groups.find((group) => group.brand);
   const cover = groups.find((group) => (group.kind === "storefront" || group.kind === "logo") && group.stored[0]);
-  if (branded?.brand) {
+  if (readable && richRead) {
+    const base = themeFromBrand(null);
+    theme = {
+      ...base,
+      accent: readable.accent,
+      ink: readable.ink,
+      swatches: [readable.accent, readable.ink, base.swatches[2], base.swatches[3], base.swatches[4]],
+      colors: [readable.accent, readable.ink],
+      font: richRead.style?.font ?? null,
+      vibe: richRead.style?.vibe ?? null,
+      deals: richRead.deals ?? [],
+      maps: richRead.maps ?? null,
+      nameEn: richRead.nameEn ?? null,
+      heroPath: heroPathOf(groups, richRead.hero ?? null),
+    };
+  } else if (branded?.brand) {
     theme = branded.brand;
   } else if (cover?.stored[0]) {
     try {
@@ -459,6 +487,11 @@ async function commitBook(input: {
     await removePaths(service, uploaded);
     return json({ error: "upload_failed" }, 502);
   }
+  const nextCategory = categoryFromOther(
+    shop.category,
+    groups.find((group) => group.read?.read.category)?.read?.read.category ?? null,
+  );
+  if (nextCategory) await service.from("shops").update({ category: nextCategory }).eq("id", shop.id);
 
   const batchId = crypto.randomUUID();
   const nowRemoved = new Date().toISOString();
@@ -482,18 +515,24 @@ async function commitBook(input: {
   let extraCursor = livePages.filter((page) => page.kind === "extra" && page.status === "live").length;
   const rows = groups.flatMap((group) => {
     const kept = group.stored.filter((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip"));
-    const start = group.kind === "extra" ? extraCursor : menuCursor;
-    if (group.kind === "menu") menuCursor += kept.length;
-    if (group.kind === "extra") extraCursor += kept.length;
-    return kept.map((page, offset) => {
+    return kept.map((page) => {
       const meta = group.read?.perPage.get(page.index);
       const extracted =
         group.resting || group.upstream || !group.read ? {} : extractedOf(group.pageByIndex.get(page.index) ?? null);
+      const kind = group.read?.read.rich ? fileKind(group.pageByIndex.get(page.index)?.kindGuess ?? null) : group.kind;
+      let position = 0;
+      if (kind === "menu") {
+        position = menuCursor;
+        menuCursor += 1;
+      } else if (kind === "extra") {
+        position = extraCursor;
+        extraCursor += 1;
+      }
       return {
         id: page.id,
         shop_id: shop.id,
-        kind: group.kind,
-        position: group.kind === "menu" || group.kind === "extra" ? start + offset : 0,
+        kind,
+        position,
         image_path: page.path,
         width: page.width,
         height: page.height,
@@ -606,10 +645,23 @@ async function ingestSeed(
   let read: BookPass | null = null;
   let aiError: string | null = null;
   try {
-    if (flat.length > 0) read = await readBook(flat.map((item) => item.image));
+    if (flat.length > 0) read = await readSeedBatch(flat.map((item) => item.image));
   } catch (error) {
     aiError = readFailure(error);
     read = null;
+  }
+
+  const logo = read?.read.logo;
+  if (read?.read.rich && logo?.box && logo.index !== read.read.hero) {
+    const target = flat.find((item) => item.image.index === logo.index);
+    if (target) {
+      try {
+        const cropped = await cropFraction(target.image.original, logo.box);
+        target.image = { ...target.image, original: cropped };
+      } catch {
+        logo.box = null;
+      }
+    }
   }
 
   const storedByKind = new Map<UploadKind, StoredPage[]>();
@@ -647,16 +699,14 @@ async function ingestSeed(
   for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
   const hasLogo = flat.some((item) => item.kind === "logo");
   const colors = read?.read.colors ?? [];
-  const brand =
-    colors.length >= 2
+  const rich = Boolean(read?.read.rich);
+  const brand = rich
+    ? null
+    : colors.length >= 2
       ? themeFromBrand({ box: [0.1, 0.1, 0.9, 0.9], rotation: 0, colors: colors.slice(0, 3), mood: "bold" })
       : hasLogo
         ? themeFromBrand(null)
         : null;
-  const shopName = read?.read.shopName ?? null;
-  if (fresh && shop.name && describesMenu(shop.name) && shopName && !describesMenu(shopName)) {
-    await service.from("shops").update({ name: shopName }).eq("id", shop.id);
-  }
 
   const grouped: Ingested[] = [];
   let primary = true;

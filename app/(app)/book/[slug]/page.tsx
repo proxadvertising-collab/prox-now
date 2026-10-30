@@ -6,7 +6,7 @@ import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
 import { presentBook } from "@/lib/book/present";
-import { CoverCard, ExtraCard, InfoCard, MenuCard, buildDeck } from "./cards";
+import { CoverCard, DealsCard, ExtraCard, InfoCard, MenuCard, bookFontFamily, buildDeck } from "./cards";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
 
@@ -125,18 +125,22 @@ export default async function BookPage({
             : "font-black";
     const info = view.info;
     const hours = view.hoursLabel ?? info.hoursText?.value ?? null;
-    const mapUrl = mapHref(info.address?.value ?? null, point);
-    const cardStyle = { background: ink, color: accent };
+    const mapUrl =
+      view.maps && /^https?:\/\//i.test(view.maps) ? view.maps : mapHref(info.address?.value ?? null, point);
+    const cardStyle = { background: "var(--book-ink)", color: "var(--book-accent)", fontFamily: "var(--book-font)" };
+    const coverStyle = { background: "var(--book-accent)", color: "var(--book-ink)", fontFamily: "var(--book-font)" };
     const deck = buildDeck({
       menuItems: menuPages.flatMap((page) =>
         page.items.map((item) => ({
           name: item.name,
           nameEn: item.nameEn ?? null,
           price: item.price,
-          photo: null,
+          photo: page.imageUrl,
+          category: page.section,
         })),
       ),
       extras: extraPages.map((page) => page.id),
+      deals: view.deals,
     });
 
     return (
@@ -151,6 +155,14 @@ export default async function BookPage({
             </button>
           </form>
         ) : null}
+        <div
+          className="book-theme"
+          style={{
+            ["--book-accent" as string]: accent,
+            ["--book-ink" as string]: ink,
+            ["--book-font" as string]: bookFontFamily(view.font),
+          }}
+        >
         <BookSwiper>
           {deck.map((card) => {
             if (card.type === "cover") {
@@ -158,18 +170,32 @@ export default async function BookPage({
                 <CoverCard
                   key="cover"
                   name={view.name}
+                  nameEn={view.nameEn}
                   logoUrl={view.logoUrl}
+                  heroUrl={view.heroUrl}
                   tagline={view.tagline}
                   mood={mood}
-                  style={{ background: accent, color: ink }}
+                  style={coverStyle}
                 />
               );
             }
             if (card.type === "info") {
               return <InfoCard key="info" hours={hours} info={info} mapUrl={mapUrl} style={cardStyle} />;
             }
+            if (card.type === "deals") {
+              return <DealsCard key="deals" deals={card.deals} style={cardStyle} />;
+            }
             if (card.type === "menu") {
-              return <MenuCard key={"menu-" + card.index} index={card.index} total={card.total} items={card.items} style={cardStyle} />;
+              return (
+                <MenuCard
+                  key={"menu-" + card.index}
+                  index={card.index}
+                  total={card.total}
+                  items={card.items}
+                  category={card.category}
+                  style={cardStyle}
+                />
+              );
             }
             const page = extraPages.find((item) => item.id === card.id);
             if (!page || page.kind !== "extra") return null;
@@ -186,6 +212,7 @@ export default async function BookPage({
             );
           })}
         </BookSwiper>
+        </div>
         <BookAddPhotos
           shopId={shop?.id ?? key}
           shop={point}
