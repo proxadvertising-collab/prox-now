@@ -274,7 +274,8 @@ export default async function BookPage({
         {actions(shop?.id ?? key, view.slug, surface.heroUrl ?? view.pages.find((page) => page.imageUrl)?.imageUrl ?? null, claimMode)}
       </div>
     );
-  } catch {
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error) throw error;
     return (
       <div className="flex flex-col gap-3">
         <p className="text-body text-fg">{t("en", "book.empty")}</p>

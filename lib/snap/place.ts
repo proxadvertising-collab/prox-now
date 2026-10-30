@@ -206,7 +206,9 @@ export function blockingShops<T extends GateShop>(shops: readonly T[], name: str
     .filter(
       (shop) =>
         shop.distanceM <= POST_RADIUS_M &&
-        (namesCollide(name, shop.name) || (shop.nameLocal ? namesCollide(name, shop.nameLocal) : false)),
+        (namesCollide(name, shop.name) ||
+          (shop.nameLocal ? namesCollide(name, shop.nameLocal) : false) ||
+          namesCollide(shop.name, "New shop")),
     )
     .slice()
     .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id));

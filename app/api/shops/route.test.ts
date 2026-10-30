@@ -183,6 +183,30 @@ describe("POST /api/shops", () => {
     expect(rpc).not.toHaveBeenCalledWith("create_shop_from_snap", expect.anything());
   });
 
+  it("creates a different shop when the seeder says it is not the nearby one", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    rpc.mockImplementation(async (fn: string, args?: { p_name?: string }) => {
+      if (fn === "nearby_shops") {
+        return {
+          data: [{ id: "near-1", name: "New shop", name_local: null, distance_m: 12 }],
+          error: null,
+        };
+      }
+      if (fn === "set_shop_name") return { data: "New shop", error: null };
+      return { data: { id: "new-1", slug: "new-shop-abc", name: args?.p_name ?? "New shop" }, error: null };
+    });
+    const response = await post({ ...good, name: "New shop", force: true });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.shop.id).toBe("new-1");
+    expect(body.shop.name).toBe("New shop");
+    expect(rpc).toHaveBeenCalledWith(
+      "create_shop_from_snap",
+      expect.objectContaining({ p_name: expect.stringMatching(/^New shop /) }),
+    );
+    expect(rpc).toHaveBeenCalledWith("set_shop_name", { p_shop_id: "new-1", p_name: "New shop" });
+  });
+
   it("offers a nearby shop with the same name after folding case and accents", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
     rpc.mockImplementation(async (fn: string) => {

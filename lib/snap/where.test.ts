@@ -47,6 +47,9 @@ describe("desktop snap", () => {
     expect(camera).toContain("snap.retry");
     expect(camera).toContain("snap.where");
     expect(camera).not.toContain("Location is required for a shot.");
+    expect(camera).toContain("confirm.named");
+    expect(camera).toContain("confirm.different");
+    expect(camera).toContain("force");
     const book = readFileSync(resolve(process.cwd(), "components/book/BookBuilder.tsx"), "utf8");
     expect(book).toContain('accept="image/*"');
     expect(book).toContain("snap.where");

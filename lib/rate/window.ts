@@ -30,6 +30,8 @@ export function take(
 export const snapHits = new Map<string, Hit>();
 export const judgeHits = new Map<string, Hit>();
 export const bookHits = new Map<string, Hit>();
+export const resetHits = new Map<string, Hit>();
+export const RESET_IP_LIMIT = 10;
 
 export type RateBucket = "snap" | "judge" | "book";
 
@@ -42,6 +44,7 @@ export function resetRateWindows(): void {
   snapHits.clear();
   judgeHits.clear();
   bookHits.clear();
+  resetHits.clear();
 }
 
 export function clientIp(request: Request): string {
@@ -144,4 +147,9 @@ export async function allowJudge(
   read: RateRead = takeFromDatabase,
 ): Promise<boolean> {
   return consumeRate("judge", ["ip:" + ip], now, read);
+}
+
+/** In-memory only. A fresh-demo reset must not call the shared judge limiter or production. */
+export async function allowReset(ip: string, now = Date.now()): Promise<boolean> {
+  return take(resetHits, [{ key: "ip:" + ip, limit: RESET_IP_LIMIT }], now);
 }

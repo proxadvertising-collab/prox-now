@@ -237,24 +237,28 @@ export async function POST(request: Request) {
     nameLocal = acceptedLocal(nameLocal, seen.name, seen.nameLocal);
   }
 
-  const blocked = blockingShops(nearby, name);
-  if (blocked.length > 0) {
-    return NextResponse.json(
-      {
-        error: "shop_exists",
-        shops: blocked.map((shop) => ({
-          id: shop.id,
-          name: shop.name,
-          nameLocal: shop.nameLocal ?? null,
-          distanceM: shop.distanceM,
-        })),
-      },
-      { status: 409 },
-    );
+  const force = body.payload.force === true;
+  if (!force) {
+    const blocked = blockingShops(nearby, name);
+    if (blocked.length > 0) {
+      return NextResponse.json(
+        {
+          error: "shop_exists",
+          shops: blocked.map((shop) => ({
+            id: shop.id,
+            name: shop.name,
+            nameLocal: shop.nameLocal ?? null,
+            distanceM: shop.distanceM,
+          })),
+        },
+        { status: 409 },
+      );
+    }
   }
 
+  const createName = force ? distinctShopName(name) : name;
   const { data, error } = await supabase.rpc("create_shop_from_snap", {
-    p_name: name,
+    p_name: createName,
     p_name_local: nameLocal,
     p_category: category,
     p_lat: input.lat,
@@ -286,5 +290,14 @@ export async function POST(request: Request) {
   if (!row || typeof row.id !== "string" || typeof row.name !== "string") {
     return NextResponse.json({ error: "upstream" }, { status: 502 });
   }
+  if (force && row.name !== name) {
+    const renamed = await supabase.rpc("set_shop_name", { p_shop_id: row.id, p_name: name });
+    if (!renamed.error && typeof renamed.data === "string") row.name = renamed.data;
+  }
   return NextResponse.json({ shop: shopPayload(row) });
+}
+
+function distinctShopName(name: string): string {
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return (name.slice(0, 70).trim() + " " + suffix).slice(0, 80);
 }

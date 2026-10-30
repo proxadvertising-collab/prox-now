@@ -189,6 +189,10 @@ describe("new shop gates", () => {
     expect(blockingShops(apart, "cafe dawn").map((shop) => shop.id)).toEqual(["same"]);
     expect(blockingShops(apart, "Laundry").map((shop) => shop.id)).toEqual(["other"]);
     expect(blockingShops(apart, "Brand New")).toEqual([]);
+    expect(blockingShops([{ id: "fresh", name: "New shop", distanceM: 200 }], "Cafe").map((shop) => shop.id)).toEqual([
+      "fresh",
+    ]);
+    expect(blockingShops([{ id: "fresh", name: "New shop", distanceM: POST_RADIUS_M + 1 }], "Cafe")).toEqual([]);
     expect(blockingShops([{ id: "far", name: "Café Dawn", distanceM: POST_RADIUS_M + 20 }], "cafe dawn")).toEqual([]);
   });
 });

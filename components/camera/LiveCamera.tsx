@@ -138,6 +138,7 @@ export function LiveCamera({
   const [retryShot, setRetryShot] = useState(false);
   const [cameraClosed, setCameraClosed] = useState(false);
   const [askWhere, setAskWhere] = useState(false);
+  const [askJoin, setAskJoin] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
   const pinRef = useRef<{ lat: number; lng: number } | null>(null);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
@@ -432,8 +433,9 @@ export function LiveCamera({
     void save(picked);
   }
 
-  async function save(shop: Picked | null) {
+  async function save(shop: Picked | null, force = false) {
     if (busy) return;
+    setAskJoin(null);
     setBusy(true);
     setPhase("building");
     setNote("");
@@ -454,6 +456,7 @@ export function LiveCamera({
             lat: place.lat,
             lng: place.lng,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            force,
           }),
         });
         const body = (await response.json().catch(() => null)) as {
@@ -467,9 +470,11 @@ export function LiveCamera({
           setPhase("seed");
           return;
         }
-        const joined = response.status === 409 ? body?.shops?.[0] : undefined;
+        const joined = !force && response.status === 409 ? body?.shops?.[0] : undefined;
         if (joined?.id) {
-          target = { id: joined.id, slug: joined.slug || joined.id, name: joined.name || name };
+          setAskJoin({ id: joined.id, slug: joined.slug || joined.id, name: joined.name || name });
+          setPhase("seed");
+          return;
         } else {
           const id = body?.shop?.id ?? body?.id;
           if (!response.ok || !id) {
@@ -603,6 +608,21 @@ export function LiveCamera({
             setPhase("seed");
           }}
         />
+      ) : null}
+      {askJoin && phase === "seed" ? (
+        <div className="absolute inset-x-4 bottom-36 z-30 flex flex-col gap-2 rounded-lg bg-surface-1 p-3">
+          <p className="text-sm text-fg">{t(lang, "confirm.named", { name: askJoin.name })}</p>
+          <button type="button" className="btn-primary min-h-12" onClick={() => void save(askJoin)}>
+            {t(lang, "confirm.yes")}
+          </button>
+          <button
+            type="button"
+            className="inline-flex min-h-12 items-center justify-center rounded-md border border-line px-4 text-sm font-semibold text-fg"
+            onClick={() => void save(null, true)}
+          >
+            {t(lang, "confirm.different")}
+          </button>
+        </div>
       ) : null}
       {phase === "seed" ? (
         <SeedCoach
