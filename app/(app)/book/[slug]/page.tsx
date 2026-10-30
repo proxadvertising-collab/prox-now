@@ -58,7 +58,7 @@ export default async function BookPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ seeded?: string; lat?: string; lng?: string }>;
+  searchParams: Promise<{ seeded?: string; lat?: string; lng?: string; edit?: string }>;
 }) {
   await connection();
   const { slug } = await params;
@@ -103,6 +103,7 @@ export default async function BookPage({
     if (view?.slug && view.slug !== key) {
       const params = new URLSearchParams();
       if (seeded) params.set("seeded", "1");
+      if (query.edit === "name") params.set("edit", "name");
       if (here) {
         params.set("lat", String(here.lat));
         params.set("lng", String(here.lng));
@@ -224,6 +225,8 @@ export default async function BookPage({
                   style={coverStyle}
                   liveLabel={liveLabel}
                   claim={claim}
+                  shopId={shop?.id ?? null}
+                  editing={query.edit === "name"}
                 />
               );
             }

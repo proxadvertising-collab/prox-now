@@ -438,3 +438,37 @@ describe("verify claim migration", () => {
     expect(sql.toLowerCase()).not.toContain("service_role");
   });
 });
+
+describe("reset demo migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0016_reset_demo.sql"), "utf8");
+
+  it("clears only demo accounts at demo shops and lets the creator rename", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create or replace function public.reset_demo()");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("raise exception 'not_demo'");
+    expect(sql).toContain("from public.demo_accounts");
+    expect(sql).toContain("shops.is_demo = true");
+    expect(sql).toContain("delete from storage.objects");
+    expect(sql).toContain("bucket_id = 'post-photos'");
+    expect(sql).toContain("delete from public.coupons");
+    expect(sql).toContain("delete from public.posts");
+    expect(sql).toContain("text_translated");
+    expect(sql).toContain("select shops.id, v_owner, 'verified'");
+    expect(sql).not.toContain("delete from public.shops");
+    expect(sql).not.toContain("delete from public.profiles");
+    expect(sql).not.toContain("delete from auth.users");
+    expect(sql).toContain("revoke all on function public.reset_demo() from public, anon");
+    expect(sql).toContain("grant execute on function public.reset_demo() to authenticated");
+    expect(sql).not.toContain("grant execute on function public.reset_demo() to anon");
+    expect(sql).toContain("create or replace function public.set_shop_name(p_shop_id uuid, p_name text)");
+    expect(sql).toContain("v_creator is distinct from auth.uid()");
+    expect(sql).toContain("status = 'verified'");
+    expect(sql).toContain("raise exception 'not_allowed'");
+    expect(sql).toContain("set name = v_name");
+    expect(sql).not.toContain("set slug");
+    expect(sql).not.toContain("eyJ");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+  });
+});

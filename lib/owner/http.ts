@@ -12,6 +12,9 @@ export function ownerError(message: string): { error: string; status: number } {
   if (text.includes("not_signed_in")) return { error: "not_signed_in", status: 401 };
   if (text.includes("not_owner") || text.includes("not a verified owner")) return { error: "not_owner", status: 403 };
   if (text.includes("not_demo_shop") || text.includes("seed_post")) return { error: "not_allowed", status: 403 };
+  if (text.includes("not_demo")) return { error: "not_demo", status: 403 };
+  if (text.includes("not_allowed")) return { error: "not_allowed", status: 403 };
+  if (text.includes("bad_name")) return { error: "bad_name", status: 400 };
   if (text.includes("not_found") || text.includes("post not found") || text.includes("shop_not_found")) {
     return { error: "not_found", status: 404 };
   }

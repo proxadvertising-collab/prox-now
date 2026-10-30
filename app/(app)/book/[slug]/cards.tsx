@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { ShopName } from "../../../../components/book/ShopName";
 import { MenuBoard } from "../../../../components/menu/MenuBoard";
 import { bookText, displayName, parseHours } from "../../../../lib/book/display";
 import { t } from "../../../../lib/copy";
@@ -364,6 +365,8 @@ export function CoverCard({
   style,
   liveLabel = null,
   claim = null,
+  shopId = null,
+  editing = false,
 }: {
   name: string;
   nameEn?: string | null;
@@ -374,6 +377,8 @@ export function CoverCard({
   style: CSSProperties;
   liveLabel?: string | null;
   claim?: ReactNode;
+  shopId?: string | null;
+  editing?: boolean;
 }) {
   const shown = displayName(name);
   const shownEn = nameEn ? displayName(nameEn) : null;
@@ -393,10 +398,19 @@ export function CoverCard({
         {logoUrl ? (
           <img src={logoUrl} alt="" className="book-logo h-[72px] w-[72px] max-h-[72px] max-w-[72px]" width={72} height={72} />
         ) : null}
-        <h1 className={"book-shop-name text-[32px] font-extrabold " + mood}>{shown}</h1>
+        {shopId && (editing || name.trim() === "New shop") ? (
+          <ShopName
+            shopId={shopId}
+            name={shown}
+            editing={editing}
+            className={"book-shop-name text-[32px] font-extrabold " + mood}
+          />
+        ) : (
+          <h1 className={"book-shop-name text-[32px] font-extrabold " + mood}>{shown}</h1>
+        )}
         {shownEn ? <p className="book-name-en">{shownEn}</p> : null}
         {shownTag ? <p className="book-tags">{shownTag}</p> : null}
-        {name.trim() === "New shop" ? (
+        {!shopId && name.trim() === "New shop" ? (
           <a className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold underline" href="?edit=name">
             {t("en", "book.editName")}
           </a>

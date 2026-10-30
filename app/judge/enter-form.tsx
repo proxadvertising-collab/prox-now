@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { FRESH_DEMO_NEXT } from "@/lib/judge/reset";
 import { t } from "@/lib/copy";
 
 const primary = "btn-primary";
@@ -30,6 +31,11 @@ export function JudgeEnter() {
       });
       const payload = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null;
       if (response.ok && payload?.ok) {
+        if (url === "/api/judge/reset") {
+          setMessage(t("en", "judge.fresh"));
+          window.setTimeout(() => window.location.assign(FRESH_DEMO_NEXT), 600);
+          return;
+        }
         window.location.assign("/map");
         return;
       }
@@ -49,6 +55,10 @@ export function JudgeEnter() {
 
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-body text-fg">{t("en", "judge.freshOffer")}</p>
+      <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/reset")}>
+        {t("en", "judge.freshStart")}
+      </button>
       <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
         {t("en", "judge.shopper")}
       </button>
