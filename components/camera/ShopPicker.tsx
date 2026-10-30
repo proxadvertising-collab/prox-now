@@ -19,7 +19,7 @@ export function ShopPicker({
           {shop.name} · {Math.round(shop.distanceM)} m
         </button>
       ))}
-      <button type="button" className="mt-4" onClick={onNew}>
+      <button type="button" className="seed-picker-new mt-4" onClick={onNew}>
         {newLabel}
       </button>
     </div>

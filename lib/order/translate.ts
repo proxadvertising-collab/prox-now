@@ -91,7 +91,7 @@ function truncated(payload: unknown): boolean {
   return details?.reason === "max_output_tokens";
 }
 
-export async function translateNote(text: string, to: string): Promise<string> {
+async function askMeta(body: unknown): Promise<string> {
   const apiKey = process.env.META_API_KEY;
   if (!apiKey) throw new MetaKeyMissing();
   const controller = new AbortController();
@@ -107,7 +107,7 @@ export async function translateNote(text: string, to: string): Promise<string> {
           Authorization: "Bearer " + apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(translateRequestBody(text, to)),
+        body: JSON.stringify(body),
       });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw new MetaCallError("timeout");
@@ -125,10 +125,61 @@ export async function translateNote(text: string, to: string): Promise<string> {
       throw new MetaCallError("upstream");
     }
     if (truncated(payload)) throw new MetaTruncated(readModel(payload), 0);
-    const translation = stripFences(collectOutputText(payload));
-    if (!translation) throw new EmptyTranslation();
-    return translation;
+    return stripFences(collectOutputText(payload));
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function translateNote(text: string, to: string): Promise<string> {
+  const translation = await askMeta(translateRequestBody(text, to));
+  if (!translation) throw new EmptyTranslation();
+  return translation;
+}
+
+export const MAX_BATCH_ITEMS = 25;
+export const MAX_BATCH_ITEM_CHARS = 200;
+
+export function translateItemsBody(texts: readonly string[], to: string) {
+  const prompt =
+    "Translate each restaurant menu item name in this JSON array into " +
+    languageName(to) +
+    ". Return only a JSON array of strings with exactly " +
+    String(texts.length) +
+    " entries, in the same order. Keep brand names and numbers. Do not add notes or explain.\n\n" +
+    JSON.stringify(texts);
+  return {
+    model: "muse-spark-1.3",
+    reasoning: { effort: "low" as const },
+    max_output_tokens: 3000,
+    store: false,
+    input: [{ role: "user" as const, content: [{ type: "input_text" as const, text: prompt }] }],
+  };
+}
+
+export function parseItemTranslations(raw: string, count: number): string[] | null {
+  const text = raw.trim();
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start < 0 || end <= start) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length !== count) return null;
+  const out: string[] = [];
+  for (const item of parsed) {
+    if (typeof item !== "string") return null;
+    out.push(item.trim());
+  }
+  return out;
+}
+
+export async function translateItems(texts: readonly string[], to: string): Promise<string[]> {
+  const raw = await askMeta(translateItemsBody(texts, to));
+  const parsed = parseItemTranslations(raw, texts.length);
+  if (!parsed) throw new EmptyTranslation();
+  return parsed;
 }

@@ -140,3 +140,12 @@ export async function paletteFromImage(bytes: Buffer): Promise<BookTheme> {
     .toBuffer({ resolveWithObject: true });
   return themeFromSwatches(quantize(data, info.channels ?? 3));
 }
+
+/** Every book card sits on the same dark surface; the brand colour is only kept for text when it reads on it. */
+export const BOOK_CARD_BG = "#1E1611";
+export const BOOK_CARD_TEXT = "#FFF4E8";
+
+export function bookCardColors(accent: string | null | undefined, ink?: string | null): { ink: string; accent: string } {
+  const pick = [accent, ink].find((color) => color && parseHex(color) && contrastRatio(color, BOOK_CARD_BG) >= MIN_CONTRAST);
+  return { ink: BOOK_CARD_BG, accent: pick ? "#" + pick.trim().slice(1).toUpperCase() : BOOK_CARD_TEXT };
+}

@@ -18,9 +18,12 @@ describe("device language", () => {
     expect(titledItem("ชาเย็น", "Trà lạnh")).toEqual({ title: "Trà lạnh", subtitle: "ชาเย็น" });
     expect(titledItem("ชาเย็น", "ชาเย็น")).toEqual({ title: "ชาเย็น", subtitle: null });
     const tile = readFileSync(resolve(import.meta.dirname, "../../components/menu/ItemTile.tsx"), "utf8");
-    expect(tile).toContain("/api/order/translate");
-    expect(tile).toContain("menuCacheKey");
+    expect(tile).toContain("menuBatcher");
+    expect(tile).not.toContain("/api/order/translate");
     expect(tile).toContain("prox-lang");
+    const batch = readFileSync(resolve(import.meta.dirname, "./menuBatch.ts"), "utf8");
+    expect(batch).toContain("/api/order/translate");
+    expect(batch).toContain("menuCacheKey");
     const profile = readFileSync(resolve(import.meta.dirname, "../../app/(app)/me/page.tsx"), "utf8");
     expect(profile).toContain("LanguageSwitch");
     const staff = readFileSync(resolve(import.meta.dirname, "../../components/order/OrderUi.tsx"), "utf8");
@@ -29,7 +32,7 @@ describe("device language", () => {
     expect(staff).toContain("border-accent bg-transparent");
   });
 
-  it("shows light skeletons instead of a heading-only wallet or a black snap screen", () => {
+  it("shows dark skeletons and a dark fallback snap screen instead of a cream one", () => {
     const root = resolve(import.meta.dirname, "../..");
     const wallet = readFileSync(resolve(root, "components/wallet/WalletList.tsx"), "utf8");
     const camera = readFileSync(resolve(root, "components/camera/LiveCamera.tsx"), "utf8");
@@ -37,8 +40,13 @@ describe("device language", () => {
     expect(wallet).toContain("SkeletonCards");
     expect(owner).toContain("SkeletonCards");
     expect(camera).toContain("SkeletonCards");
-    expect(camera).toContain("bg-[#FFF8F1]");
-    expect(camera).toContain("bottom-[calc(5.5rem+env(safe-area-inset-bottom))]");
+    expect(camera).toContain("bg-[#12100C]");
+    expect(camera).not.toContain("bg-[#FFF8F1]");
+    expect(camera).toContain("bottom-[calc(7.5rem+env(safe-area-inset-bottom))]");
+    expect(camera).toContain("Array.from(event.target.files");
+    const skeleton = readFileSync(resolve(root, "components/ui/SkeletonCards.tsx"), "utf8");
+    expect(skeleton).toContain("animate-shimmer");
+    expect(skeleton).not.toContain("#FFF4E8");
     expect(camera).not.toContain("fixed inset-0 z-40 bg-black");
     expect(camera).toContain("border-accent bg-transparent");
   });

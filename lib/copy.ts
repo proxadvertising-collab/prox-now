@@ -342,6 +342,7 @@ const en = {
   "order.total": "Total",
   "order.forStaff": "For the staff",
   "order.translating": "Translating…",
+  "order.translateFail": "Couldn't translate. Check your connection and try again.",
   "order.unlisted": "Some prices not listed",
   "loc.deals": "Turn on location to see live deals around you.",
 } as const;
@@ -690,6 +691,7 @@ const th: { [K in keyof typeof en]: string } = {
   "order.total": "รวม",
   "order.forStaff": "สำหรับพนักงาน",
   "order.translating": "กำลังแปล…",
+  "order.translateFail": "แปลไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
   "order.unlisted": "บางราคาไม่ได้ระบุ",
   "loc.deals": "เปิดตำแหน่งเพื่อดูดีลสดรอบตัวคุณ",
 };

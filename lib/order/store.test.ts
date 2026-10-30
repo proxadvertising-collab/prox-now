@@ -44,6 +44,13 @@ describe("formatPrice", () => {
     expect(formatPrice(180)).toBe("฿180");
     expect(formatPrice("ask")).toBeNull();
   });
+
+  it("keeps two decimals for satang amounts", () => {
+    expect(formatPrice(17.95 * 2)).toBe("฿35.90");
+    expect(formatPrice("12.5")).toBe("฿12.50");
+    expect(formatPrice("฿18.95")).toBe("฿18.95");
+    expect(formatPrice(54.85)).toBe("฿54.85");
+  });
 });
 
 describe("item language", () => {

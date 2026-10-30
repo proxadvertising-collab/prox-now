@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { chooseShotPlace, frameSaveKey, postedSource } from "./where";
+import { afterPin, chooseShotPlace, frameSaveKey, postedSource } from "./where";
 
 describe("desktop snap", () => {
   it("uses GPS, then a pin or the shop, and the demo street for a demo account", () => {
@@ -61,5 +61,17 @@ describe("desktop snap", () => {
     const desk = readFileSync(resolve(process.cwd(), "components/owner/OwnerDesk.tsx"), "utf8");
     expect(desk).toContain("claim.cancel");
     expect(desk).toContain("/api/owner/claim/cancel");
+  });
+});
+
+describe("afterPin", () => {
+  it("reopens the shop picker when seed mode was waiting for a place", () => {
+    expect(afterPin({ pickerWaiting: true, uploadsWaiting: 0 })).toBe("picker");
+    expect(afterPin({ pickerWaiting: true, uploadsWaiting: 2 })).toBe("picker");
+  });
+
+  it("resumes plain uploads only when no picker is waiting", () => {
+    expect(afterPin({ pickerWaiting: false, uploadsWaiting: 1 })).toBe("uploads");
+    expect(afterPin({ pickerWaiting: false, uploadsWaiting: 0 })).toBe("none");
   });
 });

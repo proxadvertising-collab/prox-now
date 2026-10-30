@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { t } from "../../lib/copy";
-import { DEVICE_LANG_KEY, deviceLang, menuCacheKey, titledItem } from "../../lib/i18n/device";
+import { DEVICE_LANG_KEY, deviceLang, titledItem } from "../../lib/i18n/device";
+import { menuBatcher } from "../../lib/i18n/menuBatch";
 import {
   addLine,
   browserStorage,
@@ -78,23 +79,11 @@ export function ItemTile({
     const original = name.trim();
     if (base === "en") setTranslated(null);
     else {
-      const cached = window.localStorage.getItem(menuCacheKey(original, base));
-      if (cached) setTranslated(cached);
-      else {
-        void fetch("/api/order/translate", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text: original, to: base }),
-        })
-          .then(async (response) => (response.ok ? response.json() : null))
-          .then((body: { translation?: unknown } | null) => {
-            const text = body && typeof body.translation === "string" ? body.translation.trim() : "";
-            if (stop || !text) return;
-            window.localStorage.setItem(menuCacheKey(original, base), text);
-            setTranslated(text);
-          })
-          .catch(() => undefined);
-      }
+      void menuBatcher()
+        .request(original, base)
+        .then((text) => {
+          if (!stop && text) setTranslated(text);
+        });
     }
     const sync = () => {
       const state = readOrder(slug, browserStorage());

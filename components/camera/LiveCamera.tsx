@@ -21,7 +21,7 @@ import { RadarButton } from "@/components/ui/RadarButton";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
-import { chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
+import { afterPin, chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
 import { PinDrop } from "@/components/camera/PinDrop";
 import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
@@ -144,6 +144,7 @@ export function LiveCamera({
   const [busy, setBusy] = useState(false);
   const pinRef = useRef<{ lat: number; lng: number } | null>(null);
   const pendingUploads = useRef<File[] | null>(null);
+  const pendingPick = useRef(false);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
@@ -298,12 +299,16 @@ export function LiveCamera({
     return { lat: chosen.lat, lng: chosen.lng, accuracy: null, at: chosen.at, source: chosen.source };
   }
 
-  async function openPicker() {
+  async function openPicker(known?: CaptureFix) {
     if (busy) return;
     setNote("");
     setRetryShot(false);
-    const fix = await placeForShot();
-    if (!fix) return;
+    const fix = known ?? (await placeForShot());
+    if (!fix) {
+      pendingPick.current = true;
+      return;
+    }
+    pendingPick.current = false;
     fixRef.current = fix;
     let shops: NearShop[] = [];
     try {
@@ -387,10 +392,10 @@ export function LiveCamera({
     askCoach(shot, previous);
   }
 
-  async function keepUploads(files: readonly File[], fix: CaptureFix) {
+  async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {
     fixRef.current = fix;
     try {
-      if (phase === "seed") {
+      if (seed) {
         let next = shotsRef.current;
         for (const file of files) {
           if (!canAddShot(next.length)) break;
@@ -426,6 +431,10 @@ export function LiveCamera({
     const files = Array.from(list);
     setNote("");
     setRetryShot(false);
+    if (phase === "pick") {
+      pendingUploads.current = files;
+      return;
+    }
     const fix = await placeForShot();
     if (!fix) {
       pendingUploads.current = files;
@@ -435,29 +444,36 @@ export function LiveCamera({
     await keepUploads(files, fix);
   }
 
+  function resumeSeedUploads() {
+    const waiting = pendingUploads.current;
+    const fix = fixRef.current;
+    pendingUploads.current = null;
+    if (waiting && waiting.length > 0 && fix) void keepUploads(waiting, fix, true);
+  }
+
   function takePin(point: { lat: number; lng: number }) {
     pinRef.current = point;
     setAskWhere(false);
-    const waiting = pendingUploads.current;
-    pendingUploads.current = null;
-    if (!waiting || waiting.length === 0) return;
-    const at = new Date().toISOString();
     const chosen = chooseShotPlace({
-      at,
+      at: new Date().toISOString(),
       gps: null,
       demo: null,
       pin: point,
       shop: shopPointRef.current,
     });
     if (!chosen) return;
-    void keepUploads(waiting, {
-      lat: chosen.lat,
-      lng: chosen.lng,
-      accuracy: null,
-      at: chosen.at,
-      source: chosen.source,
-    });
+    const fix: CaptureFix = { lat: chosen.lat, lng: chosen.lng, accuracy: null, at: chosen.at, source: chosen.source };
+    const next = afterPin({ pickerWaiting: pendingPick.current, uploadsWaiting: pendingUploads.current?.length ?? 0 });
+    if (next === "picker") {
+      void openPicker(fix);
+      return;
+    }
+    if (next !== "uploads") return;
+    const waiting = pendingUploads.current ?? [];
+    pendingUploads.current = null;
+    void keepUploads(waiting, fix);
   }
+
 
   function removeShot(id: string) {
     const target = shotsRef.current.find((shot) => shot.id === id);
@@ -600,7 +616,7 @@ export function LiveCamera({
 
   if (liveFile) {
     return (
-      <div className="fixed inset-x-0 top-0 z-20 overflow-y-auto bg-bg p-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <div className="fixed inset-x-0 top-0 z-20 overflow-y-auto bg-bg p-4 bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
         <button type="button" className="mb-3 min-h-11 text-label font-semibold text-fg" onClick={() => setLiveFile(null)}>
           ← Camera
         </button>
@@ -618,14 +634,14 @@ export function LiveCamera({
   }
 
   return (
-    <div className="fixed inset-x-0 top-0 z-20 bg-[#FFF8F1] text-white bottom-[calc(5.5rem+env(safe-area-inset-bottom))]">
+    <div className="fixed inset-x-0 top-0 z-20 bg-[#12100C] text-white bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
       <video ref={videoRef} className={previewClass(facing)} autoPlay muted playsInline />
       {!cameraReady && !cameraClosed ? (
-        <div className="absolute inset-0 z-10 bg-[#FFF8F1] p-4">
+        <div className="absolute inset-0 z-10 bg-[#12100C] p-4 pt-20">
           <SkeletonCards />
         </div>
       ) : null}
-      <a className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl" href="/map" aria-label="Back">
+      <a className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back">
         ←
       </a>
       {phase === "camera" ? (
@@ -646,10 +662,12 @@ export function LiveCamera({
               shopPointRef.current = { lat: shop.lat, lng: shop.lng, name: shop.name };
             }
             setPhase("seed");
+            resumeSeedUploads();
           }}
           onNew={() => {
             setPicked(null);
             setPhase("seed");
+            resumeSeedUploads();
           }}
         />
       ) : null}
@@ -717,12 +735,12 @@ export function LiveCamera({
         multiple
         className="sr-only"
         onChange={(event) => {
-          const files = event.target.files;
+          const files = Array.from(event.target.files ?? []);
           event.target.value = "";
           void acceptUploads(files);
         }}
       />
-      {flipMode === "hide" ? null : (
+      {flipMode === "hide" || cameraClosed || !cameraReady ? null : (
         <button
           type="button"
           className="camera-flip"
@@ -739,12 +757,12 @@ export function LiveCamera({
         </button>
       )}
       {askWhere ? (
-        <div className="absolute inset-x-4 bottom-36 z-30 flex flex-col gap-2 rounded-lg bg-black/80 p-3">
+        <div className="absolute inset-x-4 bottom-8 z-30 flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-3 text-fg">
           <p className="text-body">{t(lang, "snap.where")}</p>
           {shopPointRef.current ? (
             <button
               type="button"
-              className="inline-flex min-h-11 items-center justify-center rounded-md bg-white px-3 text-sm font-semibold text-black"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-fg"
               onClick={() => {
                 const shop = shopPointRef.current;
                 if (!shop) return;
@@ -765,7 +783,7 @@ export function LiveCamera({
         <div className="absolute inset-x-4 bottom-32 z-20 flex flex-col items-center gap-2">
           <p className="text-center text-body">{note}</p>
           {retryShot ? (
-            <button type="button" className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-semibold text-black" onClick={() => void shoot()}>
+            <button type="button" className="inline-flex min-h-11 items-center rounded-md border border-border bg-surface-2 px-4 text-sm font-semibold text-fg" onClick={() => void shoot()}>
               {t(lang, "snap.retry")}
             </button>
           ) : null}

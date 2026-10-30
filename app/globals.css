@@ -204,7 +204,7 @@
 .book-cover-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.75), rgb(0 0 0 / 0.28));
+  background: linear-gradient(to top, rgb(18 16 12 / 0.92) 0%, rgb(18 16 12 / 0.7) 45%, rgb(18 16 12 / 0.45) 100%);
 }
 .book-cover-body {
   position: relative;
@@ -217,6 +217,7 @@
   gap: 10px;
   padding: 16px;
   text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
 }
 .book-live {
   display: inline-flex;
@@ -455,9 +456,10 @@
   z-index: 20;
   min-height: 2.75rem;
   transform: translateX(-50%);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: #fff;
-  color: #111;
+  background: rgb(30 22 17 / 0.9);
+  color: #fff;
   font-weight: 700;
   padding: 0 1rem;
 }
@@ -492,7 +494,6 @@
   text-align: center;
 }
 .seed-toast button,
-.seed-picker button,
 .seed-name button,
 .seed-done {
   min-height: 2.75rem;
@@ -501,6 +502,22 @@
   color: #111;
   font-weight: 700;
   padding: 0 1rem;
+}
+.seed-picker button {
+  min-height: 3rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-1);
+  color: #fff;
+  font-weight: 700;
+  padding: 0 1rem;
+  text-align: left;
+}
+.seed-picker button.seed-picker-new {
+  border-color: var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+  text-align: center;
 }
 .seed-done {
   position: absolute;
@@ -566,7 +583,9 @@
   width: min(92vw, 420px);
   aspect-ratio: 3 / 4;
   border-radius: 16px;
-  background: linear-gradient(90deg, #222, #333, #222);
+  background: linear-gradient(90deg, #1E1611 25%, #2E231B 50%, #1E1611 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
 }
 
 .book-cover-fallback {

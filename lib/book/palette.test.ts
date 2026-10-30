@@ -1,6 +1,8 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
+  BOOK_CARD_BG,
+  bookCardColors,
   MIN_CONTRAST,
   PROX_ACCENT,
   SURFACE,
@@ -53,5 +55,17 @@ describe("palette", () => {
     ]);
     expect(theme.accent).toBe(PROX_ACCENT);
     expect(contrastRatio(theme.accent, SURFACE)).toBeGreaterThanOrEqual(MIN_CONTRAST);
+  });
+});
+
+describe("bookCardColors", () => {
+  it("keeps every card on the dark surface, even for a light brand ink", () => {
+    expect(bookCardColors("#6B2B00", "#EAC98A")).toEqual({ ink: BOOK_CARD_BG, accent: "#EAC98A" });
+    expect(bookCardColors("#FF8A2B", "#1A120B").ink).toBe("#1E1611");
+  });
+
+  it("falls back to cream text when no brand colour reads on dark", () => {
+    expect(bookCardColors("#2A1A10", "#1A120B")).toEqual({ ink: BOOK_CARD_BG, accent: "#FFF4E8" });
+    expect(bookCardColors(null)).toEqual({ ink: BOOK_CARD_BG, accent: "#FFF4E8" });
   });
 });

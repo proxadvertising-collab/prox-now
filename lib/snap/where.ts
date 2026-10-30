@@ -41,3 +41,13 @@ export function frameSaveKey(error: unknown): "snap.frameEmpty" | "snap.frameEnc
   if (message === "jpeg" || message === "canvas") return "snap.frameEncode";
   return "snap.frameFail";
 }
+
+/**
+ * What to do after a pin drop. A shop picker that was waiting for a place wins (seed mode),
+ * and any uploads stay queued until a shop is chosen so they land in the seed flow.
+ */
+export function afterPin(input: { pickerWaiting: boolean; uploadsWaiting: number }): "picker" | "uploads" | "none" {
+  if (input.pickerWaiting) return "picker";
+  if (input.uploadsWaiting > 0) return "uploads";
+  return "none";
+}

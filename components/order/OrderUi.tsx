@@ -102,6 +102,7 @@ export function OrderSheet({
   onStaff,
   onDone,
   busy = false,
+  failed = false,
 }: {
   shopName: string;
   logoUrl: string | null;
@@ -120,6 +121,7 @@ export function OrderSheet({
   onStaff?: () => void;
   onDone?: () => void;
   busy?: boolean;
+  failed?: boolean;
 }) {
   if (staff) {
     return (
@@ -133,7 +135,13 @@ export function OrderSheet({
           ))}
         </div>
         {totalLabel ? <p className="mt-8 text-3xl font-bold">{t(lang, "order.total") + " " + totalLabel}</p> : null}
-        {translation ? <p className="mt-8 text-2xl">{translation}</p> : busy ? <p className="mt-8 text-sm">{t(lang, "order.translating")}</p> : null}
+        {translation ? (
+          <p className="mt-8 text-2xl">{translation}</p>
+        ) : busy ? (
+          <p className="mt-8 text-sm">{t(lang, "order.translating")}</p>
+        ) : failed ? (
+          <p className="mt-8 text-2xl">{note}</p>
+        ) : null}
         <button type="button" className="mt-10 h-14 rounded-2xl bg-[#1A120B] px-6 text-xl font-bold text-white" onClick={onDone}>
           {t(lang, "order.done")}
         </button>
@@ -200,6 +208,10 @@ export function OrderSheet({
         </div>
       ) : busy ? (
         <p className="text-[11px] text-fg-muted">{t(lang, "order.translating")}</p>
+      ) : failed ? (
+        <p role="alert" className="text-sm text-fg-muted">
+          {t(lang, "order.translateFail")}
+        </p>
       ) : null}
       <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
         {t(lang, "order.translate")}
@@ -254,6 +266,7 @@ export function OrderClient({
   const [speak, setSpeak] = useState("en");
   const [staff, setStaff] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const nextLang = navigator.language || "en";
@@ -276,16 +289,21 @@ export function OrderClient({
       return;
     }
     setBusy(true);
+    setFailed(false);
     try {
       const response = await fetch("/api/order/translate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: trimmed, to }),
       });
-      if (!response.ok) return;
-      const body = (await response.json()) as { translation?: unknown };
-      if (typeof body.translation !== "string" || !body.translation.trim()) return;
+      const body = response.ok ? ((await response.json().catch(() => null)) as { translation?: unknown } | null) : null;
+      if (!body || typeof body.translation !== "string" || !body.translation.trim()) {
+        setFailed(true);
+        return;
+      }
       commit(setOrderTranslation(readOrder(slug, browserStorage()), body.translation));
+    } catch {
+      setFailed(true);
     } finally {
       setBusy(false);
     }
@@ -312,6 +330,7 @@ export function OrderClient({
       lang={staff ? copyLang(shopStaffLanguage(shopCountry)) : lang}
       staff={staff}
       busy={busy}
+      failed={failed}
       onNote={(value) => commit(setOrderNote(state, value))}
       onTranslate={() => void translate(state.note)}
       onQty={(id, qty) => commit(setLineQty(state, id, qty))}

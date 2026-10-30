@@ -32,11 +32,15 @@ export function emptyOrder(): OrderState {
   return { lines: [], note: "", translation: "" };
 }
 
+function bahtLabel(amount: number): string {
+  const rounded = Math.round(amount * 100) / 100;
+  return "฿" + (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2));
+}
+
 export function formatPrice(value: string | number | null | undefined): string | null {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return null;
-    const rounded = Math.round(value * 100) / 100;
-    return "฿" + (Number.isInteger(rounded) ? String(rounded) : String(rounded));
+    return bahtLabel(value);
   }
   if (value == null) return null;
   let text = value.trim();
@@ -50,7 +54,7 @@ export function formatPrice(value: string | number | null | undefined): string |
   if (!match) return null;
   const amount = Number(match[0]);
   if (!Number.isFinite(amount)) return null;
-  return "฿" + (Number.isInteger(amount) ? String(amount) : String(amount));
+  return bahtLabel(amount);
 }
 
 export function priceAmount(value: string | null): number | null {

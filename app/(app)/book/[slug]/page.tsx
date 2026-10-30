@@ -7,6 +7,7 @@ import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
 import { presentBook } from "@/lib/book/present";
+import { bookCardColors } from "@/lib/book/palette";
 import { bookSurface } from "@/lib/book/cutouts";
 import {
   CoverCard,
@@ -142,8 +143,7 @@ export default async function BookPage({
 
     const menuPages = view.pages.filter((page) => page.kind === "menu");
     const extraPages = view.pages.filter((page) => page.kind === "extra");
-    const accent = view.accent ?? "#FF8A2B";
-    const ink = view.ink ?? "#1A120B";
+    const { accent, ink } = bookCardColors(view.accent ?? "#FF8A2B", view.ink);
     let liveLabel: string | null = null;
     if (shop?.id) {
       try {
