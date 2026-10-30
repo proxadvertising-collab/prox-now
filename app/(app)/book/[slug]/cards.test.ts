@@ -111,42 +111,42 @@ describe("tidy book cards", () => {
     expect(withDeals.map((card) => card.type)).toEqual(["cover", "deals", "info"]);
   });
 
-  it("renders one banner and a list when items share one photo", () => {
+  it("lists items with no cutout as text and never repeats a source photo", () => {
     const html = renderToStaticMarkup(
       createElement(MenuCard, {
         index: 0,
         total: 1,
         style: {},
         items: [
-          { name: "ชา", nameEn: "Tea", price: "40", photo: "/menu.jpg" },
-          { name: "กาแฟ", nameEn: "Coffee", price: null, photo: "/menu.jpg" },
+          { name: "ชา", nameEn: "Tea", price: "40", photo: "https://example.supabase.co/storage/v1/object/public/shop-book/shop/menu.jpg" },
+          { name: "กาแฟ", nameEn: "Coffee", price: null, photo: null },
         ],
       }),
     );
-    expect(html.match(/src="\/menu.jpg"/g)).toHaveLength(1);
-    expect(html).toContain("book-menu-banner");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("book-menu-banner");
     expect(html).toContain("book-menu-list");
-    expect(html).toContain("book-menu-name");
     expect(html).toContain("Tea");
-    expect(html).toContain("book-menu-price");
-    expect(html).not.toContain("book-tile");
+    expect(html).toContain("฿40");
+    expect(html).not.toContain("shop-book/shop/menu.jpg");
   });
 
-  it("keeps a photo tile when each item has its own photo", () => {
+  it("renders a cutout card beside a text row", () => {
+    const cutout = "https://example.supabase.co/storage/v1/object/public/shop-book/book-cutouts/shop/tea.webp";
     const html = renderToStaticMarkup(
       createElement(MenuCard, {
         index: 0,
         total: 1,
         style: {},
         items: [
-          { name: "Tea", nameEn: null, price: null, photo: "/a.jpg" },
-          { name: "Coffee", nameEn: null, price: null, photo: "/b.jpg" },
+          { name: "Tea", nameEn: "Tea", price: "40", photo: cutout },
+          { name: "Coffee", nameEn: "Coffee", price: null, photo: null },
         ],
       }),
     );
-    expect(html).toContain("book-tile");
-    expect(html).toContain('src="/a.jpg"');
-    expect(html).toContain('src="/b.jpg"');
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(html).toContain("book-cutout-photo");
+    expect(html).toContain("book-menu-row");
     expect(html).not.toContain("book-menu-banner");
   });
 

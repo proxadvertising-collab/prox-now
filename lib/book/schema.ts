@@ -4,7 +4,8 @@ import { buildTagline } from "./tagline";
 
 const TOP_KEYS = new Set(["pages", "shop_language", "tagline_facts", "shop_name", "colors"]);
 const PAGE_KEYS = new Set(["index", "kind_guess", "is_menu", "language", "section", "items", "hours", "contacts"]);
-const ITEM_KEYS = new Set(["name", "name_en", "price", "currency", "note", "tags", "photo"]);
+const ITEM_KEYS = new Set(["name", "name_en", "price", "currency", "note", "tags", "photo", "photo_box"]);
+const BOX_KEYS = new Set(["src_index", "x", "y", "w", "h"]);
 const SHOP_CATEGORIES = new Set([
   "street_food",
   "drinks",
@@ -61,6 +62,16 @@ export type MenuItem = {
   nameEn?: string;
   tags?: string[];
   photo?: number;
+  photoBox?: PhotoBox;
+  photoUrl?: string;
+};
+
+export type PhotoBox = {
+  srcIndex: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 };
 
 export type BookDeal = {
@@ -146,6 +157,7 @@ export type PageRead = {
   items: MenuItem[];
   hours: BookHours | null;
   contacts: PageContacts;
+  logoUrl?: string | null;
 };
 
 export type BookRead = {
@@ -159,6 +171,8 @@ export type BookRead = {
   style?: BookStyle | null;
   logo?: BookLogo | null;
   hero?: number | null;
+  heroBox?: PhotoBox | null;
+  heroCutout?: string | null;
   category?: string | null;
   maps?: string | null;
   rich?: boolean;
@@ -214,6 +228,30 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function unknownKey(record: Record<string, unknown>, allowed: Set<string>): boolean {
   return Object.keys(record).some((key) => !allowed.has(key));
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/** One box. Values clamp into 0–1. A box under 4% of width or height is dropped. */
+export function normalizePhotoBox(value: unknown): PhotoBox | null | "bad" {
+  if (Array.isArray(value)) return normalizePhotoBox(value[0]);
+  const row = asRecord(value);
+  if (!row) return "bad";
+  if (unknownKey(row, BOX_KEYS)) return "bad";
+  const src = row.src_index;
+  if (typeof src !== "number" || !Number.isInteger(src) || src < 1) return "bad";
+  const parts = [row.x, row.y, row.w, row.h];
+  if (parts.some((part) => typeof part !== "number" || !Number.isFinite(part))) return "bad";
+  const x = clamp01(row.x as number);
+  const y = clamp01(row.y as number);
+  let w = clamp01(row.w as number);
+  let h = clamp01(row.h as number);
+  if (x + w > 1) w = 1 - x;
+  if (y + h > 1) h = 1 - y;
+  if (w < 0.04 || h < 0.04) return null;
+  return { srcIndex: src, x, y, w, h };
 }
 
 function languageOf(value: unknown): string | null {
@@ -280,7 +318,14 @@ function parseItem(value: unknown): MenuItem | "bad" | "invented" {
   const item: MenuItem = { name, price, currency, note };
   if (nameEn) item.nameEn = nameEn;
   if (tags.length > 0) item.tags = tags;
+  let photoBox: PhotoBox | null = null;
+  if (record.photo_box !== undefined && record.photo_box !== null) {
+    const box = normalizePhotoBox(record.photo_box);
+    if (box === "bad") return "bad";
+    photoBox = box;
+  }
   if (photo != null) item.photo = photo;
+  if (photoBox) item.photoBox = photoBox;
   return item;
 }
 
@@ -415,11 +460,13 @@ function plainItem(item: MenuItem, section: string | null): MenuItem {
   const next: MenuItem = { name: item.name, price: item.price, currency: item.currency, note: item.note };
   if (nameEn) next.nameEn = nameEn;
   if (item.tags && item.tags.length > 0) next.tags = item.tags;
+  if (item.photoBox) next.photoBox = item.photoBox;
+  if (item.photoUrl) next.photoUrl = item.photoUrl;
   return next;
 }
 
 function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookRead } | SchemaFailure {
-  const top = new Set(["brand", "style", "menu", "deals", "info", "photos", "hero", "category"]);
+  const top = new Set(["brand", "style", "menu", "deals", "info", "photos", "hero", "hero_box", "category"]);
   if (unknownKey(record, top)) return { ok: false, reason: "invented_key" };
   const brandKeys = new Set([
     "name",
@@ -437,6 +484,7 @@ function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookR
     "delivery",
     "payment",
     "logo",
+    "logo_box",
   ]);
   let shopName: string | null = null;
   let nameEn: string | null = null;
@@ -473,6 +521,20 @@ function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookR
       logoIndex = logo.index;
       logoBox = logo.box;
     }
+    if (brand.logo_box !== undefined && brand.logo_box !== null) {
+      const box = normalizePhotoBox(brand.logo_box);
+      if (box === "bad") return { ok: false, reason: "bad_shape" };
+      if (box) {
+        logoIndex = box.srcIndex;
+        logoBox = [box.x, box.y, box.w, box.h];
+      }
+    }
+  }
+  let heroBox: PhotoBox | null = null;
+  if (record.hero_box !== undefined && record.hero_box !== null) {
+    const box = normalizePhotoBox(record.hero_box);
+    if (box === "bad") return { ok: false, reason: "bad_shape" };
+    heroBox = box;
   }
   let style: BookStyle | null = null;
   if (record.style !== undefined && record.style !== null) {
@@ -634,6 +696,7 @@ function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookR
       style,
       logo: logo.index != null ? { index: logo.index, box: logo.box } : null,
       hero,
+      heroBox,
       category,
       maps,
       rich: true,
@@ -740,10 +803,27 @@ export function extractedOf(page: PageRead | null): {
   contacts?: PageContacts & { page: number };
 } {
   if (!page) return { section: null, items: [] };
-  const body: { section: string | null; items: MenuItem[]; contacts?: PageContacts & { page: number } } = {
+  const body: {
+    section: string | null;
+    items: MenuItem[];
+    contacts?: PageContacts & { page: number };
+    logo_url?: string;
+  } = {
     section: page.section,
-    items: page.items,
+    items: page.items.map((item) => {
+      const stored: MenuItem = {
+        name: item.name,
+        price: item.price,
+        currency: item.currency,
+        note: item.note,
+      };
+      if (item.nameEn) stored.nameEn = item.nameEn;
+      if (item.tags && item.tags.length > 0) stored.tags = item.tags;
+      if (item.photoUrl) stored.photoUrl = item.photoUrl;
+      return stored;
+    }),
   };
+  if (page.logoUrl) body.logo_url = page.logoUrl;
   if (!contactsBlank(page.contacts)) body.contacts = { ...page.contacts, page: page.index };
   return body;
 }

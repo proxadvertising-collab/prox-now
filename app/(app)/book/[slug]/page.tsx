@@ -5,16 +5,15 @@ import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
 import { presentBook } from "@/lib/book/present";
+import { bookSurface } from "@/lib/book/cutouts";
 import {
   CoverCard,
   DealsCard,
   ExtraCard,
   InfoCard,
   MenuCard,
-  bookFallbackPhoto,
   bookFontFamily,
   buildDeck,
-  coverPhoto,
   liveLeftLabel,
 } from "./cards";
 import { hasShopEnv } from "@/lib/shops/source";
@@ -131,8 +130,7 @@ export default async function BookPage({
         liveLabel = null;
       }
     }
-    const photoFallback = bookFallbackPhoto(view.heroUrl, view.pages);
-    const hero = coverPhoto(view.heroUrl, view.pages);
+    const surface = bookSurface(view);
     const mood =
       view.mood === "elegant"
         ? "font-serif tracking-wide"
@@ -148,15 +146,7 @@ export default async function BookPage({
     const cardStyle = { background: "var(--book-ink)", color: "var(--book-accent)", fontFamily: "var(--book-font)" };
     const coverStyle = { color: "#fff", fontFamily: "var(--book-font)" };
     const deck = buildDeck({
-      menuItems: menuPages.flatMap((page) =>
-        page.items.map((item) => ({
-          name: item.name,
-          nameEn: item.nameEn ?? null,
-          price: item.price,
-          photo: page.imageUrl || photoFallback,
-          category: page.section,
-        })),
-      ),
+      menuItems: surface.menu,
       extras: extraPages.map((page) => page.id),
       deals: view.deals,
     });
@@ -189,8 +179,8 @@ export default async function BookPage({
                   key="cover"
                   name={view.name}
                   nameEn={view.nameEn}
-                  logoUrl={view.logoUrl}
-                  heroUrl={hero}
+                  logoUrl={surface.logoUrl}
+                  heroUrl={surface.heroUrl}
                   tagline={view.tagline}
                   mood={mood}
                   style={coverStyle}
@@ -222,7 +212,7 @@ export default async function BookPage({
               <ExtraCard
                 key={page.id}
                 title={kindLabel(page.kind)}
-                imageUrl={page.imageUrl || photoFallback}
+                imageUrl={null}
                 section={page.section}
                 items={page.items}
                 credit={page.credit}

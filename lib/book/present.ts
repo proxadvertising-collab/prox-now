@@ -8,6 +8,7 @@ export type BookLine = {
   note: string | null;
   nameEn?: string;
   tags?: string[];
+  photoUrl?: string;
 };
 
 export type BookPageView = {
@@ -86,7 +87,14 @@ function stringList(value: unknown, max: number): string[] {
   return found;
 }
 
-function menuLines(value: unknown): { section: string | null; items: BookLine[] } {
+function cutoutUrl(supabaseUrl: string, value: unknown): string | null {
+  const raw = text(value, 300);
+  if (!raw || !raw.includes("book-cutouts/")) return null;
+  if (raw.startsWith("http")) return raw;
+  return bookImageUrl(supabaseUrl, raw);
+}
+
+function menuLines(value: unknown, supabaseUrl: string): { section: string | null; items: BookLine[] } {
   const record = asRecord(value);
   if (!record || !Array.isArray(record.items)) return { section: null, items: [] };
   const items: BookLine[] = [];
@@ -99,6 +107,8 @@ function menuLines(value: unknown): { section: string | null; items: BookLine[] 
     if (nameEn) line.nameEn = nameEn;
     const tags = stringList(row?.tags, 4).filter((tag) => tag === "spicy" || tag === "vegan");
     if (tags.length > 0) line.tags = tags;
+    const photoUrl = cutoutUrl(supabaseUrl, row?.photo_url) ?? cutoutUrl(supabaseUrl, row?.photoUrl);
+    if (photoUrl) line.photoUrl = photoUrl;
     items.push(line);
   }
   return { section: text(record.section, 80), items };
@@ -235,6 +245,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
   const mood = moodText === "bold" || moodText === "elegant" || moodText === "playful" || moodText === "street" ? moodText : null;
   const pages: BookPageView[] = [];
   const contactRows: { page: number; contacts: PageContacts }[] = [];
+  let logoCutout: string | null = null;
   if (Array.isArray(root.pages)) {
     for (const item of root.pages) {
       const page = asRecord(item);
@@ -243,7 +254,10 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
       const kind = text(page.kind, 20);
       if (!pageId || !kind) continue;
       const position = typeof page.position === "number" && Number.isFinite(page.position) ? page.position : pages.length;
-      const menu = menuLines(page.extracted);
+      const menu = menuLines(page.extracted, supabaseUrl);
+      const extracted = asRecord(page.extracted);
+      const cutout = cutoutUrl(supabaseUrl, extracted?.logo_url);
+      if (cutout) logoCutout = cutout;
       const stored = readStoredContacts(page.extracted);
       if (stored) contactRows.push(stored);
       pages.push({
@@ -291,7 +305,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     accent: accentOut,
     ink: inkOut,
     mood,
-    logoUrl: logo?.imageUrl ?? null,
+    logoUrl: logoCutout ?? logo?.imageUrl ?? null,
     heroUrl: bookImageUrl(supabaseUrl, typeof theme?.heroPath === "string" ? theme.heroPath : null),
     font: text(theme?.font, 40),
     nameEn: cleanNameEn(text(theme?.nameEn, 80)),

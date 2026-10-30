@@ -9,6 +9,7 @@ import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReada
 import { improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
+import { applyCutouts } from "../../../../lib/book/cutouts";
 import { categoryFromOther, extractedOf, type PageRead } from "../../../../lib/book/schema";
 import { allowBook, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
@@ -116,8 +117,13 @@ function fileKind(kind: string | null): UploadKind {
 }
 
 function heroPathOf(groups: readonly Ingested[], hero: number | null): string | null {
+  for (const group of groups) {
+    const cutout = group.read?.read.heroCutout;
+    if (cutout) return cutout;
+  }
   if (hero == null) return null;
   for (const group of groups) {
+    if (group.kind === "menu" || group.kind === "extra" || group.kind === "hours") continue;
     const found = group.stored.find((page) => page.index === hero);
     if (found) return found.path;
   }
@@ -654,6 +660,7 @@ async function ingestSeed(
     read = null;
   }
 
+  const cutSources = flat.map((item) => ({ index: item.image.index, bytes: item.image.original }));
   const logo = read?.read.logo;
   if (read?.read.rich && logo?.box && logo.index !== read.read.hero) {
     const target = flat.find((item) => item.image.index === logo.index);
@@ -700,6 +707,31 @@ async function ingestSeed(
 
   const pageByIndex = new Map<number, PageRead>();
   for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
+  if (read && !aiError) {
+    try {
+      const logoBox = read.read.logo?.box;
+      const cut = await applyCutouts({
+        shopId: shop.id,
+        pages: read.read.pages,
+        sources: cutSources,
+        logo: read.read.logo?.index != null && logoBox ? { index: read.read.logo.index, box: logoBox } : null,
+        heroBox: read.read.heroBox ?? null,
+        heroIndex: read.read.hero ?? null,
+        upload: async (path, bytes) => {
+          const uploadedFile = await service.storage.from("shop-book").upload(path, bytes, {
+            contentType: "image/webp",
+            upsert: false,
+          });
+          if (uploadedFile.error) return null;
+          uploaded.push(path);
+          return path;
+        },
+      });
+      if (cut.heroCutout) read.read.heroCutout = cut.heroCutout;
+    } catch {
+      // The book still saves. Missing cutouts render as text rows.
+    }
+  }
   const hasLogo = flat.some((item) => item.kind === "logo");
   const colors = read?.read.colors ?? [];
   const rich = Boolean(read?.read.rich);

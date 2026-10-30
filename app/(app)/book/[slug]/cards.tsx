@@ -367,6 +367,18 @@ export function InfoCard({
   );
 }
 
+function cutoutPhoto(photo: string | null): string | null {
+  if (!photo || !photo.includes("book-cutouts/")) return null;
+  const at = photo.indexOf("/shop-book/");
+  if (at >= 0 && !photo.slice(at + "/shop-book/".length).startsWith("book-cutouts/")) return null;
+  return photo;
+}
+
+function baht(price: string): string {
+  if (/[฿$€£]|thb/i.test(price)) return price;
+  return "฿" + price;
+}
+
 export function MenuCard({
   index,
   total,
@@ -381,34 +393,37 @@ export function MenuCard({
   category?: string | null;
 }) {
   const title = category ?? t("en", "book.menuOf", { n: String(index + 1), total: String(total) });
-  const banner = menuBannerPhoto(items);
-  const tiles = menuUsesTiles(items);
+  const photos = items.filter((item) => cutoutPhoto(item.photo));
+  const text = items.filter((item) => !cutoutPhoto(item.photo));
   return (
     <article className="book-card" style={style}>
       <h2 className="book-card-title">{title}</h2>
       <div className="book-card-body">
-        {tiles ? (
-          <div className="book-tile-grid">
-            {items.map((item, itemIndex) => (
-              <MenuTile key={item.name + "-" + itemIndex} {...item} />
+        {photos.length > 0 ? (
+          <div className="book-cutout-grid">
+            {photos.map((item, itemIndex) => (
+              <div key={item.name + "-" + itemIndex} className="book-cutout">
+                <img src={cutoutPhoto(item.photo) ?? ""} alt="" className="book-cutout-photo" />
+                <p className="book-cutout-name">{item.name}</p>
+                {item.nameEn ? <p className="book-cutout-en">{item.nameEn}</p> : null}
+                {item.price ? <span className="book-menu-price">{baht(item.price)}</span> : null}
+              </div>
             ))}
           </div>
-        ) : (
-          <div className="book-menu-plain">
-            {banner ? <img src={banner} alt="" className="book-menu-banner" /> : null}
-            <div className="book-menu-list">
-              {items.map((item, itemIndex) => (
-                <div key={item.name + "-" + itemIndex} className="book-menu-row">
-                  <div className="book-menu-copy">
-                    <p className="book-menu-name">{item.name}</p>
-                    {item.nameEn ? <p className="book-menu-en">{item.nameEn}</p> : null}
-                  </div>
-                  {item.price ? <span className="book-menu-price">{item.price}</span> : null}
+        ) : null}
+        {text.length > 0 ? (
+          <div className="book-menu-list">
+            {text.map((item, itemIndex) => (
+              <div key={item.name + "-" + itemIndex} className="book-menu-row">
+                <div className="book-menu-copy">
+                  <p className="book-menu-name">{item.name}</p>
+                  {item.nameEn ? <p className="book-menu-en">{item.nameEn}</p> : null}
                 </div>
-              ))}
-            </div>
+                {item.price ? <span className="book-menu-price">{baht(item.price)}</span> : null}
+              </div>
+            ))}
           </div>
-        )}
+        ) : null}
       </div>
     </article>
   );
