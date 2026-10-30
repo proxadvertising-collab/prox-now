@@ -20,6 +20,7 @@ export function ClaimShop({
   seed?: { lat: number; lng: number; photoUrl: string | null } | null;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const [code, setCode] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -83,6 +84,7 @@ export function ClaimShop({
       form.set("lat", String(position.coords.latitude));
       form.set("lng", String(position.coords.longitude));
       form.set("live", "1");
+      form.set("code", code);
       form.set("image", image, "sign.jpg");
       const response = await fetch("/api/owner/claim", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as { status?: string } | null;
@@ -95,12 +97,47 @@ export function ClaimShop({
         window.location.assign("/owner");
         return;
       }
+      if (body?.status === "in_review") {
+        setNote(t("en", "claim.review"));
+        return;
+      }
       setNote(t("en", "claim.fail"));
     } catch {
       setNote(t("en", "claim.fail"));
     } finally {
       setBusy(false);
       setConfirm(false);
+    }
+  }
+
+  async function issueCode() {
+    setBusy(true);
+    setNote("");
+    try {
+      const response = await fetch("/api/owner/claim", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shopId }),
+      });
+      const body = (await response.json().catch(() => null)) as { status?: string; code?: string } | null;
+      if (response.status === 401) {
+        const next = window.location.pathname + window.location.search;
+        window.location.assign("/login?next=" + encodeURIComponent(next));
+        return;
+      }
+      if (body?.status === "verified") {
+        window.location.assign("/owner");
+        return;
+      }
+      if (!response.ok || !body?.code) {
+        setNote(t("en", "claim.fail"));
+        return;
+      }
+      setCode(body.code);
+    } catch {
+      setNote(t("en", "claim.fail"));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -112,9 +149,16 @@ export function ClaimShop({
       {confirm ? (
         <div className="flex flex-col gap-2 rounded-lg bg-surface-1 p-3">
           <p className="text-sm text-fg">{t("en", "claim.confirm", { name })}</p>
-          <button type="button" className={button} disabled={busy} onClick={() => void prove()}>
-            {t("en", "claim.yes")}
-          </button>
+          {code ? <p className="text-heading font-bold text-fg">{t("en", "claim.code", { code })}</p> : null}
+          {code ? (
+            <button type="button" className={button} disabled={busy} onClick={() => void prove()}>
+              {t("en", "claim.take")}
+            </button>
+          ) : (
+            <button type="button" className={button} disabled={busy} onClick={() => void issueCode()}>
+              {t("en", "claim.yes")}
+            </button>
+          )}
           <button type="button" className={quiet} disabled={busy} onClick={() => setConfirm(false)}>
             {t("en", "claim.notNow")}
           </button>

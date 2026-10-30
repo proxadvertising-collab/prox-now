@@ -175,7 +175,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
     }
   }
 
-  const pending = shops.find((shop) => shop.status === "pending");
+  const pending = shops.find((shop) => shop.status === "pending" || shop.status === "in_review");
 
   return (
     <div className="flex flex-col gap-3">
@@ -187,15 +187,20 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
           {shops.map((shop) => (
             <li key={shop.shopId} className="rounded-lg bg-surface-1 p-4">
               <p className="text-heading font-bold text-fg">{shop.name}</p>
-              {shop.status === "pending" ? (
-                <button
-                  type="button"
-                  className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-fg underline disabled:opacity-60"
-                  disabled={busy}
-                  onClick={() => void cancelClaim(shop.shopId)}
-                >
-                  {t("en", "claim.cancel")}
-                </button>
+              {shop.status === "pending" || shop.status === "in_review" ? (
+                <>
+                  {shop.status === "in_review" ? (
+                    <p className="mt-1 text-sm text-fg">{t("en", "claim.review")}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-fg underline disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => void cancelClaim(shop.shopId)}
+                  >
+                    {t("en", "claim.cancel")}
+                  </button>
+                </>
               ) : null}
             </li>
           ))}

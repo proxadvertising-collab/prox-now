@@ -422,20 +422,27 @@ describe("stack posts migration", () => {
 describe("verify claim migration", () => {
   const sql = readFileSync(resolve(root, "supabase/migrations/0015_verify_claim.sql"), "utf8");
 
-  it("verifies the caller only and leaves a taken shop alone", () => {
+  it("verifies only through service_role and returns the caller's own state", () => {
     expect(sql).toContain("Apply it only after the captain writes apply");
-    expect(sql).toContain("create or replace function public.verify_claim(p_shop_id uuid)");
+    expect(sql).toContain("create or replace function public.verify_claim(p_shop_id uuid, p_user_id uuid)");
     expect(sql).toContain("create or replace function public.claim_state(p_shop_id uuid)");
+    expect(sql).toContain("shop_owners_one_verified");
+    expect(sql).toContain("where status = 'verified'");
     expect(sql).toContain("security definer");
     expect(sql).toContain("set search_path = public");
-    expect(sql).toContain("status = 'verified'");
+    expect(sql).toContain("p_user_id");
     expect(sql).toContain("raise exception 'already_owned'");
     expect(sql).toContain("on conflict (shop_id, user_id)");
-    expect(sql).toContain("revoke all on function public.verify_claim(uuid) from public, anon");
-    expect(sql).toContain("grant execute on function public.verify_claim(uuid) to authenticated");
-    expect(sql).not.toContain("grant execute on function public.verify_claim(uuid) to anon");
+    expect(sql).toContain("user_id = auth.uid()");
+    expect(sql).not.toContain("return 'taken'");
+    expect(sql).toContain("revoke all on function public.claim_state(uuid) from public, anon");
+    expect(sql).toContain("grant execute on function public.claim_state(uuid) to authenticated");
+    expect(sql).not.toContain("grant execute on function public.claim_state(uuid) to anon");
+    expect(sql).toContain("revoke all on function public.verify_claim(uuid, uuid) from public, anon, authenticated");
+    expect(sql).toContain("grant execute on function public.verify_claim(uuid, uuid) to service_role");
+    expect(sql).not.toContain("grant execute on function public.verify_claim(uuid, uuid) to authenticated");
+    expect(sql).not.toContain("grant execute on function public.verify_claim(uuid, uuid) to anon");
     expect(sql).not.toContain("eyJ");
-    expect(sql.toLowerCase()).not.toContain("service_role");
   });
 });
 
@@ -449,13 +456,19 @@ describe("reset demo migration", () => {
     expect(sql).toContain("set search_path = public");
     expect(sql).toContain("raise exception 'not_demo'");
     expect(sql).toContain("from public.demo_accounts");
+    expect(sql).toContain("returns text[]");
     expect(sql).toContain("shops.is_demo = true");
-    expect(sql).toContain("delete from storage.objects");
-    expect(sql).toContain("bucket_id = 'post-photos'");
+    expect(sql).toContain("posts.is_demo = false");
+    expect(sql).toContain("coupons.post_id not in (select id from public.posts where is_demo)");
+    expect(sql).not.toContain("delete from storage.objects");
+    expect(sql).toContain("photo_path");
     expect(sql).toContain("delete from public.coupons");
     expect(sql).toContain("delete from public.posts");
     expect(sql).toContain("text_translated");
     expect(sql).toContain("select shops.id, v_owner, 'verified'");
+    expect(sql).toContain("'mala-mafia', 'Mala Mafia'");
+    expect(sql).toContain("user_id <> v_owner");
+    expect(sql).toContain("from public.demo_accounts where user_id = auth.uid()");
     expect(sql).not.toContain("delete from public.shops");
     expect(sql).not.toContain("delete from public.profiles");
     expect(sql).not.toContain("delete from auth.users");
@@ -483,7 +496,13 @@ describe("desktop loop migration", () => {
     expect(sql).toContain("create or replace function public.stamp_post_source(p_post_id uuid, p_source text)");
     expect(sql).toContain("author_id = auth.uid()");
     expect(sql).toContain("create or replace function public.cancel_claim(p_shop_id uuid)");
-    expect(sql).toContain("status = 'pending'");
+    expect(sql).toContain("claim_code text");
+    expect(sql).toContain("claim_expires_at timestamptz");
+    expect(sql).toContain("in_review");
+    expect(sql).toContain("interval '7 days'");
+    expect(sql).toContain("create or replace function public.open_claim(p_shop_id uuid, p_code text)");
+    expect(sql).toContain("create or replace function public.mark_claim_review(p_shop_id uuid)");
+    expect(sql).toContain("status in ('pending', 'in_review')");
     expect(sql).toContain("user_id = auth.uid()");
     expect(sql).toContain("security definer");
     expect(sql).toContain("revoke all on function public.cancel_claim(uuid) from public, anon");

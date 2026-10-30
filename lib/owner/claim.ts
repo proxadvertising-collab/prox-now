@@ -11,13 +11,33 @@ export function claimNear(here: LatLng | null, shop: LatLng | null): boolean {
   return haversineMeters(here, shop) <= CLAIM_RADIUS_M;
 }
 
-export function claimPrompt(shopName: string): string {
+const CLAIM_WORDS = ["mango", "river", "lime", "paper", "tiger", "coral", "bamboo", "pepper", "lotus", "amber"];
+
+/** A short word plus 4 digits. The owner writes this on paper for the live photo. */
+export function claimCode(random: () => number = Math.random): string {
+  const word = CLAIM_WORDS[Math.floor(random() * CLAIM_WORDS.length)] ?? "mango";
+  const digits = String(Math.floor(random() * 10000)).padStart(4, "0");
+  return word + " " + digits;
+}
+
+/** Quotes and line breaks cannot break out of the prompt string. */
+export function quoteShopName(name: string): string {
+  return name.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]/g, " ").slice(0, 80);
+}
+
+export function claimPrompt(shopName: string, code = ""): string {
+  const name = quoteShopName(shopName);
+  const safeCode = quoteShopName(code);
+  const codeLine = safeCode
+    ? 'The owner wrote the code "' + safeCode + '" on paper. That exact code must be readable in the photo. '
+    : "";
   return (
-    'Does this photo show the shop sign or storefront for "' +
-    shopName +
+    codeLine +
+    'Does this photo show the sign, menu, or register for "' +
+    name +
     '"? Reply with JSON only: {"match":true} or {"match":false}. ' +
-    "Match when that shop's name is readable, including another script or a short form. " +
-    "A different shop, or a photo that is not a sign or storefront, is false."
+    "Match when that shop's name is readable, including another script or a short form, and the written code matches. " +
+    "A different shop, a missing code, or a photo that is not a sign, menu, or register, is false."
   );
 }
 

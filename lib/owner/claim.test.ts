@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ClaimShop } from "../../components/owner/ClaimShop";
-import { claimButtonMode, claimMatch, claimNear, claimStatus, ownerToolsOpen } from "./claim";
+import { claimButtonMode, claimCode, claimMatch, claimNear, claimPrompt, claimStatus, ownerToolsOpen, quoteShopName } from "./claim";
 
 const shop = { lat: 12.5685, lng: 99.9575 };
 
@@ -19,6 +19,10 @@ describe("claim at the shop", () => {
     expect(claimStatus(true, true)).toBe("verified");
     expect(claimStatus(false, true)).toBe("pending");
     expect(claimStatus(true, false)).toBe("pending");
+    expect(quoteShopName('Say "hi"\n')).toBe('Say \\"hi\\" ');
+    expect(claimPrompt('Say "hi"', "mango 1234")).toContain('\\"hi\\"');
+    expect(claimPrompt("Mala", "mango 1234")).toContain("mango 1234");
+    expect(claimCode(() => 0)).toBe("mango 0000");
   });
 
   it("hides the button when someone else owns the shop, and says so for the owner", () => {
@@ -38,6 +42,8 @@ describe("claim at the shop", () => {
     expect(source).toContain("getUserMedia");
     expect(source).not.toContain('type="file"');
     expect(source).toContain("claim.fail");
+    expect(source).toContain("claim.code");
+    expect(source).toContain("claim.review");
   });
 
   it("unlocks owner tools only after a shop is verified", () => {
