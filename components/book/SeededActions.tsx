@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ClaimShop } from "@/components/owner/ClaimShop";
 import { t } from "@/lib/copy";
 import { bookBuildHref, nextShopNearby } from "@/lib/book/builder";
 
@@ -16,11 +17,15 @@ export function SeededActions({
   slug,
   lat,
   lng,
+  photoUrl = null,
+  claimMode = "claim",
 }: {
   shopId: string;
   slug: string;
   lat: number | null;
   lng: number | null;
+  photoUrl?: string | null;
+  claimMode?: "hidden" | "own" | "claim";
 }) {
   const [nextHref, setNextHref] = useState<string | null>(null);
 
@@ -47,6 +52,9 @@ export function SeededActions({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-body text-fg">{t("en", "book.saved")}</p>
+      {lat != null && lng != null ? (
+        <ClaimShop shopId={shopId} mode={claimMode} seed={{ lat, lng, photoUrl }} />
+      ) : null}
       {nextHref ? (
         <a className={primary} href={nextHref}>
           {t("en", "book.next")}

@@ -439,7 +439,13 @@ export function LiveCamera({
         setPhase("seed");
         return;
       }
-      window.location.assign(next);
+      const place = fixRef.current ?? shotsRef.current[0]?.fix;
+      const params = new URLSearchParams({ seeded: "1" });
+      if (place) {
+        params.set("lat", String(place.lat));
+        params.set("lng", String(place.lng));
+      }
+      window.location.assign(next + "?" + params.toString());
     } catch {
       setNote("The book did not save.");
       setPhase("seed");

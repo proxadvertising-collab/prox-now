@@ -363,6 +363,7 @@ export function CoverCard({
   mood,
   style,
   liveLabel = null,
+  claim = null,
 }: {
   name: string;
   nameEn?: string | null;
@@ -372,6 +373,7 @@ export function CoverCard({
   mood: string;
   style: CSSProperties;
   liveLabel?: string | null;
+  claim?: ReactNode;
 }) {
   const shown = displayName(name);
   const shownEn = nameEn ? displayName(nameEn) : null;
@@ -399,6 +401,7 @@ export function CoverCard({
             {t("en", "book.editName")}
           </a>
         ) : null}
+        {claim}
       </div>
     </article>
   );
@@ -428,11 +431,13 @@ export function InfoCard({
   info,
   mapUrl,
   style,
+  claim = null,
 }: {
   hours: string | null;
   info: ShopInfo;
   mapUrl: string | null;
   style: CSSProperties;
+  claim?: ReactNode;
 }) {
   const rows: ReactNode[] = [];
   const safeHours = bookText(hours);
@@ -488,6 +493,7 @@ export function InfoCard({
           )
         ) : null}
         {rows.length > 0 ? <div className="book-rows">{rows}</div> : safeHours ? null : <p className="book-row-label">Hours and location coming soon</p>}
+        {claim}
       </div>
     </article>
   );

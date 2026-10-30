@@ -418,3 +418,23 @@ describe("stack posts migration", () => {
     expect(sql).not.toContain("eyJ");
   });
 });
+
+describe("verify claim migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0015_verify_claim.sql"), "utf8");
+
+  it("verifies the caller only and leaves a taken shop alone", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create or replace function public.verify_claim(p_shop_id uuid)");
+    expect(sql).toContain("create or replace function public.claim_state(p_shop_id uuid)");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("status = 'verified'");
+    expect(sql).toContain("raise exception 'already_owned'");
+    expect(sql).toContain("on conflict (shop_id, user_id)");
+    expect(sql).toContain("revoke all on function public.verify_claim(uuid) from public, anon");
+    expect(sql).toContain("grant execute on function public.verify_claim(uuid) to authenticated");
+    expect(sql).not.toContain("grant execute on function public.verify_claim(uuid) to anon");
+    expect(sql).not.toContain("eyJ");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+  });
+});

@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { retryReading } from "@/lib/book/retry";
 import { BookAddPhotos } from "@/components/book/BookAddPhotos";
+import { ClaimShop } from "@/components/owner/ClaimShop";
 import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
@@ -67,9 +68,16 @@ export default async function BookPage({
   const lat = Number(query.lat);
   const lng = Number(query.lng);
   const here = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  const actions = (shopId: string, bookSlug: string) =>
+  const actions = (shopId: string, bookSlug: string, photoUrl: string | null = null, claimMode: "hidden" | "own" | "claim" = "claim") =>
     seeded ? (
-      <SeededActions shopId={shopId} slug={bookSlug} lat={here?.lat ?? null} lng={here?.lng ?? null} />
+      <SeededActions
+        shopId={shopId}
+        slug={bookSlug}
+        lat={here?.lat ?? null}
+        lng={here?.lng ?? null}
+        photoUrl={photoUrl}
+        claimMode={claimMode}
+      />
     ) : null;
   if (!hasShopEnv()) {
     return (
@@ -104,6 +112,17 @@ export default async function BookPage({
     }
     const name = view?.name ?? shop?.name ?? key;
     const point = shop?.lat != null && shop.lng != null ? { lat: shop.lat, lng: shop.lng } : null;
+    let claimMode: "hidden" | "own" | "claim" = "claim";
+    if (shop?.id) {
+      try {
+        const claimState = await supabase.rpc("claim_state", { p_shop_id: shop.id });
+        if (claimState.data === "own") claimMode = "own";
+        else if (claimState.data === "taken") claimMode = "hidden";
+      } catch {
+        claimMode = "claim";
+      }
+    }
+    const claim = shop ? <ClaimShop shopId={shop.id} mode={claimMode} /> : null;
 
     if (!view || view.pages.length === 0) {
       return (
@@ -204,11 +223,12 @@ export default async function BookPage({
                   mood={mood}
                   style={coverStyle}
                   liveLabel={liveLabel}
+                  claim={claim}
                 />
               );
             }
             if (card.type === "info") {
-              return <InfoCard key="info" hours={hours} info={info} mapUrl={mapUrl} style={cardStyle} />;
+              return <InfoCard key="info" hours={hours} info={info} mapUrl={mapUrl} style={cardStyle} claim={claim} />;
             }
             if (card.type === "deals") {
               return <DealsCard key="deals" deals={card.deals} style={cardStyle} />;
@@ -248,7 +268,7 @@ export default async function BookPage({
           shop={point}
           className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
         />
-        {actions(shop?.id ?? key, view.slug)}
+        {actions(shop?.id ?? key, view.slug, surface.heroUrl ?? view.pages.find((page) => page.imageUrl)?.imageUrl ?? null, claimMode)}
       </div>
     );
   } catch {

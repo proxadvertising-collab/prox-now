@@ -1,20 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ownerToolsOpen } from "../../../lib/owner/claim";
 import { POST as claim } from "./claim/route";
 import { POST as keep } from "./keep/route";
 import { POST as pass } from "./pass/route";
 import { POST as redeem } from "./redeem/route";
 
-const { getUser, rpc, remove } = vi.hoisted(() => ({
+const { getUser, rpc, remove, spark, shopRow } = vi.hoisted(() => ({
   getUser: vi.fn(),
   rpc: vi.fn(),
   remove: vi.fn(),
+  spark: vi.fn(),
+  shopRow: { current: null as { name: string; lat: number; lng: number } | null },
 }));
+
+vi.mock("../../../lib/ai/meta", async () => {
+  const actual = await vi.importActual<typeof import("../../../lib/ai/meta")>("../../../lib/ai/meta");
+  return { ...actual, callSpark: spark };
+});
 
 vi.mock("../../../lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser },
     rpc,
     storage: { from: () => ({ remove }) },
+    from: () => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        maybeSingle: async () => ({ data: shopRow.current, error: shopRow.current ? null : { message: "missing" } }),
+      };
+      return query;
+    },
   }),
 }));
 
@@ -35,6 +51,8 @@ describe("owner routes", () => {
     getUser.mockReset();
     rpc.mockReset();
     remove.mockReset();
+    spark.mockReset();
+    shopRow.current = null;
     getUser.mockResolvedValue({ data: { user: { id: "user" } }, error: null });
     remove.mockResolvedValue({ data: null, error: null });
   });
@@ -88,5 +106,56 @@ describe("owner routes", () => {
     const response = await call("/api/owner/claim", { shopId: "11111111-1111-4111-8111-111111111111" }, claim);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, status: "pending" });
+  });
+
+  function proof(lat: string, lng: string) {
+    const form = new FormData();
+    form.set("shopId", "11111111-1111-4111-8111-111111111111");
+    form.set("lat", lat);
+    form.set("lng", lng);
+    form.set("image", new File([Uint8Array.from([1, 2, 3])], "sign.jpg", { type: "image/jpeg" }));
+    return claim(
+      new Request("http://localhost/api/owner/claim", {
+        method: "POST",
+        body: form,
+      }),
+    );
+  }
+
+  it("verifies when the device is at the shop and the sign matches", async () => {
+    shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575 };
+    spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "verify_claim") return { data: "verified", error: null };
+      return { data: "pending", error: null };
+    });
+    const response = await proof("12.5685", "99.9575");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "verified" });
+    expect(rpc).toHaveBeenCalledWith("verify_claim", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
+    expect(ownerToolsOpen([{ status: "verified" }])).toBe(true);
+  });
+
+  it("stays pending when the device is far from the shop", async () => {
+    shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575 };
+    spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
+    rpc.mockResolvedValue({ data: "pending", error: null });
+    const response = await proof("13.8", "100.5");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "pending", reason: "not_confirmed" });
+    expect(spark).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("claim_shop", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
+    expect(ownerToolsOpen([{ status: "pending" }])).toBe(false);
+  });
+
+  it("stays pending when the photo is not this shop", async () => {
+    shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575 };
+    spark.mockResolvedValue({ raw: '{"match":false}', model: "muse-spark-1.3", ms: 1 });
+    rpc.mockResolvedValue({ data: "pending", error: null });
+    const response = await proof("12.5685", "99.9575");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "pending", reason: "not_confirmed" });
+    expect(rpc).toHaveBeenCalledWith("claim_shop", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
+    expect(rpc).not.toHaveBeenCalledWith("verify_claim", expect.anything());
   });
 });

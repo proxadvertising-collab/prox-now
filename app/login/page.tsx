@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/server";
+import { accountDest } from "@/lib/auth/signup";
 import { loginDest, serverSignedIn, signedInDest } from "./gate";
 import { LoginForm } from "./login-form";
 
@@ -46,7 +47,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <h1 className="text-title text-fg">Prox Now</h1>
         <p className="mt-2 text-body text-fg-muted">{t("en", "auth.tagline")}</p>
       </div>
-      <LoginForm dest={signedInDest(params.next)} failed={params.error === "auth"} />
+      <LoginForm dest={signedInDest(params.next)} createDest={accountDest(params.next)} failed={params.error === "auth"} />
       <a href="/judge" className="text-label font-semibold text-fg-muted no-underline">
         Judges: try the demo
       </a>

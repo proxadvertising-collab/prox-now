@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useState, type FormEvent } from "react";
+import { signUpFailure } from "@/lib/auth/signup";
 import { t } from "@/lib/copy";
 import {
   KEEP_STORAGE_KEY,
@@ -18,7 +19,7 @@ function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function LoginForm({ dest, failed }: { dest: string; failed: boolean }) {
+export function LoginForm({ dest, createDest, failed }: { dest: string; createDest: string; failed: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [keep, setKeep] = useState(true);
@@ -71,10 +72,49 @@ export function LoginForm({ dest, failed }: { dest: string; failed: boolean }) {
     }
   }
 
-  function onSubmit(event: FormEvent) {
+  async function signUp() {
+    const address = email.trim();
+    if (!isEmail(address)) {
+      setError(t("en", "auth.emailInvalid"));
+      return;
+    }
+    if (password.length < 6) {
+      setError(t("en", "auth.weak"));
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const supabase = createClient({ keepSignedIn: keep });
+      const { data, error: signError } = await supabase.auth.signUp({
+        email: address,
+        password,
+      });
+      if (signError) {
+        const problem = signUpFailure(signError.message);
+        const key = problem === "taken" ? "auth.taken" : problem === "weak" ? "auth.weak" : problem === "confirm" ? "auth.confirm" : "auth.failed";
+        setError(t("en", key));
+        return;
+      }
+      if (!data.session) {
+        setError(t("en", "auth.confirm"));
+        return;
+      }
+      window.location.assign(createDest);
+    } catch {
+      setError(t("en", "auth.failed"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
-    void signIn();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const mode = submitter instanceof HTMLButtonElement ? submitter.value : "sign-in";
+    if (mode === "sign-up") void signUp();
+    else void signIn();
   }
 
   return (
@@ -137,9 +177,14 @@ export function LoginForm({ dest, failed }: { dest: string; failed: boolean }) {
         />
         Keep me signed in
       </label>
-      <button type="submit" className={primary} disabled={loading}>
-        {t("en", "auth.signIn")}
-      </button>
+      <div className="flex gap-2">
+        <button type="submit" name="mode" value="sign-in" className={primary + " flex-1"} disabled={loading}>
+          {t("en", "auth.signIn")}
+        </button>
+        <button type="submit" name="mode" value="sign-up" className="inline-flex min-h-12 flex-1 items-center justify-center rounded-md border border-border px-4 text-base font-semibold text-fg" disabled={loading}>
+          {t("en", "auth.create")}
+        </button>
+      </div>
     </form>
   );
 }
