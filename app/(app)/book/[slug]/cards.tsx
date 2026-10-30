@@ -116,6 +116,27 @@ export function liveLeftLabel(expiresAt: string | null, now: number): string | n
   return "LIVE · " + hours + "h " + minutes + "m left";
 }
 
+/** One shared source becomes a single banner. Distinct photos stay tiles. */
+export function menuBannerPhoto(items: readonly { photo: string | null }[]): string | null {
+  if (items.length < 2) return null;
+  const photos = items.map((item) => item.photo).filter((photo): photo is string => Boolean(photo));
+  if (photos.length === 0) return null;
+  const first = photos[0];
+  return photos.every((photo) => photo === first) ? first : null;
+}
+
+export function menuUsesTiles(items: readonly { photo: string | null }[]): boolean {
+  if (menuBannerPhoto(items)) return false;
+  const photos = items.map((item) => item.photo).filter((photo): photo is string => Boolean(photo));
+  if (photos.length === 0) return false;
+  return new Set(photos).size === photos.length;
+}
+
+export function coverUsesPhoto(hero: string | null | undefined, logo: string | null | undefined): boolean {
+  if (!hero) return false;
+  return hero !== logo;
+}
+
 function Glyph({ name }: { name: string }) {
   const common = {
     className: "book-icon",
@@ -248,10 +269,11 @@ export function CoverCard({
   liveLabel?: string | null;
 }) {
   const letter = name.trim().slice(0, 1).toUpperCase() || "?";
+  const photoHero = coverUsesPhoto(heroUrl, logoUrl);
   return (
-    <article className="book-card book-cover" style={style}>
-      {heroUrl ? <img src={heroUrl} alt="" className="book-cover-photo" /> : null}
-      <div className="book-cover-scrim" />
+    <article className={"book-card book-cover" + (photoHero ? "" : " book-cover-fallback")} style={style}>
+      {photoHero && heroUrl ? <img src={heroUrl} alt="" className="book-cover-photo" /> : null}
+      {photoHero ? <div className="book-cover-scrim" /> : null}
       <div className="book-card-body book-cover-body">
         {liveLabel ? (
           <p className="book-live">
@@ -359,15 +381,34 @@ export function MenuCard({
   category?: string | null;
 }) {
   const title = category ?? t("en", "book.menuOf", { n: String(index + 1), total: String(total) });
+  const banner = menuBannerPhoto(items);
+  const tiles = menuUsesTiles(items);
   return (
     <article className="book-card" style={style}>
       <h2 className="book-card-title">{title}</h2>
       <div className="book-card-body">
-        <div className="book-tile-grid">
-          {items.map((item, itemIndex) => (
-            <MenuTile key={item.name + "-" + itemIndex} {...item} />
-          ))}
-        </div>
+        {tiles ? (
+          <div className="book-tile-grid">
+            {items.map((item, itemIndex) => (
+              <MenuTile key={item.name + "-" + itemIndex} {...item} />
+            ))}
+          </div>
+        ) : (
+          <div className="book-menu-plain">
+            {banner ? <img src={banner} alt="" className="book-menu-banner" /> : null}
+            <div className="book-menu-list">
+              {items.map((item, itemIndex) => (
+                <div key={item.name + "-" + itemIndex} className="book-menu-row">
+                  <div className="book-menu-copy">
+                    <p className="book-menu-name">{item.name}</p>
+                    {item.nameEn ? <p className="book-menu-en">{item.nameEn}</p> : null}
+                  </div>
+                  {item.price ? <span className="book-menu-price">{item.price}</span> : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );

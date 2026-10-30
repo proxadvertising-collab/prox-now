@@ -31,6 +31,13 @@ export function BookSwiper({ children }: { children: ReactNode }) {
 
   return (
     <div className="book-swiper" data-count={count} data-index={safe}>
+      <div className="book-progress" aria-label="Pages">
+        {cards.map((_, dot) => (
+          <span key={dot} className={"book-progress-seg" + (dot <= safe ? " book-progress-seg-on" : "")}>
+            <span />
+          </span>
+        ))}
+      </div>
       <div
         className="book-stack"
         onPointerDown={onPointerDown}
@@ -62,18 +69,6 @@ export function BookSwiper({ children }: { children: ReactNode }) {
         >
           ‹
         </button>
-        <div className="book-pages">
-          <div className="book-dots" aria-label="Pages">
-            {cards.map((_, dot) => (
-              <span
-                key={dot}
-                data-dot={dot === safe ? "current" : "rest"}
-                className={"book-dot" + (dot === safe ? " book-dot-current" : "")}
-              />
-            ))}
-          </div>
-          <p className="book-counter">{count === 0 ? "0 / 0" : safe + 1 + " / " + count}</p>
-        </div>
         <button
           type="button"
           aria-label="Next page"

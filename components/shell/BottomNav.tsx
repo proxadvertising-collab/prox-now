@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { RadarButton } from "@/components/ui/RadarButton";
 import { t, type CopyKey } from "@/lib/copy";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
@@ -80,14 +79,14 @@ function SnapCapture({
   raised?: boolean;
 }) {
   return (
-    <RadarButton
+    <Link
       href="/snap"
-      label="Take a photo"
-      current={current}
-      size={raised ? 72 : 64}
-      className={raised ? "absolute left-1/2 z-10 -translate-x-1/2" : undefined}
-      style={raised ? { bottom: "calc(100% - 16px)" } : undefined}
-    />
+      aria-label="Take a photo"
+      aria-current={current ? "page" : undefined}
+      className={"nav-cam" + (raised ? " nav-cam-raised" : "")}
+    >
+      <Glyph name="snap" />
+    </Link>
   );
 }
 
@@ -111,12 +110,7 @@ function ItemLink({
       aria-current={current ? "page" : undefined}
     >
       <Glyph name={icon} />
-      <span className="text-caption font-semibold leading-none">{t("en", label)}</span>
-      <span
-        className={
-          "h-[3px] w-[3px] rounded-full " + (current ? "bg-accent" : "bg-transparent")
-        }
-      />
+      <span className="nav-label">{t("en", label)}</span>
     </Link>
   );
 }
@@ -143,20 +137,20 @@ export function BottomNav() {
               label={slot.label}
               icon={slot.icon}
               current={current}
-              className={rowLink + " " + (current ? "text-accent" : "text-fg-muted")}
+                            className={rowLink + " nav-item"}
             />
           );
         })}
       </nav>
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 bg-surface-2 pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="nav-shell fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] md:hidden"
         aria-label="Primary"
       >
-        <div className="relative mx-auto flex h-16 max-w-[480px] items-center justify-between border-t border-border px-2">
+        <div className="relative mx-auto flex h-[84px] max-w-[480px] items-center justify-between px-2">
           {SLOTS.map((slot) => {
             const current = isCurrent(pathname, slot.href);
             if (slot.icon === "snap") {
-              return <div key={slot.href} className="w-[72px] shrink-0" />;
+              return <div key={slot.href} className="nav-slot" />;
             }
             return (
               <ItemLink
@@ -165,7 +159,7 @@ export function BottomNav() {
                 label={slot.label}
                 icon={slot.icon}
                 current={current}
-                className={rowLink + " " + (current ? "text-accent" : "text-fg-muted")}
+                              className={rowLink + " nav-item"}
               />
             );
           })}

@@ -234,3 +234,11 @@
     transition: none;
   }
 }
+
+.prox-map .maplibregl-ctrl-attrib {
+  font-size: 10px;
+  opacity: 0.6;
+}
+.prox-map .maplibregl-ctrl-bottom-left {
+  bottom: 10.5rem;
+}

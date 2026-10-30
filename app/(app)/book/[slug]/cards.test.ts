@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   CoverCard,
+  MenuCard,
   MenuTile,
   bookCardCount,
   bookFallbackPhoto,
@@ -108,5 +109,89 @@ describe("tidy book cards", () => {
       deals: [{ title: "10% off", provider: "SCB", discount: "10%", conditions: null }],
     });
     expect(withDeals.map((card) => card.type)).toEqual(["cover", "deals", "info"]);
+  });
+
+  it("renders one banner and a list when items share one photo", () => {
+    const html = renderToStaticMarkup(
+      createElement(MenuCard, {
+        index: 0,
+        total: 1,
+        style: {},
+        items: [
+          { name: "ชา", nameEn: "Tea", price: "40", photo: "/menu.jpg" },
+          { name: "กาแฟ", nameEn: "Coffee", price: null, photo: "/menu.jpg" },
+        ],
+      }),
+    );
+    expect(html.match(/src="\/menu.jpg"/g)).toHaveLength(1);
+    expect(html).toContain("book-menu-banner");
+    expect(html).toContain("book-menu-list");
+    expect(html).toContain("book-menu-name");
+    expect(html).toContain("Tea");
+    expect(html).toContain("book-menu-price");
+    expect(html).not.toContain("book-tile");
+  });
+
+  it("keeps a photo tile when each item has its own photo", () => {
+    const html = renderToStaticMarkup(
+      createElement(MenuCard, {
+        index: 0,
+        total: 1,
+        style: {},
+        items: [
+          { name: "Tea", nameEn: null, price: null, photo: "/a.jpg" },
+          { name: "Coffee", nameEn: null, price: null, photo: "/b.jpg" },
+        ],
+      }),
+    );
+    expect(html).toContain("book-tile");
+    expect(html).toContain('src="/a.jpg"');
+    expect(html).toContain('src="/b.jpg"');
+    expect(html).not.toContain("book-menu-banner");
+  });
+
+  it("uses a gradient when the hero is missing or is the logo", () => {
+    const photo = renderToStaticMarkup(
+      createElement(CoverCard, {
+        name: "Cafe",
+        logoUrl: "/logo.jpg",
+        heroUrl: "/hero.jpg",
+        tagline: "Coffee",
+        mood: "",
+        style: {},
+      }),
+    );
+    expect(photo).toContain("book-cover-photo");
+    expect(photo).toContain('src="/hero.jpg"');
+    expect(photo).not.toContain("book-cover-fallback");
+
+    const missing = renderToStaticMarkup(
+      createElement(CoverCard, {
+        name: "Cafe",
+        logoUrl: "/logo.jpg",
+        heroUrl: null,
+        tagline: "Coffee",
+        mood: "",
+        style: {},
+      }),
+    );
+    expect(missing).toContain("book-cover-fallback");
+    expect(missing).not.toContain("book-cover-photo");
+    expect(missing).toContain("book-logo");
+    expect(missing).toContain('src="/logo.jpg"');
+
+    const same = renderToStaticMarkup(
+      createElement(CoverCard, {
+        name: "Cafe",
+        logoUrl: "/logo.jpg",
+        heroUrl: "/logo.jpg",
+        tagline: null,
+        mood: "",
+        style: {},
+      }),
+    );
+    expect(same).toContain("book-cover-fallback");
+    expect(same).not.toContain("book-cover-photo");
+    expect(same.match(/src="\/logo.jpg"/g)).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDarkOverrides, DARK_OVERRIDES, MAP_DEFAULTS, STYLE_URL } from "./style";
+import { applyDarkOverrides, DARK_OVERRIDES, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "./style";
 
 describe("map style", () => {
   it("uses the OpenFreeMap dark style and the demo camera", () => {
@@ -9,6 +9,7 @@ describe("map style", () => {
     expect(MAP_DEFAULTS.minZoom).toBe(13);
     expect(MAP_DEFAULTS.maxZoom).toBe(19);
     expect(MAP_DEFAULTS.pitch).toBe(0);
+    expect(MAP_BRIGHTNESS).toBe(0.85);
   });
 
   it("paints only layers the style actually has", () => {

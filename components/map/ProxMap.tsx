@@ -15,7 +15,7 @@ import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shop
 import { phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, type LatLng } from "@/lib/geo";
 import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
-import { applyDarkOverrides, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
+import { applyDarkOverrides, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import { newestLivePost, pinSheetContent } from "@/lib/map/pin-sheet";
 import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
 import { PhotoStack } from "./PhotoStack";
@@ -345,6 +345,7 @@ export function ProxMap({
       dragRotate: false,
       pitchWithRotate: false,
     });
+    map.getCanvas().style.filter = "brightness(" + MAP_BRIGHTNESS + ")";
     map.touchZoomRotate.disableRotation();
     map.touchPitch.disable();
     map.addControl(new AttributionControl({ compact: true }), "bottom-left");
@@ -594,14 +595,12 @@ export function ProxMap({
   return (
     <div tabIndex={-1} className="prox-map relative h-full w-full outline-none" data-card={sheet ? "open" : "closed"} role="region" aria-label={t("en", "nav.map")}>
       <div ref={containerRef} className="h-full w-full bg-bg" />
-      <div className="absolute left-3 top-3 z-10 flex max-w-[min(100%-1.5rem,18rem)] flex-col items-start gap-2">
-        <button
-          type="button"
-          className="inline-flex min-h-11 items-center rounded-full bg-accent px-4 text-label font-semibold text-accent-ink shadow-card"
-          onClick={() => setAskOpen(true)}
-        >
+      <div className="absolute left-3 top-3 z-10">
+        <button type="button" className="map-ask" onClick={() => setAskOpen(true)}>
           Ask
         </button>
+      </div>
+      <div className="map-sheet">
         {!fixtures &&
         showExploreChip({
           demoSession,
@@ -610,7 +609,7 @@ export function ProxMap({
         }) ? (
           <button
             type="button"
-            className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 text-left text-label font-semibold text-accent-ink shadow-card"
+            className="map-sheet-title"
             onClick={() => {
               document.cookie = demoSessionCookie();
               const map = mapRef.current;
@@ -635,23 +634,15 @@ export function ProxMap({
               })();
             }}
           >
-            {t("en", "demo.chip")}
+            Nothing live near you yet
           </button>
         ) : null}
-        <button
-          type="button"
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-surface-1 px-3 text-label font-semibold text-fg no-underline shadow-card disabled:opacity-60"
-          disabled={locBusy}
-          onClick={useMyLocation}
-        >
-          {t("en", "loc.ask")}
-        </button>
-        <p
-          role={locProblem ? "alert" : "status"}
-          className="min-h-6 rounded-md bg-surface-1 px-2 py-1 text-caption text-fg"
-        >
+        <p role={locProblem ? "alert" : "status"} className="map-sheet-note">
           {locMessage}
         </p>
+        <button type="button" className="map-sheet-go" disabled={locBusy} onClick={useMyLocation}>
+          {t("en", "loc.ask")}
+        </button>
         {showLocationHelp ? (
           <LocationHelp status={locStatus} onTryAgain={() => void useMyLocation()} />
         ) : null}
