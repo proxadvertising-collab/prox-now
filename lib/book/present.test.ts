@@ -233,4 +233,14 @@ describe("book swiper", () => {
     expect(swipeStep(0, 3, 10)).toBe(0);
     expect(swipeStep(2, 3, -80)).toBe(2);
   });
+
+  it("reaches the last page of an 8-page book", () => {
+    let index = 0;
+    for (let step = 0; step < 7; step += 1) index = swipeStep(index, 8, -48);
+    expect(index).toBe(7);
+    expect(swipeStep(7, 8, -48)).toBe(7);
+    const html = renderToStaticMarkup(createElement(BookSwiper, null, "0", "1", "2", "3", "4", "5", "6", "7"));
+    expect(html).toContain('data-count="8"');
+    expect(html.split('class="book-progress-seg').length - 1).toBe(8);
+  });
 });

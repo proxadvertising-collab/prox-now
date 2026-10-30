@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { MetaCallError, MetaKeyMissing } from "../../../../lib/ai/meta";
-import { allowOrderTranslate, translateNote } from "../../../../lib/order/translate";
+import { allowOrderTranslate, EmptyTranslation, translateNote } from "../../../../lib/order/translate";
 import { clientIp } from "../../../../lib/rate/window";
 
 export const maxDuration = 30;
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     const translation = await translateNote(text, to);
     return NextResponse.json({ translation });
   } catch (error) {
+    if (error instanceof EmptyTranslation) return NextResponse.json({ error: "empty_translation" }, { status: 502 });
     if (error instanceof MetaKeyMissing) return NextResponse.json({ error: "ai_not_configured" }, { status: 503 });
     const code = error instanceof MetaCallError ? error.code : "upstream";
     const status = code === "auth" ? 401 : code === "busy" ? 429 : 502;

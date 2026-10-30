@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OrderBar, OrderSheet } from "../../components/order/OrderUi";
+import { OrderBar, OrderClient, OrderSheet } from "../../components/order/OrderUi";
 
 const line = {
   id: "tea",
@@ -33,7 +33,8 @@ describe("order page", () => {
     expect(html).toContain("Tea");
     expect(html).toContain("Requests (e.g. no tomatoes, less spicy)");
     expect(html).toContain("no tomatoes");
-    expect(html).toContain("ไม่ใส่มะเขือเทศ");
+    expect(html).toContain("For the staff");
+    expect(html.split("ไม่ใส่มะเขือเทศ").length - 1).toBe(1);
     expect(html).toContain("฿80");
     expect(html).toContain("+ 1 items without price");
   });
@@ -47,16 +48,32 @@ describe("order page", () => {
         lines: [line],
         note: "",
         translation: "ไม่ใส่มะเขือเทศ",
-        totalLabel: null,
+        totalLabel: "฿80",
         unpriced: 0,
         lang: "en",
         staff: true,
       }),
     );
     expect(html).toContain("2 × ชา");
+    expect(html).toContain("Total");
+    expect(html).toContain("฿80");
     expect(html).toContain("ไม่ใส่มะเขือเทศ");
     expect(html).toContain("bg-[#FFF8F1]");
     expect(html).toContain("Done");
+  });
+
+  it("leaves the address off when the shop has none", () => {
+    const html = renderToStaticMarkup(
+      createElement(OrderClient, {
+        slug: "mala",
+        shopName: "Mala Mafia",
+        logoUrl: null,
+        address: null,
+        menuLanguage: "th",
+      }),
+    );
+    expect(html).toContain("Mala Mafia");
+    expect(html).not.toContain("near");
   });
 });
 

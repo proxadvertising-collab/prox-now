@@ -24,8 +24,6 @@ export type OrderStorage = {
 
 export type OrderDraft = Omit<OrderLine, "qty"> & { qty?: number };
 
-export const ACTIVE_ORDER_KEY = "prox-order:active";
-
 export function orderKey(slug: string): string {
   return "prox-order:" + slug;
 }
@@ -71,13 +69,14 @@ export function itemCopy(
   userLang: string | null | undefined,
 ): { title: string; subtitle: string | null } {
   const lang = (userLang ?? "").trim() || "en";
-  const original = displayName(item.name.trim());
+  const raw = item.name.trim();
+  const original = displayName(raw);
   const english = displayName((item.nameEn ?? "").trim());
   const englishUser = lang.toLowerCase() === "en" || lang.toLowerCase().startsWith("en-");
   if (englishUser && english) {
     return { title: english, subtitle: original && original !== english ? original : null };
   }
-  return { title: original, subtitle: null };
+  return { title: original || raw, subtitle: null };
 }
 
 export function lineId(name: string, category?: string | null): string {
@@ -105,10 +104,31 @@ export function orderSummary(state: OrderState): { count: number; amount: number
 }
 
 export function orderBarLabel(lang: "en" | "th", summary: { count: number; amount: number; unpriced: number }): string {
-  const parts = [t(lang, "order.view"), t(lang, "order.items", { n: String(summary.count) })];
-  if (summary.count > summary.unpriced) parts.push(formatPrice(summary.amount) ?? "฿0");
-  if (summary.unpriced > 0) parts.push(t(lang, "order.unpriced", { n: String(summary.unpriced) }));
-  return parts.join(" · ");
+  const line = t(lang, "order.view") + " · " + t(lang, "order.items", { n: String(summary.count) });
+  if (summary.amount > 0) return line + " · " + (formatPrice(summary.amount) ?? "฿0");
+  return line;
+}
+
+export function orderBarCaption(lang: "en" | "th", summary: { unpriced: number }): string | null {
+  return summary.unpriced > 0 ? t(lang, "order.unlisted") : null;
+}
+
+export function orderBarFor(
+  pathname: string,
+  storage: OrderStorage,
+  lang: "en" | "th",
+): { slug: string; count: number; label: string; caption: string | null } | null {
+  const match = /^\/book\/([^/]+)\/?$/.exec(pathname);
+  if (!match?.[1]) return null;
+  let slug = match[1];
+  try {
+    slug = decodeURIComponent(slug);
+  } catch {
+    slug = match[1];
+  }
+  const summary = orderSummary(readOrder(slug, storage));
+  if (summary.count < 1) return null;
+  return { slug, count: summary.count, label: orderBarLabel(lang, summary), caption: orderBarCaption(lang, summary) };
 }
 
 export function addLine(state: OrderState, draft: OrderDraft): OrderState {
@@ -178,13 +198,6 @@ export function readOrder(slug: string, storage: OrderStorage): OrderState {
 
 export function writeOrder(slug: string, state: OrderState, storage: OrderStorage): void {
   storage.setItem(orderKey(slug), JSON.stringify(state));
-  if (orderSummary(state).count > 0) storage.setItem(ACTIVE_ORDER_KEY, slug);
-  else if (storage.getItem(ACTIVE_ORDER_KEY) === slug) storage.setItem(ACTIVE_ORDER_KEY, "");
-}
-
-export function readActiveSlug(storage: OrderStorage): string | null {
-  const slug = storage.getItem(ACTIVE_ORDER_KEY);
-  return slug && slug.trim() ? slug : null;
 }
 
 export function notifyOrder(): void {

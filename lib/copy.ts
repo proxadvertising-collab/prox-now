@@ -304,6 +304,9 @@ const en = {
   "order.menu": "Menu",
   "order.empty": "Nothing in this order yet",
   "order.total": "Total",
+  "order.forStaff": "For the staff",
+  "order.translating": "Translating…",
+  "order.unlisted": "Some prices not listed",
   "loc.deals": "Turn on location to see live deals around you.",
 } as const;
 
@@ -613,6 +616,9 @@ const th: { [K in keyof typeof en]: string } = {
   "order.menu": "เมนู",
   "order.empty": "ยังไม่มีรายการ",
   "order.total": "รวม",
+  "order.forStaff": "สำหรับพนักงาน",
+  "order.translating": "กำลังแปล…",
+  "order.unlisted": "บางราคาไม่ได้ระบุ",
   "loc.deals": "เปิดตำแหน่งเพื่อดูดีลสดรอบตัวคุณ",
 };
 

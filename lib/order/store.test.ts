@@ -6,6 +6,8 @@ import {
   emptyOrder,
   formatPrice,
   itemCopy,
+  orderBarCaption,
+  orderBarFor,
   orderBarLabel,
   orderKey,
   orderSummary,
@@ -80,16 +82,24 @@ describe("order store", () => {
     expect(readOrder("mala", box).lines.map((line) => line.name)).toEqual(["ชา"]);
     expect(readOrder("cafe", box).lines.map((line) => line.name)).toEqual(["ซุป"]);
     expect(readOrder("other", box).lines).toHaveLength(0);
+    expect(box.getItem("prox-order:active")).toBeNull();
+    expect(orderBarFor("/book/cafe", box, "en")?.slug).toBe("cafe");
+    expect(orderBarFor("/book/mala", box, "en")?.slug).toBe("mala");
+    expect(orderBarFor("/book/other", box, "en")).toBeNull();
+    expect(orderBarFor("/book/mala/order", box, "en")).toBeNull();
   });
 
   it("totals priced lines and counts lines with no price", () => {
     let state = addLine(emptyOrder(), { ...tea, qty: 2 });
     state = addLine(state, soup);
     expect(orderSummary(state)).toEqual({ count: 3, amount: 80, unpriced: 1 });
-    expect(orderBarLabel("en", orderSummary(state))).toBe("View order · 3 items · ฿80 · + 1 items without price");
+    expect(orderBarLabel("en", orderSummary(state))).toBe("View order · 3 items · ฿80");
+    expect(orderBarCaption("en", orderSummary(state))).toBe("Some prices not listed");
     state = removeLine(state, "soup");
     expect(orderSummary(state)).toEqual({ count: 2, amount: 80, unpriced: 0 });
-    expect(orderBarLabel("en", { count: 3, amount: 180, unpriced: 0 })).toBe("View order · 3 items · ฿180");
+    expect(orderBarLabel("en", { count: 4, amount: 640, unpriced: 0 })).toBe("View order · 4 items · ฿640");
+    expect(orderBarLabel("en", { count: 4, amount: 0, unpriced: 4 })).toBe("View order · 4 items");
+    expect(orderBarCaption("en", { unpriced: 0 })).toBeNull();
   });
 });
 
@@ -98,9 +108,11 @@ describe("translate request", () => {
     const body = translateRequestBody("no tomatoes", "th");
     expect(body.model).toBe("muse-spark-1.3");
     expect(body.reasoning.effort).toBe("low");
-    expect(body.max_output_tokens).toBe(300);
+    expect(body.max_output_tokens).toBe(1500);
     expect(body.store).toBe(false);
     expect(body.input[0]?.content[0]?.type).toBe("input_text");
+    expect(body.input[0]?.content[0]?.text).toContain("Thai");
+    expect(body.input[0]?.content[0]?.text).toContain("only the translated text");
     expect(body.input[0]?.content[0]?.text).toContain("no tomatoes");
   });
 });

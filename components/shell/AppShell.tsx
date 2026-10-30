@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const wide = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const isMap = pathname === "/map";
   const onBook = pathname.startsWith("/book");
-  const order = useOrderSnap();
+  const order = useOrderSnap(pathname);
   const [ownsShop, setOwnsShop] = useState(false);
 
   useEffect(() => {

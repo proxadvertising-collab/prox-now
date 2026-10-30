@@ -87,7 +87,7 @@ describe("tidy book cards", () => {
       }),
     );
     expect(off).not.toContain("book-live");
-    expect(off).toContain("book-logo-letter");
+    expect(off).not.toContain("book-logo-letter");
   });
 
   it("counts cover, info, menu pages, and extras", () => {
@@ -145,7 +145,7 @@ describe("tidy book cards", () => {
       }),
     );
     expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain("h-28");
+    expect(html).toContain("h-[84px]");
     expect(html).toContain("Coffee");
     expect(html).not.toContain("book-menu-banner");
   });

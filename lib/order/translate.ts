@@ -12,13 +12,50 @@ export function allowOrderTranslate(ip: string, now = Date.now()): boolean {
   return take(hits, [{ key: "ip:" + ip, limit: SNAP_IP_LIMIT }], now);
 }
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  th: "Thai",
+  en: "English",
+  zh: "Chinese",
+  ja: "Japanese",
+  ko: "Korean",
+  vi: "Vietnamese",
+  lo: "Lao",
+  km: "Khmer",
+  my: "Burmese",
+  ms: "Malay",
+  id: "Indonesian",
+  fr: "French",
+  de: "German",
+  es: "Spanish",
+  it: "Italian",
+  ru: "Russian",
+  hi: "Hindi",
+  ar: "Arabic",
+};
+
+export class EmptyTranslation extends Error {
+  readonly code = "empty_translation";
+  constructor() {
+    super("empty_translation");
+    this.name = "EmptyTranslation";
+  }
+}
+
+export function languageName(code: string): string {
+  const primary = code.trim().toLowerCase().split("-")[0] ?? "";
+  return LANGUAGE_NAMES[primary] ?? (code.trim() || "Thai");
+}
+
 export function translateRequestBody(text: string, to: string) {
   const prompt =
-    "Translate this restaurant order note into " + to + ". Reply with the translation only, as plain text.\n\n" + text;
+    "Translate this restaurant order note into " +
+    languageName(to) +
+    ". Return only the translated text. Do not repeat the original, add a label, or explain.\n\n" +
+    text;
   return {
     model: "muse-spark-1.3",
     reasoning: { effort: "low" as const },
-    max_output_tokens: 300,
+    max_output_tokens: 1500,
     store: false,
     input: [{ role: "user" as const, content: [{ type: "input_text" as const, text: prompt }] }],
   };
@@ -89,7 +126,7 @@ export async function translateNote(text: string, to: string): Promise<string> {
     }
     if (truncated(payload)) throw new MetaTruncated(readModel(payload), 0);
     const translation = stripFences(collectOutputText(payload));
-    if (!translation) throw new MetaCallError("upstream");
+    if (!translation) throw new EmptyTranslation();
     return translation;
   } finally {
     clearTimeout(timer);

@@ -274,7 +274,6 @@ export function CoverCard({
   const shown = displayName(name);
   const shownEn = nameEn ? displayName(nameEn) : null;
   const shownTag = bookText(tagline);
-  const letter = shown.trim().slice(0, 1).toUpperCase() || "?";
   const photoHero = coverUsesPhoto(heroUrl, logoUrl);
   return (
     <article className={"book-card book-cover" + (photoHero ? "" : " book-cover-fallback")} style={style}>
@@ -288,11 +287,9 @@ export function CoverCard({
           </p>
         ) : null}
         {logoUrl ? (
-          <img src={logoUrl} alt="" className="book-logo" width="96" height="96" />
-        ) : (
-          <div className="book-logo book-logo-letter">{letter}</div>
-        )}
-        <h1 className={"book-shop-name " + mood}>{shown}</h1>
+          <img src={logoUrl} alt="" className="book-logo h-[72px] w-[72px] max-h-[72px] max-w-[72px]" width={72} height={72} />
+        ) : null}
+        <h1 className={"book-shop-name text-[32px] font-extrabold " + mood}>{shown}</h1>
         {shownEn ? <p className="book-name-en">{shownEn}</p> : null}
         {shownTag ? <p className="book-tags">{shownTag}</p> : null}
       </div>
