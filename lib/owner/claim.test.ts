@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ClaimShop } from "../../components/owner/ClaimShop";
+import { t } from "../copy";
 import { claimButtonMode, claimCode, claimMatch, claimNear, claimPrompt, claimStatus, ownerToolsOpen, quoteShopName } from "./claim";
 
 const shop = { lat: 12.5685, lng: 99.9575 };
@@ -42,6 +43,8 @@ describe("claim at the shop", () => {
     expect(source).toContain("getUserMedia");
     expect(source).not.toContain('type="file"');
     expect(source).toContain("claim.fail");
+    expect(source).toContain("claim.camera");
+    expect(t("en", "claim.camera")).toBe("Claiming needs your phone's camera at the shop.");
     expect(source).toContain("claim.code");
     expect(source).toContain("claim.review");
   });

@@ -43,7 +43,9 @@ describe("desktop snap", () => {
     const camera = readFileSync(resolve(process.cwd(), "components/camera/LiveCamera.tsx"), "utf8");
     expect(camera).toContain('accept="image/*"');
     expect(camera).toContain("multiple");
-    expect(camera).toContain("snap.upload");
+    expect(camera.match(/snap\.upload/g)).toHaveLength(1);
+    expect(camera).toContain("pendingUploads");
+    expect(camera).toContain("takePin");
     expect(camera).toContain("snap.retry");
     expect(camera).toContain("snap.where");
     expect(camera).not.toContain("Location is required for a shot.");
@@ -53,6 +55,9 @@ describe("desktop snap", () => {
     const book = readFileSync(resolve(process.cwd(), "components/book/BookBuilder.tsx"), "utf8");
     expect(book).toContain('accept="image/*"');
     expect(book).toContain("snap.where");
+    expect(book).toContain("bg-surface-2");
+    expect(book).toContain("className={quiet}");
+    expect(book).toContain("className={upload}");
     const desk = readFileSync(resolve(process.cwd(), "components/owner/OwnerDesk.tsx"), "utf8");
     expect(desk).toContain("claim.cancel");
     expect(desk).toContain("/api/owner/claim/cancel");

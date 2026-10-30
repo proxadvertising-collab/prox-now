@@ -78,7 +78,7 @@ export function ClaimShop({
       });
       const image = await livePhoto();
       if (!image) {
-        setNote(t("en", "claim.fail"));
+        setNote(t("en", "claim.camera"));
         return;
       }
       const form = new FormData();

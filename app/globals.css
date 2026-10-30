@@ -526,10 +526,10 @@
   position: absolute;
   left: 1rem;
   right: 1rem;
-  top: 4.5rem;
+  top: 5.75rem;
+  bottom: 7rem;
   z-index: 20;
   display: flex;
-  max-height: 50vh;
   flex-direction: column;
   gap: 0.5rem;
   overflow: auto;

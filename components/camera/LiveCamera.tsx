@@ -143,6 +143,7 @@ export function LiveCamera({
   const [askJoin, setAskJoin] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
   const pinRef = useRef<{ lat: number; lng: number } | null>(null);
+  const pendingUploads = useRef<File[] | null>(null);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
 
@@ -386,17 +387,12 @@ export function LiveCamera({
     askCoach(shot, previous);
   }
 
-  async function acceptUploads(list: FileList | null) {
-    if (!list || list.length === 0 || busy) return;
-    setNote("");
-    setRetryShot(false);
-    const fix = await placeForShot();
-    if (!fix) return;
+  async function keepUploads(files: readonly File[], fix: CaptureFix) {
     fixRef.current = fix;
     try {
       if (phase === "seed") {
         let next = shotsRef.current;
-        for (const file of Array.from(list)) {
+        for (const file of files) {
           if (!canAddShot(next.length)) break;
           const jpeg = await resizeToJpeg(file);
           const saved = new File([jpeg], "upload-" + Date.now() + ".jpg", { type: "image/jpeg" });
@@ -415,7 +411,7 @@ export function LiveCamera({
         commitShots(next);
         return;
       }
-      const jpeg = await resizeToJpeg(list[0]);
+      const jpeg = await resizeToJpeg(files[0]);
       const saved = new File([jpeg], "upload-" + Date.now() + ".jpg", { type: "image/jpeg" });
       stageSnapFile(saved);
       setLiveFile(saved);
@@ -423,6 +419,44 @@ export function LiveCamera({
       setNote(t(lang, frameSaveKey(error)));
       setRetryShot(true);
     }
+  }
+
+  async function acceptUploads(list: FileList | readonly File[] | null) {
+    if (!list || list.length === 0 || busy) return;
+    const files = Array.from(list);
+    setNote("");
+    setRetryShot(false);
+    const fix = await placeForShot();
+    if (!fix) {
+      pendingUploads.current = files;
+      return;
+    }
+    pendingUploads.current = null;
+    await keepUploads(files, fix);
+  }
+
+  function takePin(point: { lat: number; lng: number }) {
+    pinRef.current = point;
+    setAskWhere(false);
+    const waiting = pendingUploads.current;
+    pendingUploads.current = null;
+    if (!waiting || waiting.length === 0) return;
+    const at = new Date().toISOString();
+    const chosen = chooseShotPlace({
+      at,
+      gps: null,
+      demo: null,
+      pin: point,
+      shop: shopPointRef.current,
+    });
+    if (!chosen) return;
+    void keepUploads(waiting, {
+      lat: chosen.lat,
+      lng: chosen.lng,
+      accuracy: null,
+      at: chosen.at,
+      source: chosen.source,
+    });
   }
 
   function removeShot(id: string) {
@@ -602,6 +636,7 @@ export function LiveCamera({
       {phase === "pick" ? (
         <ShopPicker
           shops={choices}
+          heading={t(lang, "snap.which")}
           newLabel={t(lang, "seed.new")}
           onPick={(id) => {
             const shop = choices.find((item) => item.id === id);
@@ -658,8 +693,14 @@ export function LiveCamera({
         </div>
       ) : null}
       {phase === "camera" || phase === "seed" ? (
-        <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3">
-          <RadarButton label="Take a photo" onClick={() => void shoot()} />
+        <div
+          className={
+            cameraClosed
+              ? "absolute inset-x-4 top-24 z-20 flex justify-center"
+              : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
+          }
+        >
+          {cameraClosed ? null : <RadarButton label="Take a photo" onClick={() => void shoot()} />}
           <button
             type="button"
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
@@ -697,14 +738,6 @@ export function LiveCamera({
           </svg>
         </button>
       )}
-      {cameraClosed ? (
-        <div className="absolute inset-x-4 top-20 z-20 flex flex-col gap-3 rounded-lg bg-black/80 p-4">
-          <p className="text-body">{t(lang, "snap.upload")}</p>
-          <button type="button" className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 font-semibold text-accent" onClick={() => uploadRef.current?.click()}>
-            {t(lang, "snap.upload")}
-          </button>
-        </div>
-      ) : null}
       {askWhere ? (
         <div className="absolute inset-x-4 bottom-36 z-30 flex flex-col gap-2 rounded-lg bg-black/80 p-3">
           <p className="text-body">{t(lang, "snap.where")}</p>
@@ -715,8 +748,7 @@ export function LiveCamera({
               onClick={() => {
                 const shop = shopPointRef.current;
                 if (!shop) return;
-                pinRef.current = { lat: shop.lat, lng: shop.lng };
-                setAskWhere(false);
+                takePin({ lat: shop.lat, lng: shop.lng });
               }}
             >
               {t(lang, "snap.useShop", { name: shopPointRef.current.name })}
@@ -724,8 +756,7 @@ export function LiveCamera({
           ) : null}
           <PinDrop
             onPick={(point) => {
-              pinRef.current = point;
-              setAskWhere(false);
+              takePin(point);
             }}
           />
         </div>

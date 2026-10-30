@@ -30,8 +30,10 @@ type Queued = BookShot & { url: string };
 
 const primary =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
-const secondary =
+const upload =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md border border-accent bg-transparent px-4 text-base font-semibold text-accent no-underline touch-manipulation disabled:opacity-60";
+const quiet =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg no-underline touch-manipulation disabled:opacity-60";
 
 function stepTitle(step: BookTile): CopyKey {
   if (step === "menu") return "book.menuStep";
@@ -265,7 +267,7 @@ export function BookBuilder({
           <a className={primary} href={"/snap?seed=1&shop=" + encodeURIComponent(slug)}>
             {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
           </a>
-          <label className={secondary}>
+          <label className={upload}>
             {t("en", "snap.upload")}
             <input
               type="file"
@@ -280,11 +282,11 @@ export function BookBuilder({
             />
           </label>
           {capture === "menu" ? (
-            <button type="button" className={secondary} disabled={busy} onClick={() => setStep("hours")}>
+            <button type="button" className={quiet} disabled={busy} onClick={() => setStep("hours")}>
               {t("en", "book.stepDone")}
             </button>
           ) : null}
-          <button type="button" className={secondary} disabled={busy} onClick={skip}>
+          <button type="button" className={quiet} disabled={busy} onClick={skip}>
             {t("en", "book.skip")}
           </button>
         </>
