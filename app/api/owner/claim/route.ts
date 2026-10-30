@@ -12,7 +12,7 @@ function coord(value: unknown): number | null {
 
 async function readProof(request: Request): Promise<
   | { kind: "json"; shopId: string }
-  | { kind: "proof"; shopId: string; lat: number | null; lng: number | null; image: File | null }
+  | { kind: "proof"; shopId: string; lat: number | null; lng: number | null; image: File | null; live: boolean }
   | { kind: "bad" }
 > {
   const type = request.headers.get("content-type") ?? "";
@@ -42,6 +42,7 @@ async function readProof(request: Request): Promise<
     lat: coord(form.get("lat")),
     lng: coord(form.get("lng")),
     image: image instanceof File && image.size > 0 ? image : null,
+    live: form.get("live") === "1",
   };
 }
 
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
   const place = { lat: coord(shop.lat) ?? Number.NaN, lng: coord(shop.lng) ?? Number.NaN };
   const near = claimNear(here, place);
   let match = false;
-  if (near && proof.image) {
+  if (near && proof.image && proof.live) {
     try {
       const bytes = Buffer.from(await proof.image.arrayBuffer());
       const mime = proof.image.type || "image/jpeg";

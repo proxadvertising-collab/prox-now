@@ -6,8 +6,10 @@ import { DEMO_ZONE_FALLBACK, hasDemoSessionCookie } from "@/lib/demo/zone";
 import { locate } from "@/lib/geo/locate";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/client";
+import { PinDrop } from "@/components/camera/PinDrop";
 import {
   BOOK_CAPTURE_STEPS,
+  addBookShots,
   atThisShop,
   bookBuildHref,
   bookErrorKey,
@@ -18,6 +20,8 @@ import {
   type BookShot,
   type BookTile,
 } from "@/lib/book/builder";
+import { resizeToJpeg } from "@/lib/image/resize";
+import { frameSaveKey } from "@/lib/snap/where";
 
 type Gate = "checking" | "ok" | "need_location" | "too_far" | "unknown_shop";
 type Step = BookTile | "review";
@@ -123,6 +127,21 @@ export function BookBuilder({
     else if (step === "hours") setStep("review");
   }
 
+  async function addUploads(list: FileList | null) {
+    if (!list || step === "review") return;
+    const files: File[] = [];
+    for (const file of Array.from(list)) {
+      try {
+        const jpeg = await resizeToJpeg(file);
+        files.push(new File([jpeg], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
+      } catch (error) {
+        setNote(t("en", frameSaveKey(error)));
+      }
+    }
+    if (files.length === 0) return;
+    setShots((current) => withUrls(current, addBookShots(current, step, files).shots));
+  }
+
   function remove(id: string) {
     setShots((current) => {
       const next = removeBookShot(current, id);
@@ -186,8 +205,36 @@ export function BookBuilder({
     );
   }
 
+  if (gate === "need_location") {
+    const shopPoint = lat != null && lng != null ? { lat, lng } : null;
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-title font-bold text-fg">{name}</h1>
+        <p className="text-body text-fg">{t("en", "snap.where")}</p>
+        {shopPoint ? (
+          <button
+            type="button"
+            className={primary}
+            onClick={() => {
+              pointRef.current = shopPoint;
+              setGate("ok");
+            }}
+          >
+            {t("en", "snap.useShop", { name })}
+          </button>
+        ) : null}
+        <PinDrop
+          onPick={(point) => {
+            pointRef.current = point;
+            setGate(atThisShop(point, shopPoint));
+          }}
+        />
+      </div>
+    );
+  }
+
   if (gate !== "ok") {
-    const key: CopyKey = gate === "too_far" ? "book.tooFar" : gate === "need_location" ? "book.needLoc" : "book.where";
+    const key: CopyKey = gate === "too_far" ? "book.tooFar" : "book.where";
     return (
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{name}</h1>
@@ -218,6 +265,20 @@ export function BookBuilder({
           <a className={primary} href={"/snap?seed=1&shop=" + encodeURIComponent(slug)}>
             {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
           </a>
+          <label className={secondary}>
+            {t("en", "snap.upload")}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              onChange={(event) => {
+                const files = event.target.files;
+                event.target.value = "";
+                void addUploads(files);
+              }}
+            />
+          </label>
           {capture === "menu" ? (
             <button type="button" className={secondary} disabled={busy} onClick={() => setStep("hours")}>
               {t("en", "book.stepDone")}

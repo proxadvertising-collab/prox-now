@@ -123,7 +123,7 @@ export default async function BookPage({
         claimMode = "claim";
       }
     }
-    const claim = shop ? <ClaimShop shopId={shop.id} mode={claimMode} /> : null;
+    const claim = shop ? <ClaimShop shopId={shop.id} mode={claimMode} name={name} /> : null;
 
     if (!view || view.pages.length === 0) {
       return (

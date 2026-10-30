@@ -5,35 +5,87 @@ import { t } from "../../lib/copy";
 
 const button =
   "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-accent-ink";
+const quiet =
+  "inline-flex min-h-11 items-center justify-center rounded-md bg-surface-2 px-4 text-sm font-semibold text-fg";
 
 export function ClaimShop({
   shopId,
   mode,
+  name = "this shop",
   seed = null,
 }: {
   shopId: string;
   mode: "hidden" | "own" | "claim";
+  name?: string;
   seed?: { lat: number; lng: number; photoUrl: string | null } | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
 
   if (mode === "hidden") return null;
   if (mode === "own") return <p className="text-sm font-semibold text-fg">{t("en", "claim.mine")}</p>;
 
-  async function send(lat: number, lng: number, image: File | null) {
-    const form = new FormData();
-    form.set("shopId", shopId);
-    form.set("lat", String(lat));
-    form.set("lng", String(lng));
-    if (image) form.set("image", image, image.name || "sign.jpg");
+  async function livePhoto(): Promise<File | null> {
+    if (!navigator.mediaDevices?.getUserMedia) return null;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    } catch {
+      return null;
+    }
+    try {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (width < 2 || height < 2) return null;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.drawImage(video, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      if (!blob) return null;
+      return new File([blob], "sign.jpg", { type: "image/jpeg" });
+    } finally {
+      for (const track of stream.getTracks()) track.stop();
+    }
+  }
+
+  async function prove() {
     setBusy(true);
     setNote(t("en", "claim.checking"));
     try {
+      if (!navigator.geolocation) {
+        setNote(t("en", "claim.fail"));
+        return;
+      }
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 12000,
+        });
+      });
+      const image = await livePhoto();
+      if (!image) {
+        setNote(t("en", "claim.fail"));
+        return;
+      }
+      const form = new FormData();
+      form.set("shopId", shopId);
+      form.set("lat", String(position.coords.latitude));
+      form.set("lng", String(position.coords.longitude));
+      form.set("live", "1");
+      form.set("image", image, "sign.jpg");
       const response = await fetch("/api/owner/claim", { method: "POST", body: form });
-      const body = (await response.json().catch(() => null)) as { status?: string; reason?: string } | null;
+      const body = (await response.json().catch(() => null)) as { status?: string } | null;
       if (response.status === 401) {
         const next = window.location.pathname + window.location.search;
         window.location.assign("/login?next=" + encodeURIComponent(next));
@@ -44,77 +96,29 @@ export function ClaimShop({
         return;
       }
       setNote(t("en", "claim.fail"));
-      setOpen(true);
     } catch {
       setNote(t("en", "claim.fail"));
-      setOpen(true);
     } finally {
       setBusy(false);
+      setConfirm(false);
     }
-  }
-
-  async function claimSeed() {
-    if (!seed) return;
-    let image: File | null = null;
-    if (seed.photoUrl) {
-      try {
-        const response = await fetch(seed.photoUrl);
-        const blob = await response.blob();
-        image = new File([blob], "sign.jpg", { type: blob.type || "image/jpeg" });
-      } catch {
-        image = null;
-      }
-    }
-    await send(seed.lat, seed.lng, image);
-  }
-
-  function claimLive() {
-    if (!file) {
-      setNote(t("en", "claim.sign"));
-      return;
-    }
-    if (!navigator.geolocation) {
-      setNote(t("en", "claim.fail"));
-      return;
-    }
-    setBusy(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        void send(position.coords.latitude, position.coords.longitude, file);
-      },
-      () => {
-        setBusy(false);
-        setNote(t("en", "claim.fail"));
-      },
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 12000 },
-    );
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {seed ? (
-        <button type="button" className={button} disabled={busy} onClick={() => void claimSeed()}>
-          {t("en", "claim.seed")}
-        </button>
-      ) : (
-        <button type="button" className={button} disabled={busy} onClick={() => setOpen(true)}>
-          {t("en", "claim.shop")}
-        </button>
-      )}
-      {open ? (
-        <label className="flex flex-col gap-2 text-sm font-semibold text-fg">
-          {t("en", "claim.sign")}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="text-sm font-normal"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-          <button type="button" className={button} disabled={busy} onClick={claimLive}>
-            {t("en", "claim.shop")}
+      <button type="button" className={button} disabled={busy} onClick={() => setConfirm(true)}>
+        {seed ? t("en", "claim.seed") : t("en", "claim.shop")}
+      </button>
+      {confirm ? (
+        <div className="flex flex-col gap-2 rounded-lg bg-surface-1 p-3">
+          <p className="text-sm text-fg">{t("en", "claim.confirm", { name })}</p>
+          <button type="button" className={button} disabled={busy} onClick={() => void prove()}>
+            {t("en", "claim.yes")}
           </button>
-        </label>
+          <button type="button" className={quiet} disabled={busy} onClick={() => setConfirm(false)}>
+            {t("en", "claim.notNow")}
+          </button>
+        </div>
       ) : null}
       {note ? <p className="text-sm text-fg">{note}</p> : null}
     </div>

@@ -35,6 +35,27 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
   const card = cards[0];
   const verified = (shops ?? []).some((shop) => shop.status === "verified");
 
+  async function cancelClaim(shopId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/owner/claim/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shopId }),
+      });
+      if (!response.ok) {
+        setError(t("en", "loop.fail"));
+        return;
+      }
+      await load();
+    } catch {
+      setError(t("en", "loop.fail"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function load() {
     try {
       const [home, inbox] = await Promise.all([
@@ -166,6 +187,16 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
           {shops.map((shop) => (
             <li key={shop.shopId} className="rounded-lg bg-surface-1 p-4">
               <p className="text-heading font-bold text-fg">{shop.name}</p>
+              {shop.status === "pending" ? (
+                <button
+                  type="button"
+                  className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-fg underline disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() => void cancelClaim(shop.shopId)}
+                >
+                  {t("en", "claim.cancel")}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

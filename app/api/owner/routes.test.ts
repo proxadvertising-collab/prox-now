@@ -114,6 +114,7 @@ describe("owner routes", () => {
     form.set("lat", lat);
     form.set("lng", lng);
     form.set("image", new File([Uint8Array.from([1, 2, 3])], "sign.jpg", { type: "image/jpeg" }));
+    form.set("live", "1");
     return claim(
       new Request("http://localhost/api/owner/claim", {
         method: "POST",
@@ -121,6 +122,21 @@ describe("owner routes", () => {
       }),
     );
   }
+
+  it("stays pending when the photo was not taken with the live camera", async () => {
+    shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575 };
+    spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
+    rpc.mockResolvedValue({ data: "pending", error: null });
+    const form = new FormData();
+    form.set("shopId", "11111111-1111-4111-8111-111111111111");
+    form.set("lat", "12.5685");
+    form.set("lng", "99.9575");
+    form.set("image", new File([Uint8Array.from([1, 2, 3])], "sign.jpg", { type: "image/jpeg" }));
+    const response = await claim(new Request("http://localhost/api/owner/claim", { method: "POST", body: form }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "pending", reason: "not_confirmed" });
+    expect(spark).not.toHaveBeenCalled();
+  });
 
   it("verifies when the device is at the shop and the sign matches", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575 };

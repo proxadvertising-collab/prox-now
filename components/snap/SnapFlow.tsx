@@ -148,16 +148,18 @@ function clearPostDraft() {
 export function SnapFlow({
   preselected = null,
   onRetake,
+  placed = null,
 }: {
   preselected?: { id: string; name: string } | null;
   onRetake?: () => void;
+  placed?: { lat: number; lng: number; source: "gps" | "pin" | "demo" } | null;
 }) {
   const onFileRef = useRef<(file: File | undefined) => void>(() => undefined);
   const runRef = useRef(0);
   const fileRef = useRef<File | null>(null);
   const blobsRef = useRef<string[]>([]);
   const startedRef = useRef(0);
-  const pointRef = useRef<Point | null>(null);
+  const pointRef = useRef<Point | null>(placed ? { lat: placed.lat, lng: placed.lng } : null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -837,6 +839,8 @@ export function SnapFlow({
       form.set("shopId", shop.id);
       form.set("lat", String(postHere.lat));
       form.set("lng", String(postHere.lng));
+      const source = placed?.source ?? (demo && !here ? "demo" : "gps");
+      form.set("locationSource", source);
       const chosenFaces = showFacesPayload(faceBoxes, shown);
       if (chosenFaces.length > 0) form.set("showFaces", JSON.stringify(chosenFaces));
       const response = await fetch("/api/posts", { method: "POST", body: form });

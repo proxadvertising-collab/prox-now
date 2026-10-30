@@ -34,7 +34,9 @@ describe("claim at the shop", () => {
     expect(open).toContain("Claim this shop");
     expect(open).not.toContain("You own this shop");
     const source = readFileSync(new URL("../../components/owner/ClaimShop.tsx", import.meta.url), "utf8");
-    expect(source).toContain('capture="environment"');
+    expect(source).toContain("claim.confirm");
+    expect(source).toContain("getUserMedia");
+    expect(source).not.toContain('type="file"');
     expect(source).toContain("claim.fail");
   });
 

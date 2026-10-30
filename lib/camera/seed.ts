@@ -3,6 +3,7 @@ export type CaptureFix = {
   lng: number;
   accuracy: number | null;
   at: string;
+  source?: "gps" | "pin" | "demo";
 };
 
 export type SeedSlot = "logo" | "menu" | "hours" | "extras";
@@ -97,8 +98,8 @@ export async function captureFix(input: {
 }): Promise<CaptureFix | null> {
   const at = (input.now ?? (() => new Date().toISOString()))();
   const demo = await input.lookupDemo();
-  if (demo) return { lat: demo.lat, lng: demo.lng, accuracy: null, at };
+  if (demo) return { lat: demo.lat, lng: demo.lng, accuracy: null, at, source: "demo" };
   const here = await input.locate();
   if (!here) return null;
-  return { lat: here.lat, lng: here.lng, accuracy: here.accuracy, at };
+  return { lat: here.lat, lng: here.lng, accuracy: here.accuracy, at, source: "gps" };
 }

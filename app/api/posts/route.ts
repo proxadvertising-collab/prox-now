@@ -5,6 +5,7 @@ import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
 import { allowPostDistance, isUnreadablePhoto } from "../../../lib/snap/place";
+import { postedSource } from "../../../lib/snap/where";
 import { factsWithConsent } from "../../../lib/posts/consent";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
 import { createClient } from "../../../lib/supabase/server";
@@ -218,6 +219,14 @@ export async function POST(request: Request) {
     expires_at?: string;
   } | null;
   if (!row?.id) return NextResponse.json({ error: "upstream" }, { status: 502 });
+
+  const source = postedSource(typeof form.get("locationSource") === "string" ? String(form.get("locationSource")) : "", demoAccount);
+  if (source !== "gps") {
+    const stamped = await supabase.rpc("stamp_post_source", { p_post_id: row.id, p_source: source });
+    if (stamped.error) {
+      // The column lands with migration 0017. The photo is already saved.
+    }
+  }
 
   return NextResponse.json({
     post: {

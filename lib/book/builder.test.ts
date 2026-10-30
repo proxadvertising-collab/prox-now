@@ -119,7 +119,8 @@ describe("book capture session", () => {
     expect(screen.includes("/api/shops")).toBe(false);
     expect(screen.includes("uploadBookSession")).toBe(true);
     expect(screen.includes('capture="environment"')).toBe(false);
-    expect(screen.includes('type="file"')).toBe(false);
+    expect(screen.includes('type="file"')).toBe(true);
+    expect(screen.includes('accept="image/*"')).toBe(true);
     expect(screen.includes("/snap?seed=1")).toBe(true);
   });
 

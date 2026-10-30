@@ -95,7 +95,7 @@ describe("camera seed", () => {
       lookupDemo: async () => ({ lat: 1, lng: 2 }),
       locate: async () => ({ lat: 9, lng: 9, accuracy: 3 }),
     });
-    expect(demo).toEqual({ lat: 1, lng: 2, accuracy: null, at: fix.at });
+    expect(demo).toEqual({ lat: 1, lng: 2, accuracy: null, at: fix.at, source: "demo" });
     const real = await captureFix({
       now: () => fix.at,
       lookupDemo: async () => null,

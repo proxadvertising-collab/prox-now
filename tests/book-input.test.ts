@@ -36,17 +36,22 @@ describe("book file input", () => {
     expect(files).toEqual([front, menu]);
   });
 
-  it("keeps user photo file inputs off the camera, book, and nav", () => {
-    const files = [
-      "components/book/BookBuilder.tsx",
+  it("keeps user photo file inputs off the nav, and offers upload on the camera and book", () => {
+    const closed = [
       "components/book/BookAddPhotos.tsx",
       "components/snap/SnapFlow.tsx",
       "components/shell/BottomNav.tsx",
-      "components/camera/LiveCamera.tsx",
       "app/(app)/snap/page.tsx",
     ];
-    for (const path of files) {
+    for (const path of closed) {
       expect(readFileSync(resolve(root, path), "utf8").includes('type="file"')).toBe(false);
+    }
+    for (const path of ["components/camera/LiveCamera.tsx", "components/book/BookBuilder.tsx"]) {
+      const source = readFileSync(resolve(root, path), "utf8");
+      expect(source.includes('type="file"')).toBe(true);
+      expect(source.includes('accept="image/*"')).toBe(true);
+      expect(source.includes("multiple")).toBe(true);
+      expect(source.includes('capture="environment"')).toBe(false);
     }
   });
 });

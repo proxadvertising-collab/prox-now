@@ -472,3 +472,25 @@ describe("reset demo migration", () => {
     expect(sql.toLowerCase()).not.toContain("service_role");
   });
 });
+
+describe("desktop loop migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0017_desktop_loop.sql"), "utf8");
+
+  it("marks pin and demo fixes and cancels only a pending claim", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("location_source text not null default 'gps'");
+    expect(sql).toContain("check (location_source in ('gps', 'pin', 'demo'))");
+    expect(sql).toContain("create or replace function public.stamp_post_source(p_post_id uuid, p_source text)");
+    expect(sql).toContain("author_id = auth.uid()");
+    expect(sql).toContain("create or replace function public.cancel_claim(p_shop_id uuid)");
+    expect(sql).toContain("status = 'pending'");
+    expect(sql).toContain("user_id = auth.uid()");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("revoke all on function public.cancel_claim(uuid) from public, anon");
+    expect(sql).toContain("grant execute on function public.cancel_claim(uuid) to authenticated");
+    expect(sql).not.toContain("grant execute on function public.cancel_claim(uuid) to anon");
+    expect(sql).not.toContain("delete from public.shops");
+    expect(sql).not.toContain("eyJ");
+    expect(sql.toLowerCase()).not.toContain("service_role");
+  });
+});
