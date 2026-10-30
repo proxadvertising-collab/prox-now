@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/client";
 import { activeCouponCount, couponPhase, type WalletCoupon } from "@/lib/wallet/coupons";
@@ -158,7 +159,12 @@ export function WalletList() {
   }, []);
 
   if (coupons === null) {
-    return <h1 className="text-title font-bold text-fg">{t("en", "nav.wallet")}</h1>;
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-title font-bold text-fg">{t("en", "nav.wallet")}</h1>
+        <SkeletonCards />
+      </div>
+    );
   }
 
   if (signedOut) {

@@ -5,7 +5,7 @@ import { bookText, displayName, parseHours } from "../../../../lib/book/display"
 import { t } from "../../../../lib/copy";
 import type { ShopInfo } from "../../../../lib/book/present";
 
-export const MENU_PAGE_SIZE = 6;
+export const MENU_PAGE_SIZE = 5;
 
 export type MenuTileData = {
   name: string;
@@ -545,8 +545,8 @@ export function MenuCard({
       style={{ ...style, aspectRatio: "auto", height: "calc(min(78dvh, 760px) - var(--order-bar, 0px))", overflow: "hidden", color: "#FFF4E8" }}
     >
       {title ? <h2 className="book-card-title text-fg">{title}</h2> : null}
-      <div className="book-card-body">
-        <MenuBoard slug={slug} items={items} />
+      <div className="book-card-body" style={{ overflow: "hidden" }}>
+        <MenuBoard slug={slug} items={items} sectionId={"menu-section-" + index} />
       </div>
     </article>
   );

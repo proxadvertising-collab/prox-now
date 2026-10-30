@@ -5,6 +5,8 @@ import { t } from "../../lib/copy";
 
 const button =
   "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-accent-ink";
+const outline =
+  "inline-flex min-h-11 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent";
 const quiet =
   "inline-flex min-h-11 items-center justify-center rounded-md bg-surface-2 px-4 text-sm font-semibold text-fg";
 
@@ -143,7 +145,7 @@ export function ClaimShop({
 
   return (
     <div className="flex flex-col gap-2">
-      <button type="button" className={button} disabled={busy} onClick={() => setConfirm(true)}>
+      <button type="button" className={outline} disabled={busy} onClick={() => setConfirm(true)}>
         {seed ? t("en", "claim.seed") : t("en", "claim.shop")}
       </button>
       {confirm ? (

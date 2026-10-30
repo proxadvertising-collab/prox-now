@@ -24,6 +24,7 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
 import { PinDrop } from "@/components/camera/PinDrop";
 import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
+import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import {
@@ -137,6 +138,7 @@ export function LiveCamera({
   const [note, setNote] = useState("");
   const [retryShot, setRetryShot] = useState(false);
   const [cameraClosed, setCameraClosed] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [askWhere, setAskWhere] = useState(false);
   const [askJoin, setAskJoin] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
@@ -187,7 +189,9 @@ export function LiveCamera({
         streamRef.current = active;
         if (video) {
           video.srcObject = active;
-          void video.play();
+          void video.play().then(() => {
+            if (!stopped) setCameraReady(true);
+          }).catch(() => setCameraClosed(true));
         }
         void navigator.mediaDevices.enumerateDevices().then((devices) => {
           if (stopped) return;
@@ -562,7 +566,7 @@ export function LiveCamera({
 
   if (liveFile) {
     return (
-      <div className="fixed inset-0 z-40 overflow-y-auto bg-bg p-4">
+      <div className="fixed inset-x-0 top-0 z-20 overflow-y-auto bg-bg p-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))]">
         <button type="button" className="mb-3 min-h-11 text-label font-semibold text-fg" onClick={() => setLiveFile(null)}>
           ← Camera
         </button>
@@ -580,8 +584,13 @@ export function LiveCamera({
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-black text-white">
+    <div className="fixed inset-x-0 top-0 z-20 bg-[#FFF8F1] text-white bottom-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <video ref={videoRef} className={previewClass(facing)} autoPlay muted playsInline />
+      {!cameraReady && !cameraClosed ? (
+        <div className="absolute inset-0 z-10 bg-[#FFF8F1] p-4">
+          <SkeletonCards />
+        </div>
+      ) : null}
       <a className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl" href="/map" aria-label="Back">
         ←
       </a>
@@ -653,7 +662,7 @@ export function LiveCamera({
           <RadarButton label="Take a photo" onClick={() => void shoot()} />
           <button
             type="button"
-            className="inline-flex min-h-12 items-center justify-center rounded-full bg-white/90 px-4 text-sm font-semibold text-black"
+            className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
             onClick={() => uploadRef.current?.click()}
           >
             {t(lang, "snap.upload")}
@@ -691,7 +700,7 @@ export function LiveCamera({
       {cameraClosed ? (
         <div className="absolute inset-x-4 top-20 z-20 flex flex-col gap-3 rounded-lg bg-black/80 p-4">
           <p className="text-body">{t(lang, "snap.upload")}</p>
-          <button type="button" className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-4 font-semibold text-black" onClick={() => uploadRef.current?.click()}>
+          <button type="button" className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 font-semibold text-accent" onClick={() => uploadRef.current?.click()}>
             {t(lang, "snap.upload")}
           </button>
         </div>

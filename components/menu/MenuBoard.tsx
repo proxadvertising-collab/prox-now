@@ -29,8 +29,17 @@ function groupsOf(items: readonly MenuBoardItem[]): { category: string | null; i
   return order.map((key) => ({ category: key || null, items: map.get(key) ?? [] }));
 }
 
-export function MenuBoard({ slug, items }: { slug: string; items: readonly MenuBoardItem[] }) {
+export function MenuBoard({
+  slug,
+  items,
+  sectionId,
+}: {
+  slug: string;
+  items: readonly MenuBoardItem[];
+  sectionId?: string;
+}) {
   const groups = groupsOf(items);
+  const single = groups.length <= 1;
   const [active, setActive] = useState(0);
   const [lang, setLang] = useState<"en" | "th">("en");
   useEffect(() => {
@@ -39,6 +48,7 @@ export function MenuBoard({ slug, items }: { slug: string; items: readonly MenuB
 
   return (
     <div>
+      {single ? null : (
       <div className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto bg-[var(--book-ink,#1E1611)] py-2">
         {groups.map((group, index) => (
           <button
@@ -58,10 +68,13 @@ export function MenuBoard({ slug, items }: { slug: string; items: readonly MenuB
           </button>
         ))}
       </div>
-      <div className="flex flex-col gap-6">
+      )}
+      <div className="flex flex-col gap-2">
         {groups.map((group, index) => (
-          <section key={(group.category ?? "menu") + "-section-" + index} id={"menu-section-" + index} className="flex flex-col gap-3">
+          <section key={(group.category ?? "menu") + "-section-" + index} id={sectionId ?? "menu-section-" + index} className="flex flex-col gap-2">
+            {single ? null : (
             <h2 className="text-sm font-bold text-fg-muted">{group.category ? displayName(group.category) : t(lang, "order.menu")}</h2>
+            )}
             {group.items.map((item, itemIndex) => (
               <ItemTile
                 key={lineId(item.name, group.category) + "-" + itemIndex}

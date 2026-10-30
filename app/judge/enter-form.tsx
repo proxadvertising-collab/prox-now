@@ -5,6 +5,8 @@ import { FRESH_DEMO_NEXT } from "@/lib/judge/reset";
 import { t } from "@/lib/copy";
 
 const primary = "btn-primary";
+const outline =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-md border border-accent bg-transparent px-4 text-base font-semibold text-accent";
 const field = "field";
 
 function noteFor(status: number, error: string | undefined): string {
@@ -59,10 +61,10 @@ export function JudgeEnter() {
       <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/reset")}>
         {t("en", "judge.freshStart")}
       </button>
-      <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
+      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
         {t("en", "judge.shopper")}
       </button>
-      <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
+      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
         {t("en", "judge.owner")}
       </button>
       <p role={message ? "alert" : "status"} className="min-h-6 text-label text-fg">

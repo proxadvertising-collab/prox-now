@@ -7,6 +7,7 @@ import {
   browserStorage,
   clearOrder,
   copyLang,
+  shopStaffLanguage,
   emptyOrder,
   formatPrice,
   itemCopy,
@@ -200,13 +201,18 @@ export function OrderSheet({
       ) : busy ? (
         <p className="text-[11px] text-fg-muted">{t(lang, "order.translating")}</p>
       ) : null}
-      <button type="button" className="h-12 rounded-2xl border border-border bg-transparent font-bold text-fg active:scale-95" onClick={onTranslate}>
+      <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
         {t(lang, "order.translate")}
       </button>
       <button type="button" className="h-12 rounded-2xl bg-accent font-bold text-accent-ink active:scale-95" onClick={onStaff}>
         {t(lang, "order.staff")}
       </button>
-      <button type="button" className="h-12 rounded-2xl text-sm font-semibold text-fg-muted" onClick={onClear}>
+      <button
+        type="button"
+        className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={onClear}
+      >
         {t(lang, "order.clear")}
       </button>
     </div>
@@ -303,7 +309,7 @@ export function OrderClient({
       translation={state.translation}
       totalLabel={summary.count > summary.unpriced ? formatPrice(summary.amount) : null}
       unpriced={summary.unpriced}
-      lang={lang}
+      lang={staff ? copyLang(shopStaffLanguage(shopCountry)) : lang}
       staff={staff}
       busy={busy}
       onNote={(value) => commit(setOrderNote(state, value))}

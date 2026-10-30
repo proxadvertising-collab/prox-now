@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { LanguageSwitch } from "@/components/me/LanguageSwitch";
 import { BehindSwitch } from "@/components/me/BehindSwitch";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/server";
@@ -42,6 +43,7 @@ async function MeAccount() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-title font-bold text-fg">{t("en", "nav.you")}</h1>
+      <LanguageSwitch />
       <BehindSwitch />
       {signedIn ? (
         <>

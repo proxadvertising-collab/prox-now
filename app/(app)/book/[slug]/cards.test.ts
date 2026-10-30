@@ -39,29 +39,43 @@ const blankInfo: ShopInfo = {
 };
 
 describe("tidy book cards", () => {
-  it("splits the menu into pages of at most 6 items", () => {
+  it("splits the menu into pages of at most 5 items", () => {
     const pages = chunkMenu(Array.from({ length: 13 }, (_, index) => tile(index)));
     expect(pages).toHaveLength(3);
-    expect(pages[0]).toHaveLength(6);
-    expect(pages[1]).toHaveLength(6);
-    expect(pages[2]).toHaveLength(1);
-    expect(pages.every((page) => page.length <= 6)).toBe(true);
-    expect(chunkMenu(Array.from({ length: 6 }, (_, index) => tile(index)))).toHaveLength(1);
+    expect(pages[0]).toHaveLength(5);
+    expect(pages[1]).toHaveLength(5);
+    expect(pages[2]).toHaveLength(3);
+    expect(pages.every((page) => page.length <= 5)).toBe(true);
+    expect(chunkMenu(Array.from({ length: 5 }, (_, index) => tile(index)))).toHaveLength(1);
+    expect(chunkMenu(Array.from({ length: 6 }, (_, index) => tile(index)))).toHaveLength(2);
   });
 
-  it("keeps a 20-item menu as category pages of 6 or fewer", () => {
+  it("keeps a 20-item menu as category pages of 5 or fewer", () => {
     const drinks = Array.from({ length: 8 }, (_, index) => ({ ...tile(index), name: "Drink " + index, category: "Drinks" }));
     const food = Array.from({ length: 12 }, (_, index) => ({ ...tile(index + 8), name: "Food " + index, category: "Food" }));
     const deck = assembleDeck({ menuItems: [...drinks, ...food], extras: [], hours: null, info: blankInfo });
     const menus = deck.filter((card) => card.type === "menu");
-    expect(menus).toHaveLength(4);
-    expect(menus.every((card) => card.type === "menu" && card.items.length > 0 && card.items.length <= 6)).toBe(true);
-    expect(menus.map((card) => (card.type === "menu" ? card.category : null))).toEqual(["Drinks", "Drinks", "Food", "Food"]);
+    expect(menus).toHaveLength(5);
+    expect(menus.every((card) => card.type === "menu" && card.items.length > 0 && card.items.length <= 5)).toBe(true);
+    expect(menus.map((card) => (card.type === "menu" ? card.category : null))).toEqual([
+      "Drinks",
+      "Drinks",
+      "Food",
+      "Food",
+      "Food",
+    ]);
     expect(menus[1]).toMatchObject({ continued: true });
     const continued = renderToStaticMarkup(
-      createElement(MenuCard, { index: 1, total: 4, style: {}, category: "Drinks", continued: true, items: [tile(0)] }),
+      createElement(MenuCard, { index: 1, total: 5, style: {}, category: "Drinks", continued: true, items: [tile(0)] }),
     );
     expect(continued).toContain("Drinks, continued");
+    expect(continued).toContain('id="menu-section-1"');
+    expect(continued.match(/<h2/g)?.length).toBe(1);
+    const first = renderToStaticMarkup(
+      createElement(MenuCard, { index: 0, total: 5, style: {}, category: "Salad", continued: false, items: [tile(0)] }),
+    );
+    expect(first).toContain('id="menu-section-0"');
+    expect(first).not.toContain('id="menu-section-1"');
   });
 
   it("keeps About when the only detail is a map, address, or contact link", () => {
@@ -250,7 +264,7 @@ describe("tidy book cards", () => {
       }),
     );
     expect(html.match(/<img /g)).toHaveLength(1);
-    expect(html).toContain("h-[84px]");
+    expect(html).toContain("h-12 w-12");
     expect(html).toContain("Coffee");
     expect(html).not.toContain("book-menu-banner");
   });

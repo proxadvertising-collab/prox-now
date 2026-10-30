@@ -278,6 +278,7 @@ const en = {
   "snap.frameEncode": "The photo could not be encoded. Try again.",
   "snap.frameFail": "That frame did not save. Try again.",
   "auth.emailInvalid": "Enter a valid email address.",
+  "lang.label": "Language",
   "timer.left": "{t} left",
   "timer.over": "Time's up",
   "coupon.landed": "Nice shot! A coupon is in your wallet.",
@@ -624,6 +625,7 @@ const th: { [K in keyof typeof en]: string } = {
   "snap.frameEncode": "เข้ารหัสรูปไม่ได้ ลองอีกครั้ง",
   "snap.frameFail": "บันทึกเฟรมไม่ได้ ลองอีกครั้ง",
   "auth.emailInvalid": "ใส่อีเมลที่ใช้งานได้",
+  "lang.label": "ภาษา",
   "timer.left": "เหลือ {t}",
   "timer.over": "หมดเวลาแล้ว",
   "coupon.landed": "ภาพสวย! คูปองเข้ากระเป๋าแล้ว",
@@ -694,12 +696,8 @@ export const copy = { en, th };
 
 export type CopyKey = keyof typeof en;
 
-export function t(
-  lang: keyof typeof copy,
-  key: CopyKey,
-  vars?: Record<string, string>,
-): string {
-  const table: Record<CopyKey, string> = copy[lang];
+export function t(lang: string, key: CopyKey, vars?: Record<string, string>): string {
+  const table: Record<CopyKey, string> = lang === "th" ? th : en;
   let text = table[key];
   if (!vars) return text;
   for (const name of Object.keys(vars)) {

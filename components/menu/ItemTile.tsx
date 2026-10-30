@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { t } from "../../lib/copy";
+import { DEVICE_LANG_KEY, deviceLang, menuCacheKey, titledItem } from "../../lib/i18n/device";
 import {
   addLine,
   browserStorage,
@@ -58,23 +59,57 @@ export function ItemTile({
 }) {
   const [qty, setQty] = useState(0);
   const [speak, setSpeak] = useState(userLang ?? "en");
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [langTick, setLangTick] = useState(0);
   const lang = copyLang(speak);
   const copy = itemCopy({ name, nameEn }, speak);
+  const shown = translated ? titledItem(name, translated) : copy;
   const picture = tilePhoto(photo);
   const priceLabel = formatPrice(price);
   const chips = tags.filter((tag) => tag === "spicy" || tag === "vegan");
   const drink = isDrink(category);
 
   useEffect(() => {
-    if (!userLang) setSpeak(navigator.language || "en");
+    let stop = false;
+    const saved = window.localStorage.getItem(DEVICE_LANG_KEY);
+    const chosen = userLang || deviceLang(saved, navigator.language);
+    if (!userLang) setSpeak(chosen);
+    const base = chosen.toLowerCase().split("-")[0] || "en";
+    const original = name.trim();
+    if (base === "en") setTranslated(null);
+    else {
+      const cached = window.localStorage.getItem(menuCacheKey(original, base));
+      if (cached) setTranslated(cached);
+      else {
+        void fetch("/api/order/translate", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text: original, to: base }),
+        })
+          .then(async (response) => (response.ok ? response.json() : null))
+          .then((body: { translation?: unknown } | null) => {
+            const text = body && typeof body.translation === "string" ? body.translation.trim() : "";
+            if (stop || !text) return;
+            window.localStorage.setItem(menuCacheKey(original, base), text);
+            setTranslated(text);
+          })
+          .catch(() => undefined);
+      }
+    }
     const sync = () => {
       const state = readOrder(slug, browserStorage());
       setQty(state.lines.find((line) => line.id === id)?.qty ?? 0);
     };
     sync();
+    const onLang = () => setLangTick((value) => value + 1);
     window.addEventListener("prox-order", sync);
-    return () => window.removeEventListener("prox-order", sync);
-  }, [slug, id, userLang]);
+    window.addEventListener("prox-lang", onLang);
+    return () => {
+      stop = true;
+      window.removeEventListener("prox-order", sync);
+      window.removeEventListener("prox-lang", onLang);
+    };
+  }, [slug, id, userLang, name, langTick]);
 
   function persist(nextQty: number) {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(12);
@@ -97,17 +132,17 @@ export function ItemTile({
   }
 
   return (
-    <article className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-border bg-surface-1 p-3 active:scale-95">
+    <article className="flex w-full min-w-0 items-center gap-2 rounded-2xl border border-border bg-surface-1 p-2 active:scale-95">
       {picture ? (
-        <img src={picture} alt="" className="h-[84px] w-[84px] shrink-0 rounded-xl object-cover" />
+        <img src={picture} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
       ) : (
-        <div className="grid h-[84px] w-[84px] shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent/35 to-surface-2">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-accent/35 to-surface-2">
           <TileMark drink={drink} />
         </div>
       )}
       <div className="min-w-0 flex-1 overflow-hidden">
-        <p className="line-clamp-2 text-base font-bold leading-snug text-fg">{copy.title}</p>
-        {copy.subtitle ? <p className="truncate text-sm text-fg-subtle">{copy.subtitle}</p> : null}
+        <p className="line-clamp-1 text-sm font-bold leading-snug text-fg">{shown.title}</p>
+        {shown.subtitle ? <p className="truncate text-sm text-fg-subtle">{shown.subtitle}</p> : null}
         {priceLabel ? (
           <span className="mt-1 inline-flex rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-accent-ink">{priceLabel}</span>
         ) : null}

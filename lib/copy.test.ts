@@ -22,5 +22,7 @@ describe("copy", () => {
     expect(t("en", "timer.left", { t: "12m" })).toBe("12m left");
     expect(t("th", "timer.left", { t: "12m" })).toBe("เหลือ 12m");
     expect(t("en", "timer.left", { name: "Mai" })).toBe("{t} left");
+    expect(t("fr", "nav.wallet")).toBe(t("en", "nav.wallet"));
+    expect(t("vi", "lang.label")).toBe("Language");
   });
 });
