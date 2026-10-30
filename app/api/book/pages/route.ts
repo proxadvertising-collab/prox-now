@@ -201,6 +201,9 @@ function shopLookupColumn(key: string): "id" | "slug" {
 }
 
 function sessionGroups(form: FormData): { kind: UploadKind; files: File[] }[] | "empty" | "bad_image" | "page_limit" {
+  const auto = namedFiles(form, "auto");
+  if (auto.length > MAX_UPLOAD_IMAGES) return "page_limit";
+  if (auto.length > 0) return [{ kind: "extra", files: auto }];
   const storefront = namedFiles(form, "storefront");
   const logo = namedFiles(form, "logo");
   const hours = namedFiles(form, "hours");

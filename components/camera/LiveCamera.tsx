@@ -14,38 +14,38 @@ import {
   rememberFacing,
   type Facing,
 } from "./flip";
+import { SeedCoach } from "./SeedCoach";
+import { ShopPicker } from "./ShopPicker";
 import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
-import {
-  addSeedShot,
-  bookKind,
-  bubbleCount,
-  captureFix,
-  emptyTray,
-  menuButton,
-  parkMenu,
-  seedTitle,
-  showSeedDone,
-  shotsFor,
-  slotOpen,
-  stampLine,
-  type CaptureFix,
-  type SeedSlot,
-  type SeedTray,
-} from "@/lib/camera/seed";
+import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { stageSnapFile } from "@/lib/snap/handoff";
+import {
+  COACH_TIMEOUT_MS,
+  canAddShot,
+  coachToast,
+  doneEnabled,
+  nearbyShops,
+  parseCoach,
+  seenChips,
+} from "@/lib/seed/coach";
 import { createClient } from "@/lib/supabase/client";
 
-const SLOTS: { slot: SeedSlot; label: string }[] = [
-  { slot: "logo", label: "Logo" },
-  { slot: "menu", label: "Menu/Product" },
-  { slot: "hours", label: "Hours" },
-  { slot: "extras", label: "Extras" },
-];
-
-type Match = { id: string; slug: string; name: string; hasBook: boolean };
+type Phase = "camera" | "pick" | "seed" | "name" | "building";
+type Lang = "en" | "th";
+type Picked = { id: string; slug: string; name: string };
+type NearShop = Picked & { distanceM: number };
+type SeedShot = {
+  id: string;
+  url: string;
+  file: File;
+  index: number;
+  contains: string[];
+  fix: CaptureFix;
+};
+type ToastState = { text: string; duplicateOf: number | null; shotId: string };
 
 async function lookupDemoPoint(): Promise<{ lat: number; lng: number } | null> {
   try {
@@ -61,33 +61,46 @@ async function lookupDemoPoint(): Promise<{ lat: number; lng: number } | null> {
   }
 }
 
-async function shopHasBook(shopId: string): Promise<boolean> {
-  try {
-    const supabase = createClient();
-    const pages = await supabase.from("shop_book_pages").select("id").eq("shop_id", shopId).limit(1);
-    if (pages.error) return false;
-    return (pages.data?.length ?? 0) > 0;
-  } catch {
-    return false;
-  }
+function locate(): Promise<{ lat: number; lng: number; accuracy: number | null } | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 8_000 },
+    );
+  });
 }
 
-function readMatch(body: {
-  result?: { shopId?: string | null; placeName?: string | null; signText?: { original?: string; translated?: string }[] };
-  candidates?: { id: string; slug?: string; name: string }[];
-  place?: { name?: string | null } | null;
-}): { id: string; slug: string; name: string } | { name: string } | null {
-  const id = body.result?.shopId ?? null;
-  const known = id ? body.candidates?.find((shop) => shop.id === id) : null;
-  if (known) return { id: known.id, slug: known.slug ?? known.id, name: known.name };
-  const sign = body.result?.signText?.[0];
-  const name =
-    body.place?.name?.trim() ||
-    body.result?.placeName?.trim() ||
-    sign?.translated?.trim() ||
-    sign?.original?.trim() ||
-    "";
-  return name ? { name } : null;
+function here(): Promise<CaptureFix | null> {
+  return captureFix({ lookupDemo: lookupDemoPoint, locate });
+}
+
+function asNear(value: unknown): NearShop[] {
+  if (!value || typeof value !== "object") return [];
+  const shops = (value as { shops?: unknown }).shops;
+  if (!Array.isArray(shops)) return [];
+  const parsed: NearShop[] = [];
+  for (const shop of shops) {
+    if (!shop || typeof shop !== "object") continue;
+    const row = shop as { id?: unknown; slug?: unknown; name?: unknown; distanceM?: unknown };
+    if (typeof row.id !== "string" || typeof row.name !== "string" || typeof row.distanceM !== "number") continue;
+    parsed.push({
+      id: row.id,
+      slug: typeof row.slug === "string" && row.slug ? row.slug : row.id,
+      name: row.name,
+      distanceM: row.distanceM,
+    });
+  }
+  return nearbyShops(parsed);
 }
 
 export function LiveCamera({
@@ -100,25 +113,39 @@ export function LiveCamera({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const facingRef = useRef<Facing>(facingForSession());
-  const armedWas = useRef<SeedSlot | null>(null);
   const alive = useRef(true);
+  const shotsRef = useRef<SeedShot[]>([]);
+  const fixRef = useRef<CaptureFix | null>(null);
+  const nameGuessRef = useRef("");
+  const langRef = useRef<Lang>("en");
+  const boot = useRef(false);
+  const facedSeed = useRef(false);
   const [facing, setFacing] = useState<Facing>(facingForSession());
   const [cameraCount, setCameraCount] = useState<number | null>(null);
   const [flipFailed, setFlipFailed] = useState(false);
-  const [tray, setTray] = useState<SeedTray>(emptyTray());
-  const [fan, setFan] = useState(startSeeding);
-  const [hasBook, setHasBook] = useState(false);
-  const [match, setMatch] = useState<Match | null>(
-    preselected ? { id: preselected.id, slug: preselected.id, name: preselected.name, hasBook: false } : null,
-  );
+  const [phase, setPhase] = useState<Phase>("camera");
+  const [choices, setChoices] = useState<NearShop[]>([]);
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [shots, setShots] = useState<SeedShot[]>([]);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [draftName, setDraftName] = useState(preselected?.name ?? "");
+  const [lang, setLang] = useState<Lang>("en");
   const [liveFile, setLiveFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
-  const [flying, setFlying] = useState<{ url: string; go: boolean } | null>(null);
-  const [badge, setBadge] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [savedSlug, setSavedSlug] = useState<string | null>(null);
-  const [files, setFiles] = useState<Record<string, File>>({});
+
+  function commitShots(next: SeedShot[]) {
+    shotsRef.current = next;
+    setShots(next);
+  }
+
+  useEffect(() => {
+    langRef.current = lang;
+  }, [lang]);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("th")) setLang("th");
+  }, []);
 
   useEffect(() => {
     alive.current = true;
@@ -162,10 +189,8 @@ export function LiveCamera({
   }, []);
 
   useEffect(() => {
-    const previous = armedWas.current;
-    const armed = tray.armed;
-    armedWas.current = armed;
-    if (!armed || previous) return;
+    if (phase !== "seed" || facedSeed.current) return;
+    facedSeed.current = true;
     const stream = streamRef.current;
     if (!stream || facingRef.current === "environment") {
       facingRef.current = "environment";
@@ -196,7 +221,7 @@ export function LiveCamera({
     return () => {
       cancel = true;
     };
-  }, [tray.armed]);
+  }, [phase]);
 
   useEffect(() => {
     if (liveFile) return;
@@ -206,6 +231,12 @@ export function LiveCamera({
     video.srcObject = stream;
     void video.play();
   }, [liveFile]);
+
+  useEffect(() => {
+    if (!startSeeding || boot.current) return;
+    boot.current = true;
+    void openPicker();
+  }, [startSeeding]);
 
   async function grab(fix: CaptureFix): Promise<File> {
     const video = videoRef.current;
@@ -230,29 +261,75 @@ export function LiveCamera({
     return new File([blob], `shot-${fix.at}.jpg`, { type: "image/jpeg" });
   }
 
-  async function shoot() {
+  async function openPicker() {
     if (busy) return;
     setNote("");
-    const fix = await captureFix({
-      lookupDemo: lookupDemoPoint,
-      locate: () =>
-        new Promise((resolve) => {
-          if (typeof navigator === "undefined" || !navigator.geolocation) {
-            resolve(null);
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (position) =>
-              resolve({
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-              }),
-            () => resolve(null),
-            { enableHighAccuracy: true, maximumAge: 10_000, timeout: 8_000 },
-          );
-        }),
-    });
+    const fix = await here();
+    if (!fix) {
+      setNote("Location is required for a shot.");
+      return;
+    }
+    fixRef.current = fix;
+    let shops: NearShop[] = [];
+    try {
+      const response = await fetch("/api/shops/near?lat=" + encodeURIComponent(String(fix.lat)) + "&lng=" + encodeURIComponent(String(fix.lng)));
+      shops = asNear(await response.json().catch(() => null));
+    } catch {
+      shops = [];
+    }
+    setChoices(shops);
+    setPhase("pick");
+  }
+
+  function askCoach(shot: SeedShot, previous: { index: number; contains: string[] }[]) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), COACH_TIMEOUT_MS);
+    const form = new FormData();
+    form.set("image", shot.file, "seed.jpg");
+    form.set("previous", JSON.stringify(previous));
+    form.set("index", String(shot.index));
+    void fetch("/api/seed/check", { method: "POST", body: form, signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((body) => {
+        const read = parseCoach(body, shot.index);
+        if (!read || !shotsRef.current.some((item) => item.id === shot.id)) return;
+        commitShots(
+          shotsRef.current.map((item) => (item.id === shot.id ? { ...item, contains: read.contains } : item)),
+        );
+        if (read.name_guess) nameGuessRef.current = read.name_guess;
+        const next = coachToast(read, langRef.current);
+        setToast(next ? { ...next, shotId: shot.id } : null);
+      })
+      .catch(() => undefined)
+      .finally(() => clearTimeout(timer));
+  }
+
+  async function shoot() {
+    if (busy) return;
+    if (phase === "camera") {
+      setNote("");
+      const fix = await here();
+      if (!fix) {
+        setNote("Location is required for a shot.");
+        return;
+      }
+      let file: File;
+      try {
+        file = await grab(fix);
+      } catch {
+        setNote("That frame did not save.");
+        return;
+      }
+      stageSnapFile(file);
+      setLiveFile(file);
+      return;
+    }
+    if (phase !== "seed" || !canAddShot(shotsRef.current.length)) return;
+    setNote("");
+    const fix = (await here()) ?? fixRef.current;
     if (!fix) {
       setNote("Location is required for a shot.");
       return;
@@ -264,71 +341,54 @@ export function LiveCamera({
       setNote("That frame did not save.");
       return;
     }
-    const armed = tray.armed;
-    if (!armed) {
-      stageSnapFile(file);
-      setLiveFile(file);
+    const index = shotsRef.current.reduce((max, shot) => Math.max(max, shot.index), 0) + 1;
+    const shot: SeedShot = {
+      id: crypto.randomUUID(),
+      url: URL.createObjectURL(file),
+      file,
+      index,
+      contains: [],
+      fix,
+    };
+    const previous = shotsRef.current.map((item) => ({ index: item.index, contains: item.contains }));
+    commitShots([...shotsRef.current, shot]);
+    askCoach(shot, previous);
+  }
+
+  function removeShot(id: string) {
+    const target = shotsRef.current.find((shot) => shot.id === id);
+    if (target) URL.revokeObjectURL(target.url);
+    commitShots(shotsRef.current.filter((shot) => shot.id !== id));
+    setToast((current) => (current && current.shotId === id ? null : current));
+  }
+
+  function finishSeed() {
+    if (busy || !doneEnabled(shotsRef.current.length)) return;
+    if (!picked) {
+      setDraftName((current) => nameGuessRef.current || current.trim());
+      setPhase("name");
       return;
     }
-    const id = crypto.randomUUID();
-    const next = addSeedShot(tray, { id, slot: armed, fix }, hasBook);
-    if (next === tray) {
-      setNote(armed === "extras" ? "Extras needs a book." : "That set is full.");
-      return;
-    }
-    setFiles((current) => ({ ...current, [id]: file }));
-    setTray(next);
-    if (armed !== "menu") launch(file);
-    if (armed === "logo" || !match) void matchShop(file, fix);
+    void save(picked);
   }
 
-  function launch(file: File) {
-    const url = URL.createObjectURL(file);
-    setFlying({ url, go: false });
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => setFlying((current) => (current && current.url === url ? { url, go: true } : current)));
-    });
-  }
-
-  async function matchShop(file: File, fix: CaptureFix) {
-    try {
-      const form = new FormData();
-      form.set("image", file, "logo.jpg");
-      form.set("lat", String(fix.lat));
-      form.set("lng", String(fix.lng));
-      const response = await fetch("/api/analyze", { method: "POST", body: form });
-      const body = (await response.json().catch(() => null)) as Parameters<typeof readMatch>[0] | null;
-      if (!body) return;
-      const found = readMatch(body);
-      if (!found) return;
-      if ("id" in found) {
-        const book = await shopHasBook(found.id);
-        setHasBook(book);
-        setMatch({ ...found, hasBook: book });
-        setDraftName(found.name);
-        return;
-      }
-      setDraftName(found.name);
-    } catch {
-      setNote("The shop match did not finish.");
-    }
-  }
-
-  async function finish() {
-    if (busy || tray.shots.length === 0) return;
+  async function save(shop: Picked | null) {
+    if (busy) return;
     setBusy(true);
+    setPhase("building");
     setNote("");
     try {
-      let shop = match;
+      let target = shop;
       let createdHere = false;
-      if (!shop) {
-        const name = draftName.trim();
+      if (!target) {
+        const name = draftName.trim() || nameGuessRef.current.trim();
         if (name.length < 2) {
           setNote("Name the shop before Done.");
+          setPhase("name");
           return;
         }
-        const here = tray.shots[0]?.fix;
-        if (!here) return;
+        const place = fixRef.current ?? shotsRef.current[0]?.fix;
+        if (!place) return;
         const response = await fetch("/api/shops", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -336,8 +396,8 @@ export function LiveCamera({
             name,
             nameLocal: "",
             category: "other",
-            lat: here.lat,
-            lng: here.lng,
+            lat: place.lat,
+            lng: place.lng,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         });
@@ -349,64 +409,44 @@ export function LiveCamera({
         } | null;
         if (response.status === 401) {
           setNote("Sign in to save.");
+          setPhase("name");
           return;
         }
         const joined = response.status === 409 ? body?.shops?.[0] : undefined;
         if (joined?.id) {
-          const book = await shopHasBook(joined.id);
-          shop = { id: joined.id, slug: joined.slug || joined.id, name: joined.name || name, hasBook: book };
-          setHasBook(book);
-          setMatch(shop);
+          target = { id: joined.id, slug: joined.slug || joined.id, name: joined.name || name };
         } else {
           const id = body?.shop?.id ?? body?.id;
           if (!response.ok || !id) {
             setNote("The shop was not created.");
+            setPhase("name");
             return;
           }
-          shop = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name, hasBook: false };
+          target = { id, slug: body?.shop?.slug ?? body?.slug ?? id, name };
           createdHere = true;
-          setMatch(shop);
         }
+        setPicked(target);
       }
-      const bookShots: BookShot[] = tray.shots.flatMap((shot) => {
-        const file = files[shot.id];
-        if (!file) return [];
-        const kind = shot.slot === "extras" ? "extra" : bookKind(shot.slot);
-        return [{ id: shot.id, kind, file }];
-      });
-      const result = await uploadBookSession(
-        shop.id,
-        bookShots,
-        fetch,
-        shop.hasBook ? "improve" : undefined,
-        createdHere,
-      );
+      const bookShots: BookShot[] = shotsRef.current.map((shot) => ({
+        id: shot.id,
+        kind: "auto",
+        file: shot.file,
+      }));
+      const result = await uploadBookSession(target.id, bookShots, fetch, undefined, createdHere);
       if (result.status === 401) {
         setNote("Sign in to save.");
+        setPhase(shop ? "seed" : "name");
         return;
       }
-      const pages =
-        result.body && typeof result.body === "object" && "pages" in result.body && Array.isArray(result.body.pages)
-          ? result.body.pages
-          : [];
-      const built = pages.some((page) => {
-        if (!page || typeof page !== "object" || !("extracted" in page)) return false;
-        const extracted = page.extracted;
-        if (!extracted || typeof extracted !== "object" || !("items" in extracted)) return false;
-        return Array.isArray(extracted.items) && extracted.items.length > 0;
-      });
-      if (!built) {
-        setNote(result.status >= 400 && result.error !== "upstream" && result.error !== "ai_resting" ? "The book did not save." : "Reading menu…");
+      if (result.status >= 400) {
+        setNote("The book did not save.");
+        setPhase(shop ? "seed" : "name");
         return;
       }
-      const summary =
-        result.body && typeof result.body === "object" && "summary" in result.body && typeof result.body.summary === "string"
-          ? result.body.summary
-          : "";
-      setSavedSlug(shop.slug);
-      if (summary) setNote(summary);
+      window.location.assign("/book/" + encodeURIComponent(target.slug));
     } catch {
       setNote("The book did not save.");
+      setPhase(shop ? "seed" : "name");
     } finally {
       setBusy(false);
     }
@@ -443,12 +483,8 @@ export function LiveCamera({
     }
   }
 
-  const menu = menuButton(tray);
   const flipMode = flipControl(cameraCount, flipFailed);
-  const parked = bubbleCount(tray);
-  if (!flying && badge !== parked) {
-    queueMicrotask(() => setBadge(parked));
-  }
+  const chips = seenChips(shots);
 
   if (liveFile) {
     return (
@@ -464,97 +500,74 @@ export function LiveCamera({
   return (
     <div className="fixed inset-0 z-40 bg-black text-white">
       <video ref={videoRef} className={previewClass(facing)} autoPlay muted playsInline />
-      <a className="absolute left-4 top-4 inline-flex min-h-11 min-w-11 items-center text-2xl" href="/map" aria-label="Back">
+      <a className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl" href="/map" aria-label="Back">
         ←
       </a>
-      <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
-        <button
-          type="button"
-          className="relative inline-flex min-h-11 items-center rounded-full bg-white/90 px-4 font-semibold text-black"
-          onClick={() => setFan((open) => !open)}
-        >
-          {seedTitle(hasBook)}
-          {badge > 0 ? (
-            <span
-              key={badge}
-              className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent px-1 text-caption font-bold text-accent-ink"
-              style={{ animation: "seed-bump 200ms ease-out" }}
-            >
-              {badge}
-            </span>
-          ) : null}
+      {phase === "camera" ? (
+        <button type="button" className="seed-open" onClick={() => void openPicker()}>
+          {t(lang, "seed.shop")}
         </button>
-        {showSeedDone(tray) ? (
-          <button type="button" className="min-h-11 rounded-full bg-accent px-4 font-semibold text-accent-ink" disabled={busy} onClick={() => void finish()}>
-            {busy ? "Saving" : "Done"}
-          </button>
-        ) : null}
-        {fan ? (
-          <div className="flex flex-col items-end gap-2">
-            {SLOTS.map(({ slot, label }) => {
-              const enabled = slotOpen(slot, hasBook);
-              const text = slot === "menu" ? (menu.label === "Done" ? `Done (${menu.count})` : label) : label;
-              return (
-                <button
-                  key={slot}
-                  type="button"
-                  disabled={!enabled}
-                  className="min-h-11 rounded-full bg-white/90 px-3 font-semibold text-black disabled:opacity-40"
-                  onClick={() => {
-                    if (slot === "menu" && menu.label === "Done") {
-                      const last = shotsFor(tray, "menu").at(-1);
-                      const file = last ? files[last.id] : null;
-                      if (file) launch(file);
-                      setTray((current) => parkMenu(current));
-                      void finish();
-                      return;
-                    }
-                    setTray((current) => ({ ...current, armed: slot }));
-                    setFan(false);
-                  }}
-                >
-                  {text}
-                  {slot !== "menu" && shotsFor(tray, slot).length > 0 ? ` ${shotsFor(tray, slot).length}` : ""}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
-      <style>{"@keyframes seed-bump { from { transform: scale(0.6); } to { transform: scale(1); } }"}</style>
-      {flying ? (
-        <img
-          src={flying.url}
-          alt=""
-          className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-16 w-16 rounded-md object-cover"
-          style={{
-            transition: "transform 400ms ease-in",
-            transform: flying.go
-              ? "translate(calc(50vw - 5rem), calc(-50vh + 1.5rem)) scale(0.15)"
-              : "translate(-50%, -50%) scale(1)",
+      ) : null}
+      {phase === "pick" ? (
+        <ShopPicker
+          shops={choices}
+          newLabel={t(lang, "seed.new")}
+          onPick={(id) => {
+            const shop = choices.find((item) => item.id === id);
+            if (!shop) return;
+            setPicked({ id: shop.id, slug: shop.slug, name: shop.name });
+            setPhase("seed");
           }}
-          onTransitionEnd={() => {
-            URL.revokeObjectURL(flying.url);
-            setFlying(null);
+          onNew={() => {
+            setPicked(null);
+            setPhase("seed");
           }}
         />
       ) : null}
-      {!match && tray.shots.length > 0 ? (
-        <label className="absolute inset-x-4 bottom-28 text-black">
-          <span className="text-label text-white">Shop name</span>
-          <input
-            className="mt-1 min-h-11 w-full rounded-md px-3 text-black"
-            placeholder="Shop name"
-            value={draftName}
-            onChange={(event) => setDraftName(event.target.value)}
-          />
-        </label>
+      {phase === "seed" ? (
+        <SeedCoach
+          seen={chips}
+          labels={{
+            sign: t(lang, "seed.sign"),
+            menu: t(lang, "seed.menu"),
+            deals: t(lang, "seed.deals"),
+            hours: t(lang, "seed.hours"),
+          }}
+          toast={toast}
+          deleteLabel={t(lang, "seed.delete")}
+          shots={shots}
+          doneLabel={t(lang, "seed.done").replace("{n}", String(shots.length))}
+          canDone={doneEnabled(shots.length)}
+          onDelete={removeShot}
+          onDone={finishSeed}
+        />
       ) : null}
-      <RadarButton
-        label="Take a photo"
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        onClick={() => void shoot()}
-      />
+      {phase === "name" ? (
+        <form
+          className="seed-name"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save(null);
+          }}
+        >
+          <label>
+            <span>{t(lang, "seed.name")}</span>
+            <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
+          </label>
+          <button type="submit" disabled={busy}>
+            {t(lang, "seed.done").replace("{n}", String(shots.length))}
+          </button>
+        </form>
+      ) : null}
+      {phase === "building" ? (
+        <div className="seed-build">
+          <p>{t(lang, "seed.building")}</p>
+          <div className="seed-skel" />
+        </div>
+      ) : null}
+      {phase === "camera" || phase === "seed" ? (
+        <RadarButton label="Take a photo" className="absolute bottom-8 left-1/2 -translate-x-1/2" onClick={() => void shoot()} />
+      ) : null}
       {flipMode === "hide" ? null : (
         <button
           type="button"
@@ -571,12 +584,7 @@ export function LiveCamera({
           </svg>
         </button>
       )}
-      {note ? <p className="absolute inset-x-4 bottom-32 text-center text-body">{note}</p> : null}
-      {savedSlug ? (
-        <a className="absolute bottom-32 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-3 font-semibold text-accent-ink" href={"/book/" + encodeURIComponent(savedSlug)}>
-          View book
-        </a>
-      ) : null}
+      {note ? <p className="absolute inset-x-4 bottom-32 z-20 text-center text-body">{note}</p> : null}
     </div>
   );
 }

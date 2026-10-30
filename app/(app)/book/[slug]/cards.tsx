@@ -72,7 +72,7 @@ export function buildDeck(input: {
   extras: readonly string[];
   deals?: readonly DealTile[];
 }): DeckCard[] {
-  const cards: DeckCard[] = [{ type: "cover" }, { type: "info" }];
+  const cards: DeckCard[] = [{ type: "cover" }];
   if (input.deals && input.deals.length > 0) cards.push({ type: "deals", deals: [...input.deals] });
   const menus = groupMenu(input.menuItems).flatMap((group) =>
     chunkMenu(group.items).map((items) => ({ items, category: group.category })),
@@ -80,6 +80,7 @@ export function buildDeck(input: {
   menus.forEach((group, index) => {
     cards.push({ type: "menu", index, total: menus.length, items: group.items, category: group.category });
   });
+  cards.push({ type: "info" });
   for (const id of input.extras) cards.push({ type: "extra", id });
   return cards;
 }

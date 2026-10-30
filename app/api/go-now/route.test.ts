@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MetaCallError } from "../../../lib/ai/meta";
 import type { ContextShop } from "../../../lib/gonow/context";
-import { handleGoNow } from "./route";
+import { handleGoNow } from "../../../lib/gonow/handler";
 
 const NOW = new Date("2026-10-29T04:00:00.000Z");
 

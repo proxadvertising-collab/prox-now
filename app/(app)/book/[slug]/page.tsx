@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { POST as postBookPages } from "../../../api/book/pages/route";
+import { retryReading } from "@/lib/book/retry";
 import { BookAddPhotos } from "@/components/book/BookAddPhotos";
 import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
@@ -11,17 +10,6 @@ import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/server";
 
 export const instant = false;
-
-export async function retryReading(formData: FormData) {
-  "use server";
-  const shop = String(formData.get("shop") ?? "");
-  const slug = String(formData.get("slug") ?? "");
-  const form = new FormData();
-  form.set("shop", shop);
-  form.set("retry", "1");
-  await postBookPages(new Request("http://localhost/api/book/pages", { method: "POST", body: form }));
-  redirect("/book/" + encodeURIComponent(slug || shop));
-}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

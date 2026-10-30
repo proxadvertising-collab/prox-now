@@ -41,7 +41,7 @@ describe("improve a book", () => {
     const camera = readFileSync(resolve(root, "components/camera/LiveCamera.tsx"), "utf8");
     expect(page).toContain('page.kind === "extra"');
     expect(page).toContain("Extras");
-    expect(camera).toContain('shot.slot === "extras" ? "extra"');
-    expect(camera).toContain('shop.hasBook ? "improve"');
+    expect(camera).toContain('kind: "auto"');
+    expect(camera).not.toContain('shop.hasBook ? "improve"');
   });
 });

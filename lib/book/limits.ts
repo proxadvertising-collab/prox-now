@@ -12,7 +12,7 @@ export const MAX_STORED_BYTES = 1_048_576;
 
 export const STORED_LONG_EDGE = 1600;
 
-export const META_LONG_EDGE = 1024;
+export const META_LONG_EDGE = 1600;
 
 export const META_JPEG_QUALITY = 80;
 

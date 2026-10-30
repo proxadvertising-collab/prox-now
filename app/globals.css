@@ -306,3 +306,124 @@
   color: #111;
 }
 .camera-flip:disabled { opacity: 0.4; }
+
+.seed-open {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  z-index: 20;
+  min-height: 2.75rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  padding: 0 1rem;
+}
+.seed-chips {
+  position: absolute;
+  top: 4.5rem;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.seed-chip {
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.45);
+  color: #fff;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+}
+.seed-chip[data-seen="true"] { background: #fff; color: #111; }
+.seed-toast {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 38%;
+  z-index: 20;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.72);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+.seed-toast button,
+.seed-picker button,
+.seed-name button,
+.seed-done {
+  min-height: 2.75rem;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  padding: 0 1rem;
+}
+.seed-done {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 20;
+}
+.seed-done:disabled { opacity: 0.4; }
+.seed-film {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6.5rem;
+  z-index: 20;
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0 1rem;
+}
+.seed-film button { flex: none; background: transparent; padding: 0; }
+.seed-thumb { width: 3.5rem; height: 3.5rem; border-radius: 8px; object-fit: cover; }
+.seed-picker {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 4.5rem;
+  z-index: 20;
+  display: flex;
+  max-height: 50vh;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: auto;
+}
+.seed-name {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 7rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.seed-name input {
+  min-height: 2.75rem;
+  width: 100%;
+  border-radius: 8px;
+  color: #111;
+  padding: 0 0.75rem;
+}
+.seed-build {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgb(0 0 0 / 0.72);
+}
+.seed-skel {
+  width: min(92vw, 420px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #222, #333, #222);
+}

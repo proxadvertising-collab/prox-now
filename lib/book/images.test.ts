@@ -22,7 +22,7 @@ async function wide(): Promise<Buffer> {
 }
 
 describe("book image copies", () => {
-  it("sends a 1024 jpeg to Meta and stores a separate blurred copy at most 1600 px", async () => {
+  it("sends a 1600 jpeg to Meta and stores a separate blurred copy at most 1600 px", async () => {
     const original = await wide();
     const meta = await metaJpeg(original);
     const metaInfo = await sharp(meta).metadata();
