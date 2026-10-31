@@ -1,7 +1,7 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
+import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
 
 describe("judge script", () => {
   it("has eight steps and a card for each named beat", () => {
@@ -10,6 +10,13 @@ describe("judge script", () => {
     expect(EXPLAINERS.map((step) => step.id)).toEqual(["seed", "book", "ask", "translate", "order", "post", "claim", "coupon"]);
     expect(BOOK_PROGRESS).toContain("about a minute");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");
+    expect(DEMO_CAFES.a.name).toBe("Farm to Go (demo)");
+    expect(DEMO_CAFES.a.photos).toEqual([
+      "/judge/cafe-a/1-storefront.jpg",
+      "/judge/cafe-a/2-drinks.jpg",
+      "/judge/cafe-a/3-brunch.jpg",
+    ]);
+    expect(DEMO_CAFES.b.name).toBe("Coconut shake stand");
     expect(DEMO_CAFES.b.slug).toBe("coconut-shake-stand");
     expect(DEMO_CAFES.a.photos.every((photo) => photo.startsWith("/judge/cafe-a/"))).toBe(true);
     expect(DEMO_CAFES.b.photos.every((photo) => photo.startsWith("/judge/cafe-b/"))).toBe(true);
@@ -19,6 +26,22 @@ describe("judge script", () => {
       expect(photo).toMatch(/\.(jpg|png|webp)$/);
       expect(existsSync(resolve(root, "public", photo.slice(1)))).toBe(true);
     }
+  });
+
+  it("saves a judge sample into the demo café on the first try", () => {
+    expect(judgeSampleSave(null)).toBeNull();
+    expect(judgeSampleSave({ cafe: "a", role: "shopper", step: "seed" })).toEqual({
+      shop: "mala-mafia",
+      mode: "improve",
+    });
+    expect(judgeSampleSave({ cafe: "b", role: "owner", step: "claim" })?.shop).toBe("coconut-shake-stand");
+    const camera = readFileSync(resolve(import.meta.dirname, "../../components/camera/LiveCamera.tsx"), "utf8");
+    const save = camera.slice(camera.indexOf("async function save"), camera.indexOf("async function flip"));
+    expect(save.indexOf("judgeSampleSave")).toBeGreaterThan(-1);
+    expect(save.indexOf("judgeSampleSave")).toBeLessThan(save.indexOf('fetch("/api/shops"'));
+    expect(save).toContain('createdHere ? undefined : "improve"');
+    expect(camera).toContain("Turn on location to use sample photos");
+    expect(camera).toContain("top-[7.5rem] inset-x-0 z-20 mx-auto");
   });
 
   it("shows every card to a judge and once to everyone else", () => {

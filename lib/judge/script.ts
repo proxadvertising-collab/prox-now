@@ -11,8 +11,8 @@ export type Tour = { cafe: CafeId; role: TourRole; step: StepId };
 export const DEMO_CAFES: Record<CafeId, { slug: string; name: string; photos: readonly string[] }> = {
   a: {
     slug: "mala-mafia",
-    name: "Mala Mafia",
-    photos: ["/judge/cafe-a/menu-1.jpg", "/judge/cafe-a/menu-2.jpg", "/judge/cafe-a/menu-3.jpg"],
+    name: "Farm to Go (demo)",
+    photos: ["/judge/cafe-a/1-storefront.jpg", "/judge/cafe-a/2-drinks.jpg", "/judge/cafe-a/3-brunch.jpg"],
   },
   b: {
     slug: "coconut-shake-stand",
@@ -36,6 +36,12 @@ export const EXPLAINERS: readonly Explainer[] = [
 ];
 
 const STEP_IDS = new Set<string>(EXPLAINERS.map((step) => step.id));
+
+/** Judge tour writes the existing demo café in improve mode. No shop match. */
+export function judgeSampleSave(tour: Tour | null): { shop: string; mode: "improve" } | null {
+  if (!tour) return null;
+  return { shop: DEMO_CAFES[tour.cafe].slug, mode: "improve" };
+}
 
 export function explainer(id: StepId): Explainer {
   const found = EXPLAINERS.find((step) => step.id === id);

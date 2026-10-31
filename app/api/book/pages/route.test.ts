@@ -585,6 +585,18 @@ describe("POST /api/book/pages", () => {
     expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed").length).toBeGreaterThan(1);
   });
 
+  it("joining an existing shop with a live page succeeds", async () => {
+    const pageId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP }];
+    state.book = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };
+    const refused = await postSession([{ kind: "storefront" }]);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: "already_there" });
+    const joined = await postSession([{ kind: "storefront" }], SHOP, "improve");
+    expect(joined.status).toBe(200);
+    expect(state.pages.some((page) => page.status === "live")).toBe(true);
+  });
+
   it("stores an extra page as the extra kind", async () => {
     const response = await postSession([{ kind: "extra" }]);
     expect(response.status).toBe(200);

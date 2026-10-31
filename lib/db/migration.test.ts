@@ -577,6 +577,21 @@ describe("security migrations 0018 through 0021", () => {
     expect(book).toContain("Rollback:");
   });
 
+  it("resets café A to Farm to Go without changing its slug", () => {
+    const sql = readFileSync(resolve(root, "supabase/migrations/0022_farm_to_go_name.sql"), "utf8");
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create or replace function public.reset_demo()");
+    expect(sql).toContain("'mala-mafia', 'Farm to Go (demo)'");
+    expect(sql).toContain("'coconut-shake-stand', 'Coconut shake stand'");
+    expect(sql).not.toContain("'mala-mafia', 'Mala Mafia'");
+    expect(sql).not.toContain("set slug");
+    expect(sql).toContain("where shops.slug = seed.slug");
+    expect(sql).toContain("revoke all on function public.reset_demo() from public, anon");
+    expect(sql).toContain("grant execute on function public.reset_demo() to authenticated");
+    expect(sql).not.toContain("grant execute on function public.reset_demo() to anon");
+    expect(sql).not.toContain("eyJ");
+  });
+
   it("makes both photo buckets private", () => {
     expect(photos).toContain("Apply it only after the captain writes apply");
     expect(photos).toContain("set public = false");

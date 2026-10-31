@@ -28,7 +28,7 @@ import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { BuildProgress } from "@/components/book/BuildProgress";
-import { DEMO_CAFES, readTour } from "@/lib/judge/script";
+import { DEMO_CAFES, judgeSampleSave, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
 import {
@@ -455,7 +455,10 @@ export function LiveCamera({
 
   async function loadSamples(): Promise<boolean> {
     const fix = (await placeForShot()) ?? fixRef.current;
-    if (!fix) return false;
+    if (!fix) {
+      setNote("Turn on location to use sample photos");
+      return false;
+    }
     const tour = readTour();
     const cafe = DEMO_CAFES[tour?.cafe ?? "a"];
     const files: File[] = [];
@@ -578,7 +581,12 @@ export function LiveCamera({
     try {
       let target = shop;
       let createdHere = false;
-      if (!target) {
+      const tour = readTour();
+      const judged = force ? null : judgeSampleSave(tour);
+      if (!target && judged && tour) {
+        const cafe = DEMO_CAFES[tour.cafe];
+        target = { id: judged.shop, slug: cafe.slug, name: cafe.name };
+      } else if (!target) {
         const name = PLACEHOLDER_SHOP_NAME;
         const place = fixRef.current ?? shotsRef.current[0]?.fix;
         if (!place) return;
@@ -629,7 +637,13 @@ export function LiveCamera({
         file: shot.file,
       }));
       const saveFor = target;
-      const result = await uploadBookSession(saveFor.id, bookShots, fetch, undefined, createdHere).catch(() => null);
+      const result = await uploadBookSession(
+        saveFor.id,
+        bookShots,
+        fetch,
+        createdHere ? undefined : "improve",
+        createdHere,
+      ).catch(() => null);
       if (!result || savedMaybe(result.status)) {
         const slug = await waitForBook(saveFor.id, async (shopId) => {
           const supabase = createClient();
@@ -791,7 +805,7 @@ export function LiveCamera({
       {phase === "seed" && readTour()?.role === "shopper" ? (
         <button
           type="button"
-          className="absolute left-4 top-16 z-20 inline-flex min-h-11 items-center rounded-full bg-[#C4B5FD] px-4 text-sm font-semibold text-[#2A1848]"
+          className="absolute top-[7.5rem] inset-x-0 z-20 mx-auto inline-flex min-h-11 w-fit items-center rounded-full bg-[#C4B5FD] px-4 text-sm font-semibold text-[#2A1848]"
           onClick={() => void loadSamples()}
         >
           Use pre-seeded photos
