@@ -322,6 +322,14 @@ export function OrderClient({
 
   function openStaff() {
     setStaff(true);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("staff") !== "1") {
+        url.searchParams.set("staff", "1");
+        window.history.replaceState(window.history.state, "", url.pathname + url.search);
+        window.dispatchEvent(new Event("prox-step"));
+      }
+    }
     const current = readOrder(slug, browserStorage());
     if (!current.translation.trim() && current.note.trim()) void translate(current.note);
   }

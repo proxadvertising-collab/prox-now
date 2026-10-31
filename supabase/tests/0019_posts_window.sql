@@ -35,3 +35,35 @@ begin
     raise exception 'inbox must wait on ready_at';
   end if;
 end $$;
+
+-- A 5-argument create_post call resolves to exactly one function.
+-- The 6-argument function has no defaults, so it cannot take that call.
+
+do $$
+declare
+  v_match int;
+  v_defaults int;
+begin
+  select count(*) into v_match
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'create_post'
+    and p.pronargs >= 5
+    and (p.pronargs - p.pronargdefaults) <= 5;
+
+  if v_match <> 1 then
+    raise exception 'a 5-argument create_post call must resolve to exactly one function';
+  end if;
+
+  select p.pronargdefaults into v_defaults
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'create_post'
+    and p.pronargs = 6;
+
+  if v_defaults is null or v_defaults <> 0 then
+    raise exception 'the 6-argument create_post must have no defaults';
+  end if;
+end $$;

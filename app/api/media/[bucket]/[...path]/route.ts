@@ -3,7 +3,8 @@ import {
   bookPhotoVisible,
   cutoutShopId,
   extractedMentions,
-  postPhotoVisible,
+  postPhotoAudience,
+  type PhotoAudience,
   type PostPhotoRow,
 } from "../../../../../lib/photos/access";
 import { cachedSignedUrl, SIGNED_URL_TTL_SECONDS } from "../../../../../lib/photos/sign";
@@ -29,13 +30,13 @@ async function callerId(): Promise<string | null> {
   }
 }
 
-async function postAllowed(
+async function postAudience(
   service: ReturnType<typeof createServiceClient>,
   objectPath: string,
   userId: string | null,
-): Promise<boolean> {
+): Promise<PhotoAudience> {
   const posts = await service.from("posts").select("author_id, shop_id, status, expires_at").eq("photo_path", objectPath);
-  if (posts.error) return false;
+  if (posts.error) return "none";
   const rows: PostPhotoRow[] = [];
   for (const row of asRows(posts.data)) {
     rows.push({
@@ -60,7 +61,7 @@ async function postAllowed(
       }
     }
   }
-  return postPhotoVisible(rows, userId, owned);
+  return postPhotoAudience(rows, userId, owned);
 }
 
 async function bookAllowed(service: ReturnType<typeof createServiceClient>, objectPath: string): Promise<boolean> {
@@ -79,6 +80,19 @@ async function bookAllowed(service: ReturnType<typeof createServiceClient>, obje
     if (cutShop) {
       const cuts = await service.from("shop_book_pages").select("extracted").eq("status", "live").eq("shop_id", cutShop);
       if (!cuts.error && asRows(cuts.data).some((row) => extractedMentions(row.extracted, objectPath))) shopId = cutShop;
+    }
+  }
+  if (!shopId) {
+    const books = await service.from("shop_books").select("shop_id, theme").eq("status", "live");
+    if (books.error) return false;
+    for (const row of asRows(books.data)) {
+      const theme = row.theme;
+      const hero =
+        theme && typeof theme === "object" && !Array.isArray(theme) ? (theme as { heroPath?: unknown }).heroPath : null;
+      if (typeof hero === "string" && hero === objectPath && typeof row.shop_id === "string") {
+        shopId = row.shop_id;
+        break;
+      }
     }
   }
   if (!shopId) return false;
@@ -102,14 +116,19 @@ export async function GET(_request: Request, context: { params: Promise<{ bucket
   } catch {
     return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
-  const userId = await callerId();
-  const allowed = bucket === "shop-book" ? await bookAllowed(service, objectPath) : await postAllowed(service, objectPath, userId);
-  if (!allowed) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const audience: PhotoAudience =
+    bucket === "shop-book"
+      ? (await bookAllowed(service, objectPath))
+        ? "public"
+        : "none"
+      : await postAudience(service, objectPath, await callerId());
+  if (audience === "none") return NextResponse.json({ error: "not_found" }, { status: 404 });
   const url = await cachedSignedUrl(bucket, objectPath, async () => {
     const signed = await service.storage.from(bucket).createSignedUrl(objectPath, SIGNED_URL_TTL_SECONDS);
     const value = signed.data?.signedUrl;
     return typeof value === "string" && value.includes("token=") ? value : null;
   });
   if (!url) return NextResponse.json({ error: "not_found" }, { status: 404 });
-  return NextResponse.redirect(url, { headers: { "Cache-Control": "public, max-age=60, s-maxage=60" } });
+  const cache = audience === "public" ? "public, max-age=60, s-maxage=60" : "private, no-store";
+  return NextResponse.redirect(url, { headers: { "Cache-Control": cache } });
 }

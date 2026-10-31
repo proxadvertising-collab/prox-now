@@ -23,27 +23,39 @@ export function TourChrome() {
   const [tour, setTour] = useState<Tour | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
   const [hidden, setHidden] = useState(false);
+  const [located, setLocated] = useState(pathname);
 
   useEffect(() => {
-    const stored = readTour();
-    const fromPath = pathStep(pathname);
-    if (stored && fromPath) {
-      const step = advanceStep(stored.step, fromPath);
-      if (step !== stored.step) {
-        const next = { ...stored, step };
-        startJudgeTour(next);
-        setTour(next);
+    function sync() {
+      const here = window.location.pathname + window.location.search;
+      setLocated(here);
+      const stored = readTour();
+      const fromPath = pathStep(here);
+      if (stored && fromPath) {
+        const step = advanceStep(stored.step, fromPath);
+        if (step !== stored.step) {
+          const next = { ...stored, step };
+          startJudgeTour(next);
+          setTour(next);
+        } else {
+          setTour(stored);
+        }
       } else {
         setTour(stored);
       }
-    } else {
-      setTour(stored);
+      setSeen(readSeen());
+      setHidden(false);
     }
-    setSeen(readSeen());
-    setHidden(false);
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("prox-step", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("prox-step", sync);
+    };
   }, [pathname]);
 
-  const step: StepId | null = tour?.step ?? pathStep(pathname);
+  const step: StepId | null = tour?.step ?? pathStep(located);
   if (!step || hidden) return null;
   if (!showExplainer({ judge: Boolean(tour), step, seen })) return null;
   const card = explainer(step);

@@ -5,20 +5,34 @@ export type PostPhotoRow = {
   expires_at: string;
 };
 
-/** A live post is public. Its author and the shop's verified owner can still open it. */
+export type PhotoAudience = "public" | "private" | "none";
+
+/** Live and kept posts are public. An ended post stays visible to its author and the verified owner. */
+export function postPhotoAudience(
+  rows: readonly PostPhotoRow[],
+  userId: string | null,
+  ownedShopIds: ReadonlySet<string>,
+  now = Date.now(),
+): PhotoAudience {
+  let personal = false;
+  for (const row of rows) {
+    const expires = Date.parse(row.expires_at);
+    const live = row.status === "live" && Number.isFinite(expires) && expires > now;
+    if (live || row.status === "kept") return "public";
+    const mine = Boolean(userId && row.author_id && row.author_id === userId);
+    const owner = Boolean(userId && row.shop_id && ownedShopIds.has(row.shop_id));
+    if (mine || owner) personal = true;
+  }
+  return personal ? "private" : "none";
+}
+
 export function postPhotoVisible(
   rows: readonly PostPhotoRow[],
   userId: string | null,
   ownedShopIds: ReadonlySet<string>,
   now = Date.now(),
 ): boolean {
-  for (const row of rows) {
-    const expires = Date.parse(row.expires_at);
-    if (row.status === "live" && Number.isFinite(expires) && expires > now) return true;
-    if (userId && row.author_id && row.author_id === userId) return true;
-    if (userId && row.shop_id && ownedShopIds.has(row.shop_id)) return true;
-  }
-  return false;
+  return postPhotoAudience(rows, userId, ownedShopIds, now) !== "none";
 }
 
 /** Cutouts are stored as book-cutouts/{shopId}/{file}. */

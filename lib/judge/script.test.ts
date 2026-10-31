@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, rememberSeen, showExplainer, swapTour } from "./script";
+import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
 
 describe("judge script", () => {
   it("has eight steps and a card for each named beat", () => {
@@ -41,11 +41,26 @@ describe("judge script", () => {
     expect(DEMO_CAFES[swapTour({ cafe: "a", role: "owner", step: "claim" }).cafe].photos.every((photo) => photo.startsWith("/judge/cafe-b/") && photo.endsWith(".jpg"))).toBe(true);
   });
 
-  it("never shows a later step before the one in front of it", () => {
-    expect(advanceStep("seed", "book")).toBe("book");
-    expect(advanceStep("seed", "ask")).toBe("seed");
-    expect(advanceStep("seed", "coupon")).toBe("seed");
-    expect(advanceStep("order", "post")).toBe("post");
+  it("walks all eight steps forward and never goes back", () => {
+    const pages = [
+      "/snap",
+      "/book/mala",
+      "/map",
+      "/book/mala/order",
+      "/book/mala/order?staff=1",
+      "/map?post=post-1",
+      "/owner",
+      "/wallet",
+    ];
+    let step: (typeof EXPLAINERS)[number]["id"] = "seed";
+    const seen = pages.map((page) => {
+      const next = pathStep(page);
+      expect(next).not.toBeNull();
+      step = advanceStep(step, next ?? step);
+      return step;
+    });
+    expect(seen).toEqual(["seed", "book", "ask", "translate", "order", "post", "claim", "coupon"]);
     expect(advanceStep("post", "order")).toBe("post");
+    expect(advanceStep("coupon", "seed")).toBe("coupon");
   });
 });

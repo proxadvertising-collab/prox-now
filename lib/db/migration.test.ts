@@ -548,7 +548,9 @@ describe("security migrations 0018 through 0021", () => {
     expect(posts).toContain("coalesce(v_ready_at, v_expires_at)");
     expect(posts).toContain("if tg_op = 'INSERT' then");
     expect(posts).not.toContain("new.expires_at := old.expires_at");
-    expect(posts).toContain("Drop this wrapper after the deploy");
+    expect(posts).toContain("Drop it in a later migration");
+    expect(posts).toContain("p_facts jsonb default null");
+    expect(posts).not.toContain("p_author_id uuid default null");
     expect(posts).toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb) to authenticated");
     expect(posts).toContain("ready_at = now()");
     expect(posts).toContain("coalesce(p.ready_at, p.expires_at)");
@@ -558,6 +560,8 @@ describe("security migrations 0018 through 0021", () => {
     expect(sqlTest).toContain("coalesce(v_ready_at, v_expires_at)");
     expect(sqlTest).toContain("ready_at = now()");
     expect(sqlTest).toContain("new.expires_at := old.expires_at");
+    expect(sqlTest).toContain("a 5-argument create_post call must resolve to exactly one function");
+    expect(sqlTest).toContain("pronargdefaults");
     expect(posts).toContain("Rollback:");
   });
 

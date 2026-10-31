@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookPhotoVisible, cutoutShopId, extractedMentions, postPhotoVisible, type PostPhotoRow } from "./access";
+import { bookPhotoVisible, cutoutShopId, extractedMentions, postPhotoAudience, postPhotoVisible, type PostPhotoRow } from "./access";
 
 const future = new Date(Date.now() + 60_000).toISOString();
 const past = new Date(Date.now() - 60_000).toISOString();
@@ -17,15 +17,19 @@ function row(patch: Partial<PostPhotoRow> = {}): PostPhotoRow {
 describe("media visibility", () => {
   it("shows a live post to anyone and hides it once it is over", () => {
     expect(postPhotoVisible([row()], null, new Set())).toBe(true);
-    expect(postPhotoVisible([row({ status: "kept" })], null, new Set())).toBe(false);
+    expect(postPhotoAudience([row({ status: "kept" })], null, new Set())).toBe("public");
+    expect(postPhotoVisible([row({ status: "kept", expires_at: past })], null, new Set())).toBe(true);
+    expect(postPhotoAudience([row({ expires_at: past })], "author-1", new Set())).toBe("private");
     expect(postPhotoVisible([row({ expires_at: past })], null, new Set())).toBe(false);
     expect(postPhotoVisible([], null, new Set())).toBe(false);
   });
 
   it("still shows an ended post to its author and the verified owner", () => {
-    const ended = row({ status: "kept", expires_at: past });
+    const ended = row({ status: "live", expires_at: past });
     expect(postPhotoVisible([ended], "author-1", new Set())).toBe(true);
     expect(postPhotoVisible([ended], "owner-1", new Set(["shop-1"]))).toBe(true);
+    expect(postPhotoAudience([ended], "author-1", new Set())).toBe("private");
+    expect(postPhotoAudience([ended], "owner-1", new Set(["shop-1"]))).toBe("private");
     expect(postPhotoVisible([ended], "stranger", new Set())).toBe(false);
     expect(postPhotoVisible([ended], "owner-1", new Set(["other-shop"]))).toBe(false);
   });

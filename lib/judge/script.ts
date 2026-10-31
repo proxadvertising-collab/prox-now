@@ -48,11 +48,11 @@ export function tourHref(role: TourRole): string {
 
 const STEP_ORDER: readonly StepId[] = EXPLAINERS.map((step) => step.id);
 
-/** Move at most one step forward. Step N+1 never shows before step N. */
+/** Jump forward to a later step. Never move backward. */
 export function advanceStep(current: StepId, candidate: StepId): StepId {
   const at = STEP_ORDER.indexOf(current);
   const want = STEP_ORDER.indexOf(candidate);
-  if (want === at + 1) return candidate;
+  if (want > at) return candidate;
   return current;
 }
 
@@ -63,12 +63,15 @@ export function swapTour(tour: Tour): { cafe: CafeId; role: TourRole; enter: "ex
 }
 
 export function pathStep(pathname: string): StepId | null {
-  if (pathname.startsWith("/wallet")) return "coupon";
-  if (pathname.startsWith("/owner")) return "claim";
-  if (pathname.startsWith("/map")) return "ask";
-  if (pathname.includes("/order")) return "order";
-  if (pathname.startsWith("/book")) return "book";
-  if (pathname.startsWith("/snap")) return "seed";
+  const [path, query = ""] = pathname.split("?");
+  const params = new URLSearchParams(query);
+  if (path.startsWith("/wallet")) return "coupon";
+  if (path.startsWith("/owner")) return "claim";
+  if (params.has("post")) return "post";
+  if (path.includes("/order")) return params.get("staff") === "1" ? "order" : "translate";
+  if (path.startsWith("/map")) return "ask";
+  if (path.startsWith("/book")) return "book";
+  if (path.startsWith("/snap")) return "seed";
   return null;
 }
 

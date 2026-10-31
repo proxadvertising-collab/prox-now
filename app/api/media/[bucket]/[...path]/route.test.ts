@@ -129,6 +129,41 @@ describe("media signing", () => {
     expect(buckets).toEqual(["shop-book"]);
   });
 
+  it("signs a kept post for anyone and keeps the public cache", async () => {
+    tables.posts = [{ photo_path: "user/a.jpg", author_id: "author-1", shop_id: "shop-1", status: "kept", expires_at: past }];
+    const response = await call("post-photos", ["user", "a.jpg"]);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=60, s-maxage=60");
+  });
+
+  it("keeps an author-only or owner-only photo out of the shared cache", async () => {
+    tables.posts = [{ photo_path: "user/a.jpg", author_id: "author-1", shop_id: "shop-1", status: "live", expires_at: past }];
+    getUser.mockResolvedValue({ data: { user: { id: "author-1" } }, error: null });
+    const author = await call("post-photos", ["user", "a.jpg"]);
+    expect(author.status).toBe(307);
+    expect(author.headers.get("cache-control")).toBe("private, no-store");
+
+    clearSignedUrlCache();
+    getUser.mockResolvedValue({ data: { user: { id: "owner-1" } }, error: null });
+    tables.shop_owners = [{ user_id: "owner-1", shop_id: "shop-1", status: "verified" }];
+    const owner = await call("post-photos", ["user", "a.jpg"]);
+    expect(owner.status).toBe(307);
+    expect(owner.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("signs a hero cutout when the live book theme names it", async () => {
+    tables.shop_books = [{ shop_id: "shop-1", status: "live", theme: { heroPath: "book-cutouts/shop-1/hero.webp" } }];
+    const live = await call("shop-book", ["book-cutouts", "shop-1", "hero.webp"]);
+    expect(live.status).toBe(307);
+
+    clearSignedUrlCache();
+    createSignedUrl.mockClear();
+    tables.shop_books = [{ shop_id: "shop-1", status: "hidden", theme: { heroPath: "book-cutouts/shop-1/hero.webp" } }];
+    const hidden = await call("shop-book", ["book-cutouts", "shop-1", "hero.webp"]);
+    expect(hidden.status).toBe(404);
+    expect(createSignedUrl).not.toHaveBeenCalled();
+  });
+
   it("signs a cutout only when a live page names it", async () => {
     tables.shop_book_pages = [{ shop_id: "shop-1", status: "live", image_path: "shop-1/menu.jpg", extracted: { logo_url: "book-cutouts/shop-1/logo.webp" } }];
     tables.shop_books = [{ shop_id: "shop-1", status: "live" }];

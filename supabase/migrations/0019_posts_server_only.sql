@@ -3,8 +3,8 @@
 --
 -- Clients cannot insert or update posts. Expiry and ready_at are stamped
 -- by the trigger on insert only. A temporary 5-argument create_post wrapper
--- keeps the live app working if this file lands before the deploy.
--- Drop that wrapper after the deploy.
+-- keeps the live signature, including p_facts default null. Do not drop the
+-- wrapper in this file. Drop it in a later migration.
 -- Rollback: recreate posts_insert_own_live and grant insert on public.posts
 -- to authenticated, as in 0001_core_schema.sql. Grant execute on
 -- create_post(uuid, text, text, jsonb, jsonb) to authenticated.
@@ -57,8 +57,8 @@ create or replace function public.create_post(
   p_photo_path text,
   p_text_original text,
   p_text_translated jsonb,
-  p_facts jsonb default null,
-  p_author_id uuid default null
+  p_facts jsonb,
+  p_author_id uuid
 )
 returns public.posts
 language plpgsql
@@ -152,14 +152,16 @@ $$;
 revoke all on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) from public, anon, authenticated;
 grant execute on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) to service_role;
 
--- Temporary wrapper so the live app can still call the 5-argument create_post
--- if this file lands before the deploy. Drop this wrapper after the deploy.
+-- Temporary wrapper. Same signature as prod, including p_facts default null,
+-- so create-or-replace does not try to drop that default. A 5-argument call
+-- resolves only to this function because the 6-argument one has no defaults.
+-- Do not drop the wrapper in this file. Drop it in a later migration.
 create or replace function public.create_post(
   p_shop_id uuid,
   p_photo_path text,
   p_text_original text,
   p_text_translated jsonb,
-  p_facts jsonb
+  p_facts jsonb default null
 )
 returns public.posts
 language plpgsql

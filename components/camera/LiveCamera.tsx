@@ -129,6 +129,7 @@ export function LiveCamera({
   const langRef = useRef<Lang>("en");
   const boot = useRef(false);
   const samplesOnce = useRef(false);
+  const loadSamplesRef = useRef<() => Promise<boolean>>(async () => false);
   const facedSeed = useRef(false);
   const [facing, setFacing] = useState<Facing>(facingForSession());
   const [cameraCount, setCameraCount] = useState<number | null>(null);
@@ -163,6 +164,41 @@ export function LiveCamera({
       if (action === "shoot") navShoot.current();
       else if (action === "pick") navPick.current();
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("samples") !== "1" || readTour()?.role !== "shopper") return;
+    let stopped = false;
+    let running = false;
+    const attempt = async () => {
+      if (stopped || samplesOnce.current || running) return;
+      running = true;
+      try {
+        const ok = await loadSamplesRef.current();
+        if (ok) samplesOnce.current = true;
+      } finally {
+        running = false;
+      }
+    };
+    void attempt();
+    const timer = window.setInterval(() => {
+      if (samplesOnce.current) {
+        window.clearInterval(timer);
+        return;
+      }
+      void attempt();
+    }, 1000);
+    const stop = window.setTimeout(() => {
+      stopped = true;
+      window.clearInterval(timer);
+    }, 30_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.clearTimeout(stop);
+    };
   }, []);
 
   function commitShots(next: SeedShot[]) {
@@ -417,7 +453,9 @@ export function LiveCamera({
     void openPicker();
   };
 
-  async function loadSamples() {
+  async function loadSamples(): Promise<boolean> {
+    const fix = (await placeForShot()) ?? fixRef.current;
+    if (!fix) return false;
     const tour = readTour();
     const cafe = DEMO_CAFES[tour?.cafe ?? "a"];
     const files: File[] = [];
@@ -427,17 +465,13 @@ export function LiveCamera({
       const blob = await response.blob();
       files.push(new File([blob], "sample-menu.jpg", { type: blob.type || "image/jpeg" }));
     }
-    if (files.length === 0) return;
-    const fix = (await placeForShot()) ?? fixRef.current;
-    if (!fix) return;
+    if (files.length === 0) return false;
     setPhase("seed");
     await keepUploads(files, fix, true);
+    return true;
   }
 
-  if (!samplesOnce.current && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("samples") === "1" && readTour()?.role === "shopper") {
-    samplesOnce.current = true;
-    void loadSamples();
-  }
+  loadSamplesRef.current = loadSamples;
 
   async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {
     fixRef.current = fix;
