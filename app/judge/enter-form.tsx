@@ -35,6 +35,7 @@ export function JudgeEnter() {
       const payload = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null;
       if (response.ok && payload?.ok) {
         if (url === "/api/judge/reset") {
+          startJudgeTour({ cafe: "a", role: "shopper", step: "seed" });
           setMessage(t("en", "judge.fresh"));
           window.setTimeout(() => window.location.assign(FRESH_DEMO_NEXT), 600);
           return;
@@ -69,13 +70,13 @@ export function JudgeEnter() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body text-fg">{t("en", "judge.freshOffer")}</p>
-      <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/reset")}>
+      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/reset")}>
         {t("en", "judge.freshStart")}
       </button>
       <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
         {t("en", "judge.shopper")}
       </button>
-      <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
+      <button type="button" className={outline + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
         {t("en", "judge.owner")}
       </button>
       <p role={message ? "alert" : "status"} className="min-h-6 text-label text-fg">

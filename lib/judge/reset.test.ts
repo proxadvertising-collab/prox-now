@@ -25,7 +25,11 @@ describe("fresh demo reset", () => {
     expect(form).toContain('post("/api/judge/reset")');
     expect(form).toContain("judge.fresh");
     expect(form).toContain("FRESH_DEMO_NEXT");
+    expect(form).toContain('startJudgeTour({ cafe: "a", role: "shopper", step: "seed" })');
+    expect(form.indexOf('post("/api/judge/reset")')).toBeGreaterThan(form.indexOf("startJudgeTour"));
     expect(form.indexOf("judge.freshStart")).toBeLessThan(form.indexOf("judge.shopper"));
+    expect(form.indexOf("className={primary")).toBeGreaterThan(form.indexOf("judge.freshStart"));
+    expect(form.indexOf('role=explorer')).toBeLessThan(form.indexOf('role=owner'));
     expect(form).toContain("/api/judge/enter?role=explorer");
     expect(form).toContain("/api/judge/enter?role=owner");
   });

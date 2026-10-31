@@ -128,6 +128,7 @@ export function LiveCamera({
   const fixRef = useRef<CaptureFix | null>(null);
   const langRef = useRef<Lang>("en");
   const boot = useRef(false);
+  const samplesOnce = useRef(false);
   const facedSeed = useRef(false);
   const [facing, setFacing] = useState<Facing>(facingForSession());
   const [cameraCount, setCameraCount] = useState<number | null>(null);
@@ -424,13 +425,18 @@ export function LiveCamera({
       const response = await fetch(url);
       if (!response.ok) continue;
       const blob = await response.blob();
-      files.push(new File([blob], "sample-menu.svg", { type: blob.type || "image/svg+xml" }));
+      files.push(new File([blob], "sample-menu.jpg", { type: blob.type || "image/jpeg" }));
     }
     if (files.length === 0) return;
     const fix = (await placeForShot()) ?? fixRef.current;
     if (!fix) return;
     setPhase("seed");
     await keepUploads(files, fix, true);
+  }
+
+  if (!samplesOnce.current && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("samples") === "1" && readTour()?.role === "shopper") {
+    samplesOnce.current = true;
+    void loadSamples();
   }
 
   async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {

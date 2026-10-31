@@ -546,6 +546,18 @@ describe("security migrations 0018 through 0021", () => {
     expect(posts).toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) to service_role");
     expect(posts).not.toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) to authenticated");
     expect(posts).toContain("coalesce(v_ready_at, v_expires_at)");
+    expect(posts).toContain("if tg_op = 'INSERT' then");
+    expect(posts).not.toContain("new.expires_at := old.expires_at");
+    expect(posts).toContain("Drop this wrapper after the deploy");
+    expect(posts).toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb) to authenticated");
+    expect(posts).toContain("ready_at = now()");
+    expect(posts).toContain("coalesce(p.ready_at, p.expires_at)");
+    expect(posts).toContain("function public.pass_post_begin");
+    expect(posts).toContain("function public.owner_inbox()");
+    const sqlTest = readFileSync(resolve(root, "supabase/tests/0019_posts_window.sql"), "utf8");
+    expect(sqlTest).toContain("coalesce(v_ready_at, v_expires_at)");
+    expect(sqlTest).toContain("ready_at = now()");
+    expect(sqlTest).toContain("new.expires_at := old.expires_at");
     expect(posts).toContain("Rollback:");
   });
 

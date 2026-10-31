@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
+  advanceStep,
   explainer,
   pathStep,
   readSeen,
@@ -26,10 +27,15 @@ export function TourChrome() {
   useEffect(() => {
     const stored = readTour();
     const fromPath = pathStep(pathname);
-    if (stored && fromPath && stored.step !== fromPath && fromPath !== "seed") {
-      const next = { ...stored, step: fromPath };
-      startJudgeTour(next);
-      setTour(next);
+    if (stored && fromPath) {
+      const step = advanceStep(stored.step, fromPath);
+      if (step !== stored.step) {
+        const next = { ...stored, step };
+        startJudgeTour(next);
+        setTour(next);
+      } else {
+        setTour(stored);
+      }
     } else {
       setTour(stored);
     }
@@ -57,7 +63,8 @@ export function TourChrome() {
     if (!response.ok || !payload?.ok) return;
     const saved = { cafe: next.cafe, role: next.role, step: next.step };
     startJudgeTour(saved);
-    window.location.assign(tourHref(next.role));
+    const href = next.role === "shopper" ? "/snap?tour=1&samples=1" : tourHref(next.role);
+    window.location.assign(href);
   }
 
   return (

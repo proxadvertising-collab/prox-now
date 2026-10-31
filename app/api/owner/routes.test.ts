@@ -207,8 +207,9 @@ describe("owner routes", () => {
     const response = await proof("13.8", "100.5");
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "too_far" });
-    expect(spark).not.toHaveBeenCalled();
-    expect(serviceRpc).not.toHaveBeenCalled();
+    expect(spark).toHaveBeenCalled();
+    expect(serviceRpc).not.toHaveBeenCalledWith("consume_claim_capture", expect.anything());
+    expect(serviceRpc).not.toHaveBeenCalledWith("verify_claim", expect.anything());
   });
 
   it("stays in review when GPS is at the shop, live is set, and the photo does not match", async () => {
@@ -224,6 +225,6 @@ describe("owner routes", () => {
       message: "We'll review this within 48 hours",
     });
     expect(rpc).toHaveBeenCalledWith("mark_claim_review", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
-    expect(serviceRpc).not.toHaveBeenCalledWith("verify_claim", expect.anything());
+    expect(serviceRpc).not.toHaveBeenCalled();
   });
 });

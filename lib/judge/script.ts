@@ -46,6 +46,16 @@ export function tourHref(role: TourRole): string {
   return role === "shopper" ? "/snap?tour=1" : "/owner?tour=1";
 }
 
+const STEP_ORDER: readonly StepId[] = EXPLAINERS.map((step) => step.id);
+
+/** Move at most one step forward. Step N+1 never shows before step N. */
+export function advanceStep(current: StepId, candidate: StepId): StepId {
+  const at = STEP_ORDER.indexOf(current);
+  const want = STEP_ORDER.indexOf(candidate);
+  if (want === at + 1) return candidate;
+  return current;
+}
+
 export function swapTour(tour: Tour): { cafe: CafeId; role: TourRole; enter: "explorer" | "owner"; step: StepId } {
   const cafe: CafeId = tour.cafe === "a" ? "b" : "a";
   const role: TourRole = tour.role === "shopper" ? "owner" : "shopper";

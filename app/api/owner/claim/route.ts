@@ -91,9 +91,6 @@ export async function POST(request: Request) {
   const shop = shopResult.data as { name?: unknown; lat?: unknown; lng?: unknown } | null;
   if (shopResult.error || !shop) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const name = typeof shop.name === "string" ? shop.name : "";
-  const here = proof.lat != null && proof.lng != null ? { lat: proof.lat, lng: proof.lng } : null;
-  const place = { lat: coord(shop.lat) ?? Number.NaN, lng: coord(shop.lng) ?? Number.NaN };
-  if (!claimNear(here, place)) return NextResponse.json({ error: "too_far" }, { status: 400 });
   if (!isUuid(proof.capture)) return NextResponse.json({ error: "bad_capture" }, { status: 400 });
 
   const storedResult = await supabase
@@ -106,19 +103,6 @@ export async function POST(request: Request) {
   const stored = storedRow && typeof storedRow.claim_code === "string" ? storedRow.claim_code.trim() : "";
   if (!stored || (proof.code && stored !== proof.code)) return review(supabase, proof.shopId);
   const code = stored;
-
-  let service;
-  try {
-    service = createServiceClient();
-  } catch {
-    return NextResponse.json({ error: "not_configured" }, { status: 503 });
-  }
-  const consumed = await service.rpc("consume_claim_capture", {
-    p_token: proof.capture,
-    p_shop_id: proof.shopId,
-    p_user_id: user.id,
-  });
-  if (consumed.error || consumed.data !== true) return NextResponse.json({ error: "bad_capture" }, { status: 400 });
 
   let match = false;
   if (proof.image) {
@@ -134,10 +118,25 @@ export async function POST(request: Request) {
       match = false;
     }
   }
-  if (proof.image && claimGranted({ match })) {
-    const verified = await service.rpc("verify_claim", { p_shop_id: proof.shopId, p_user_id: user.id });
-    if (verified.error) return ownerFailure(verified.error);
-    return NextResponse.json({ ok: true, status: verified.data ?? "verified" });
+  if (!proof.image || !claimGranted({ match })) return review(supabase, proof.shopId);
+
+  const here = proof.lat != null && proof.lng != null ? { lat: proof.lat, lng: proof.lng } : null;
+  const place = { lat: coord(shop.lat) ?? Number.NaN, lng: coord(shop.lng) ?? Number.NaN };
+  if (!claimNear(here, place)) return NextResponse.json({ error: "too_far" }, { status: 400 });
+
+  let service;
+  try {
+    service = createServiceClient();
+  } catch {
+    return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
-  return review(supabase, proof.shopId);
+  const consumed = await service.rpc("consume_claim_capture", {
+    p_token: proof.capture,
+    p_shop_id: proof.shopId,
+    p_user_id: user.id,
+  });
+  if (consumed.error || consumed.data !== true) return NextResponse.json({ error: "bad_capture" }, { status: 400 });
+  const verified = await service.rpc("verify_claim", { p_shop_id: proof.shopId, p_user_id: user.id });
+  if (verified.error) return ownerFailure(verified.error);
+  return NextResponse.json({ ok: true, status: verified.data ?? "verified" });
 }
