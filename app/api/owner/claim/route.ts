@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { callSpark } from "../../../../lib/ai/meta";
 import { allowNoCodeClaim } from "../../../../lib/judge/shortcuts";
-import { claimCode, claimMatch, claimNear, claimPrompt } from "../../../../lib/owner/claim";
+import { claimCode, claimGranted, claimMatch, claimPrompt } from "../../../../lib/owner/claim";
 import { isUuid, ownerClient, ownerFailure, unsigned } from "../../../../lib/owner/http";
 import { createServiceClient } from "../../../../lib/supabase/admin";
 
@@ -9,14 +9,9 @@ export const maxDuration = 60;
 
 const REVIEW = "We'll review this within 48 hours";
 
-function coord(value: unknown): number | null {
-  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  return Number.isFinite(number) ? number : null;
-}
-
 async function readProof(request: Request): Promise<
   | { kind: "json"; shopId: string }
-  | { kind: "proof"; shopId: string; lat: number | null; lng: number | null; image: File | null; live: boolean; code: string }
+  | { kind: "proof"; shopId: string; image: File | null; code: string }
   | { kind: "bad" }
 > {
   const type = request.headers.get("content-type") ?? "";
@@ -44,10 +39,7 @@ async function readProof(request: Request): Promise<
   return {
     kind: "proof",
     shopId,
-    lat: coord(form.get("lat")),
-    lng: coord(form.get("lng")),
     image: image instanceof File && image.size > 0 ? image : null,
-    live: form.get("live") === "1",
     code: typeof code === "string" ? code.trim() : "",
   };
 }
@@ -86,8 +78,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, status: verified.data ?? "verified", demo: true });
   }
 
-  const shopResult = await supabase.from("shops").select("name, lat, lng").eq("id", proof.shopId).maybeSingle();
-  const shop = shopResult.data as { name?: unknown; lat?: unknown; lng?: unknown } | null;
+  const shopResult = await supabase.from("shops").select("name").eq("id", proof.shopId).maybeSingle();
+  const shop = shopResult.data as { name?: unknown } | null;
   if (shopResult.error || !shop) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const name = typeof shop.name === "string" ? shop.name : "";
   const storedResult = await supabase
@@ -101,11 +93,8 @@ export async function POST(request: Request) {
   const code = stored || proof.code;
   if (!code || (stored && proof.code && stored !== proof.code)) return review(supabase, proof.shopId);
 
-  const here = proof.lat != null && proof.lng != null ? { lat: proof.lat, lng: proof.lng } : null;
-  const place = { lat: coord(shop.lat) ?? Number.NaN, lng: coord(shop.lng) ?? Number.NaN };
-  const near = claimNear(here, place);
   let match = false;
-  if (near && proof.image && proof.live) {
+  if (proof.image) {
     try {
       const bytes = Buffer.from(await proof.image.arrayBuffer());
       const mime = proof.image.type || "image/jpeg";
@@ -118,7 +107,7 @@ export async function POST(request: Request) {
       match = false;
     }
   }
-  if (near && match && proof.live && proof.image) {
+  if (proof.image && claimGranted({ match })) {
     let service;
     try {
       service = createServiceClient();

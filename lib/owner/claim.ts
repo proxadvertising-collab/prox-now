@@ -57,8 +57,16 @@ function parseClaimJson(raw: string): unknown {
   }
 }
 
+/**
+ * A real claim is verified only when the photo matches the stored code.
+ * `near` and `live` are client fields. They cannot grant or block verification.
+ */
+export function claimGranted(input: { match: boolean; near?: boolean; live?: boolean }): boolean {
+  return input.match === true;
+}
+
 export function claimStatus(near: boolean, match: boolean): "verified" | "pending" {
-  return near && match ? "verified" : "pending";
+  return claimGranted({ match, near }) ? "verified" : "pending";
 }
 
 export function claimButtonMode(input: { otherVerified: boolean; mine: "verified" | "pending" | "none" }): ClaimMode {

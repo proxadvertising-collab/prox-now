@@ -167,24 +167,21 @@ describe("owner routes", () => {
     );
   }
 
-  it("stays in review when the photo was not taken with the live camera", async () => {
+  it("verifies a matching photo when the live flag is missing", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });
     const response = await proof("12.5685", "99.9575", false);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      ok: true,
-      status: "in_review",
-      reason: "not_confirmed",
-      message: "We'll review this within 48 hours",
+    expect(await response.json()).toEqual({ ok: true, status: "verified" });
+    expect(spark).toHaveBeenCalled();
+    expect(serviceRpc).toHaveBeenCalledWith("verify_claim", {
+      p_shop_id: "11111111-1111-4111-8111-111111111111",
+      p_user_id: "user",
     });
-    expect(spark).not.toHaveBeenCalled();
-    expect(serviceRpc).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenCalledWith("mark_claim_review", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
   });
 
-  it("verifies when the device is at the shop and the sign matches", async () => {
+  it("verifies when the sign matches", async () => {
     shopRow.current = { name: 'Mala "Mafia"', lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });
@@ -201,25 +198,21 @@ describe("owner routes", () => {
     expect(ownerToolsOpen([{ status: "verified" }])).toBe(true);
   });
 
-  it("sends a far claim to review without calling the photo check", async () => {
+  it("verifies a matching photo when the client GPS is far from the shop", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });
     const response = await proof("13.8", "100.5");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      ok: true,
-      status: "in_review",
-      reason: "not_confirmed",
-      message: "We'll review this within 48 hours",
+    expect(await response.json()).toEqual({ ok: true, status: "verified" });
+    expect(spark).toHaveBeenCalled();
+    expect(serviceRpc).toHaveBeenCalledWith("verify_claim", {
+      p_shop_id: "11111111-1111-4111-8111-111111111111",
+      p_user_id: "user",
     });
-    expect(spark).not.toHaveBeenCalled();
-    expect(serviceRpc).not.toHaveBeenCalled();
-    expect(rpc).toHaveBeenCalledWith("mark_claim_review", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
-    expect(ownerToolsOpen([{ status: "pending" }])).toBe(false);
   });
 
-  it("sends a mismatched photo to review", async () => {
+  it("stays in review when GPS is at the shop, live is set, and the photo does not match", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":false}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });

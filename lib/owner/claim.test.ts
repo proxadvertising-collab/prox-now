@@ -4,12 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ClaimShop } from "../../components/owner/ClaimShop";
 import { t } from "../copy";
-import { claimButtonMode, claimCode, claimMatch, claimNear, claimPrompt, claimStatus, ownerToolsOpen, quoteShopName } from "./claim";
+import { claimButtonMode, claimCode, claimGranted, claimMatch, claimNear, claimPrompt, claimStatus, ownerToolsOpen, quoteShopName } from "./claim";
 
 const shop = { lat: 12.5685, lng: 99.9575 };
 
 describe("claim at the shop", () => {
-  it("verifies only when the device is within 150 m and the photo matches", () => {
+  it("verifies only when the photo matches, and ignores client GPS and the live flag", () => {
     expect(claimNear({ lat: 12.5685, lng: 99.9575 }, shop)).toBe(true);
     expect(claimNear({ lat: 12.57, lng: 99.9575 }, shop)).toBe(false);
     expect(claimNear(null, shop)).toBe(false);
@@ -17,9 +17,16 @@ describe("claim at the shop", () => {
     expect(claimMatch({ match: true })).toBe(true);
     expect(claimMatch('{"match":false}')).toBe(false);
     expect(claimMatch("not json")).toBe(false);
+    expect(claimGranted({ match: false, near: true, live: true })).toBe(false);
+    expect(claimGranted({ match: true, near: false, live: false })).toBe(true);
     expect(claimStatus(true, true)).toBe("verified");
-    expect(claimStatus(false, true)).toBe("pending");
+    expect(claimStatus(false, true)).toBe("verified");
     expect(claimStatus(true, false)).toBe("pending");
+    const route = readFileSync(new URL("../../app/api/owner/claim/route.ts", import.meta.url), "utf8");
+    expect(route).toContain("claimGranted");
+    expect(route).toContain("allowNoCodeClaim");
+    expect(route).not.toContain("claimNear");
+    expect(route).not.toContain('form.get("live")');
     expect(quoteShopName('Say "hi"\n')).toBe('Say \\"hi\\" ');
     expect(claimPrompt('Say "hi"', "mango 1234")).toContain('\\"hi\\"');
     expect(claimPrompt("Mala", "mango 1234")).toContain("mango 1234");
