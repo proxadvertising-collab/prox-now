@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { fallbackDecision, improveSummary, parseImproveDecision } from "./improve";
+import { blockedReplaceAction, fallbackDecision, improveSummary, parseImproveDecision } from "./improve";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -23,6 +23,13 @@ describe("improve a book", () => {
     expect(parseImproveDecision({ action: "replace", pageId: "missing" }, ["menu-1"])).toBeNull();
     expect(parseImproveDecision({ action: "add", pageId: null }, [])).toEqual({ action: "add", pageId: null });
     expect(parseImproveDecision({ action: "skip", pageId: null }, [])).toEqual({ action: "skip", pageId: null });
+    expect(blockedReplaceAction("storefront", 4)).toBe("skip");
+    expect(blockedReplaceAction("logo", 4)).toBe("skip");
+    expect(blockedReplaceAction("hours", 4)).toBe("skip");
+    expect(blockedReplaceAction("qr", 4)).toBe("skip");
+    expect(blockedReplaceAction("menu", 2)).toBe("add");
+    expect(blockedReplaceAction("extra", 1)).toBe("add");
+    expect(blockedReplaceAction("menu", 0)).toBe("skip");
   });
 
   it("writes the short summary", () => {

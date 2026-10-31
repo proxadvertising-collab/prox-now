@@ -6,7 +6,7 @@ import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
 import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReadable, type BrandTheme } from "../../../../lib/book/brand";
-import { improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
+import { blockedReplaceAction, improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
 import { applyCutouts } from "../../../../lib/book/cutouts";
@@ -118,6 +118,11 @@ function fileKind(kind: string | null): UploadKind {
   if (kind === "logo" || kind === "menu" || kind === "hours" || kind === "storefront") return kind;
   if (kind === "product") return "menu";
   return "extra";
+}
+
+function finalPageKind(group: Ingested, index: number): string {
+  if (group.read?.read.rich) return fileKind(group.pageByIndex.get(index)?.kindGuess ?? null);
+  return group.kind;
 }
 
 function heroPathOf(groups: readonly Ingested[], hero: number | null): string | null {
@@ -439,13 +444,9 @@ async function commitBook(input: {
     for (const group of groups) {
       for (const plan of group.plans) {
         if (plan.action !== "replace") continue;
-        if (room <= 0) {
-          plan.action = "skip";
-          plan.pageId = null;
-          continue;
-        }
-        room -= 1;
-        plan.action = "add";
+        const next = blockedReplaceAction(finalPageKind(group, plan.index), room);
+        if (next === "add") room -= 1;
+        plan.action = next;
         plan.pageId = null;
       }
     }

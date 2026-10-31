@@ -99,6 +99,12 @@ const { getUser, state, service } = vi.hoisted(() => {
       if (this.table === "shop_book_pages" && this.op === "insert") {
         if (state.pageInsertError) return { data: null, error: state.pageInsertError };
         const rows = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row];
+        const single = new Set(["storefront", "logo", "hours", "qr"]);
+        for (const row of rows) {
+          if (row.status !== "live" || !single.has(String(row.kind))) continue;
+          const clash = state.pages.some((page) => page.kind === row.kind && page.status === "live");
+          if (clash) return { data: null, error: { code: "23505", message: "shop_book_pages_one_live_single_idx" } };
+        }
         state.pages.push(...rows);
         return { data: rows, error: null };
       }
@@ -602,7 +608,7 @@ describe("POST /api/book/pages", () => {
     const judge = await postSession([{ kind: "storefront" }], SHOP, "improve");
     expect(judge.status).toBe(200);
     expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
-    expect(state.pages.filter((page) => page.kind === "storefront" && page.status !== "removed").length).toBeGreaterThan(1);
+    expect(state.pages.filter((page) => page.kind === "storefront" && page.status === "live")).toHaveLength(1);
 
     state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP }];
     state.book = liveBook;
@@ -631,6 +637,26 @@ describe("POST /api/book/pages", () => {
     expect(state.pages.filter((page) => page.status !== "removed")).toHaveLength(12);
   });
 
+  it("a repeat judge upload keeps the storefront and saves the menu photos", async () => {
+    const pageId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    state.shop = { id: SHOP, category: "street_food", slug: "mala-mafia", is_demo: true };
+    state.demoAccount = true;
+    state.ownerIds = ["99999999-9999-4999-8999-999999999999"];
+    state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: {}, shop_id: SHOP }];
+    state.book = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };
+    mode = "improve-replace";
+    const response = await postSession(
+      [{ kind: "storefront" }, { kind: "menu" }, { kind: "menu" }],
+      SHOP,
+      "improve",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toMatchObject({ error: "already_there" });
+    expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
+    expect(state.pages.filter((page) => page.kind === "storefront" && page.status === "live")).toHaveLength(1);
+    expect(state.pages.filter((page) => page.kind === "menu" && page.status === "live")).toHaveLength(2);
+  });
+
   it("joining an existing shop with a live page succeeds", async () => {
     const pageId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP }];
@@ -638,9 +664,10 @@ describe("POST /api/book/pages", () => {
     const refused = await postSession([{ kind: "storefront" }]);
     expect(refused.status).toBe(409);
     expect(await refused.json()).toEqual({ error: "already_there" });
+    mode = "improve-replace";
     const joined = await postSession([{ kind: "storefront" }], SHOP, "improve");
     expect(joined.status).toBe(200);
-    expect(state.pages.some((page) => page.status === "live")).toBe(true);
+    expect(state.pages.filter((page) => page.kind === "storefront" && page.status === "live")).toHaveLength(1);
   });
 
   it("stores an extra page as the extra kind", async () => {

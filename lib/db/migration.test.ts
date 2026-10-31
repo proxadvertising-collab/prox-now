@@ -588,6 +588,8 @@ describe("security migrations 0018 through 0021", () => {
     expect(sql).toContain("where shops.slug = seed.slug");
     expect(sql).toContain("delete from public.shop_book_pages");
     expect(sql).toContain("shops.slug = 'mala-mafia'");
+    expect(sql).toContain("shops.slug in ('mala-mafia', 'coconut-shake-stand')");
+    expect(sql).toContain("owners.status = 'verified'");
     expect(sql).toContain("pages.image_path like '/demo/mala-mafia-%'");
     expect(sql).toContain("Smoothies, coffee, and brunch");
     expect(sql).not.toContain("delete from public.shops");

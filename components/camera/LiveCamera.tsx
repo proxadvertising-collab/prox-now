@@ -655,6 +655,7 @@ export function LiveCamera({
         file: shot.file,
       }));
       const saveFor = target;
+      const startedAt = new Date().toISOString();
       const result = await uploadBookSession(
         saveFor.id,
         bookShots,
@@ -663,13 +664,39 @@ export function LiveCamera({
         createdHere,
       ).catch(() => null);
       if (!result || savedMaybe(result.status)) {
+        const supabase = createClient();
+        const userId = (await supabase.auth.getUser().catch(() => null))?.data.user?.id ?? null;
         const slug = await waitForBook(saveFor.id, async (shopId) => {
-          const supabase = createClient();
-          const [book, row] = await Promise.all([
-            supabase.from("shop_books").select("status").eq("shop_id", shopId).maybeSingle(),
-            supabase.from("shops").select("slug").eq("id", shopId).maybeSingle(),
+          const client = createClient();
+          const [book, row, pages, writes] = await Promise.all([
+            client.from("shop_books").select("status").eq("shop_id", shopId).maybeSingle(),
+            client.from("shops").select("slug").eq("id", shopId).maybeSingle(),
+            userId
+              ? client
+                  .from("shop_book_pages")
+                  .select("id")
+                  .eq("shop_id", shopId)
+                  .eq("contributed_by", userId)
+                  .gte("created_at", startedAt)
+                  .limit(1)
+              : Promise.resolve({ data: [] as { id: string }[] }),
+            userId
+              ? client
+                  .from("shop_book_writes")
+                  .select("id")
+                  .eq("shop_id", shopId)
+                  .eq("user_id", userId)
+                  .gte("created_at", startedAt)
+                  .limit(1)
+              : Promise.resolve({ data: [] as { id: string }[] }),
           ]);
-          return { live: book.data?.status === "live", slug: (row.data?.slug as string | undefined) ?? null };
+          const fresh =
+            (Array.isArray(pages.data) && pages.data.length > 0) ||
+            (Array.isArray(writes.data) && writes.data.length > 0);
+          return {
+            live: book.data?.status === "live" && fresh,
+            slug: (row.data?.slug as string | undefined) ?? null,
+          };
         });
         const late = slug ? seedBookPath(saveFor.id, saveFor.slug, slug) : null;
         if (late) {
@@ -686,7 +713,8 @@ export function LiveCamera({
         return;
       }
       if (result.status >= 400) {
-        setNote("The book did not save.");
+        const error = result.body && typeof result.body === "object" ? (result.body as { error?: unknown }).error : null;
+        setNote(result.status === 403 && error === "not_owner" ? "The owner manages this shop's book." : "The book did not save.");
         setPhase("seed");
         return;
       }

@@ -71,27 +71,45 @@ begin
   where shops.slug = seed.slug
     and shops.is_demo = true;
 
-  -- Café A only. Seeded SVG pages and pages the demo accounts added go away
-  -- so the next judge upload builds the book. Other shops stay.
+  -- Café A and café B. Seeded SVG pages, and pages a demo account added
+  -- who is not the verified owner, go away. Owner pages and real-user pages stay.
   delete from public.shop_book_writes as writes
   using public.shop_book_pages as pages, public.shops as shops
   where writes.page_id = pages.id
     and pages.shop_id = shops.id
     and shops.is_demo = true
-    and shops.slug = 'mala-mafia'
+    and shops.slug in ('mala-mafia', 'coconut-shake-stand')
     and (
-      pages.image_path like '/demo/mala-mafia-%'
-      or pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+      (shops.slug = 'mala-mafia' and pages.image_path like '/demo/mala-mafia-%')
+      or (
+        pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+        and not exists (
+          select 1
+          from public.shop_owners as owners
+          where owners.shop_id = shops.id
+            and owners.user_id = pages.contributed_by
+            and owners.status = 'verified'
+        )
+      )
     );
 
   delete from public.shop_book_pages as pages
   using public.shops as shops
   where pages.shop_id = shops.id
     and shops.is_demo = true
-    and shops.slug = 'mala-mafia'
+    and shops.slug in ('mala-mafia', 'coconut-shake-stand')
     and (
-      pages.image_path like '/demo/mala-mafia-%'
-      or pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+      (shops.slug = 'mala-mafia' and pages.image_path like '/demo/mala-mafia-%')
+      or (
+        pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+        and not exists (
+          select 1
+          from public.shop_owners as owners
+          where owners.shop_id = shops.id
+            and owners.user_id = pages.contributed_by
+            and owners.status = 'verified'
+        )
+      )
     );
 
   update public.shop_books as books

@@ -41,6 +41,9 @@ describe("judge script", () => {
     expect(save.indexOf("judgeSampleSave")).toBeGreaterThan(-1);
     expect(save.indexOf("judgeSampleSave")).toBeLessThan(save.indexOf('fetch("/api/shops"'));
     expect(save).toContain('createdHere ? undefined : "improve"');
+    expect(save).toContain("The owner manages this shop's book.");
+    expect(save).toContain("contributed_by");
+    expect(save).toContain('gte("created_at", startedAt)');
     expect(save).toContain("demoShopTarget");
     expect(save).toContain('.eq("is_demo", true)');
     expect(save).not.toContain("id: judged.shop");

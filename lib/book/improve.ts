@@ -15,6 +15,12 @@ export type ExistingPage = { id: string; extracted: unknown };
 
 const SINGLE = new Set(["storefront", "logo", "hours", "qr"]);
 
+/** A replace the caller cannot make. One-of-a-kind pages stay. Menu pages are added until the book is full. */
+export function blockedReplaceAction(kind: string, room: number): "add" | "skip" {
+  if (SINGLE.has(kind) || room <= 0) return "skip";
+  return "add";
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
