@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -18,19 +18,17 @@ describe("Soi 102 demo street seed", () => {
     expect(sql).not.toMatch(/\bupdate\s+public\.shops\b/i);
   });
 
-  it("plants live deals, coupons, and a Mala Mafia book", () => {
+  it("plants live deals, coupons, and an empty Farm to Go book", () => {
     expect(check.postCount).toBeGreaterThanOrEqual(4);
     expect(check.postCount).toBeLessThanOrEqual(6);
     expect(check.couponCount).toBeGreaterThanOrEqual(2);
     expect(check.couponCount).toBeLessThanOrEqual(3);
     expect(sql).toContain("interval '2 hours'");
-    expect(check.bookKinds.filter((kind) => kind === "menu")).toHaveLength(3);
-    expect(check.bookKinds).toContain("logo");
-    expect(check.bookKinds).toContain("hours");
+    expect(sql).toContain("Smoothies, coffee, and brunch");
+    expect(sql).not.toContain("Mala skewers");
+    expect(sql).not.toContain("mala-mafia-menu");
+    expect(sql).not.toContain(".svg");
+    expect(check.bookKinds).toEqual([]);
     expect(sql).toContain("theme");
-    expect(check.imagePaths.length).toBe(check.bookKinds.length);
-    for (const imagePath of check.imagePaths) {
-      expect(existsSync(resolve(root, "public", imagePath))).toBe(true);
-    }
   });
 });

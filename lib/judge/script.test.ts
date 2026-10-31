@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
+import { seedBookPath } from "../book/seedName";
+import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
 
 describe("judge script", () => {
   it("has eight steps and a card for each named beat", () => {
@@ -40,6 +41,16 @@ describe("judge script", () => {
     expect(save.indexOf("judgeSampleSave")).toBeGreaterThan(-1);
     expect(save.indexOf("judgeSampleSave")).toBeLessThan(save.indexOf('fetch("/api/shops"'));
     expect(save).toContain('createdHere ? undefined : "improve"');
+    expect(save).toContain("demoShopTarget");
+    expect(save).toContain('.eq("is_demo", true)');
+    expect(save).not.toContain("id: judged.shop");
+    const shopId = "11111111-1111-4111-8111-111111111101";
+    const target = demoShopTarget("mala-mafia", { id: shopId, slug: "mala-mafia", name: "Farm to Go (demo)" });
+    expect(target?.id).toBe(shopId);
+    expect(seedBookPath(target?.id ?? "", target?.slug, "mala-mafia")).toBe("/book/mala-mafia");
+    expect(seedBookPath("mala-mafia", "mala-mafia", "mala-mafia")).toBeNull();
+    expect(demoShopTarget("coconut-shake-stand", { id: shopId, slug: "coconut-shake-stand", name: "Coconut shake stand" })?.id).toBe(shopId);
+    expect(demoShopTarget("mala-mafia", { id: "mala-mafia", slug: "mala-mafia" })).toBeNull();
     expect(camera).toContain("Turn on location to use sample photos");
     expect(camera).toContain("top-[7.5rem] inset-x-0 z-20 mx-auto");
   });

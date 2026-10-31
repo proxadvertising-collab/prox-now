@@ -28,7 +28,7 @@ import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { BuildProgress } from "@/components/book/BuildProgress";
-import { DEMO_CAFES, judgeSampleSave, readTour } from "@/lib/judge/script";
+import { DEMO_CAFES, demoShopTarget, judgeSampleSave, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
 import {
@@ -129,6 +129,7 @@ export function LiveCamera({
   const langRef = useRef<Lang>("en");
   const boot = useRef(false);
   const samplesOnce = useRef(false);
+  const sampleNoteShown = useRef(false);
   const loadSamplesRef = useRef<() => Promise<boolean>>(async () => false);
   const facedSeed = useRef(false);
   const [facing, setFacing] = useState<Facing>(facingForSession());
@@ -456,9 +457,13 @@ export function LiveCamera({
   async function loadSamples(): Promise<boolean> {
     const fix = (await placeForShot()) ?? fixRef.current;
     if (!fix) {
-      setNote("Turn on location to use sample photos");
+      if (!sampleNoteShown.current) {
+        sampleNoteShown.current = true;
+        setNote("Turn on location to use sample photos");
+      }
       return false;
     }
+    sampleNoteShown.current = false;
     const tour = readTour();
     const cafe = DEMO_CAFES[tour?.cafe ?? "a"];
     const files: File[] = [];
@@ -584,8 +589,21 @@ export function LiveCamera({
       const tour = readTour();
       const judged = force ? null : judgeSampleSave(tour);
       if (!target && judged && tour) {
-        const cafe = DEMO_CAFES[tour.cafe];
-        target = { id: judged.shop, slug: cafe.slug, name: cafe.name };
+        const supabase = createClient();
+        const found = await supabase
+          .from("shops")
+          .select("id, slug, name")
+          .eq("slug", judged.shop)
+          .eq("is_demo", true)
+          .maybeSingle();
+        const resolved = demoShopTarget(judged.shop, found.data);
+        if (!resolved) {
+          setNote("The book did not save.");
+          setPhase("seed");
+          return;
+        }
+        target = resolved;
+        setPicked(resolved);
       } else if (!target) {
         const name = PLACEHOLDER_SHOP_NAME;
         const place = fixRef.current ?? shotsRef.current[0]?.fix;
@@ -838,7 +856,7 @@ export function LiveCamera({
         <div
           className={
             cameraClosed
-              ? "absolute inset-x-4 top-24 z-20 flex justify-center"
+              ? "absolute inset-x-4 top-[11.5rem] z-20 flex justify-center"
               : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
           }
         >

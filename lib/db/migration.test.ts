@@ -586,6 +586,12 @@ describe("security migrations 0018 through 0021", () => {
     expect(sql).not.toContain("'mala-mafia', 'Mala Mafia'");
     expect(sql).not.toContain("set slug");
     expect(sql).toContain("where shops.slug = seed.slug");
+    expect(sql).toContain("delete from public.shop_book_pages");
+    expect(sql).toContain("shops.slug = 'mala-mafia'");
+    expect(sql).toContain("pages.image_path like '/demo/mala-mafia-%'");
+    expect(sql).toContain("Smoothies, coffee, and brunch");
+    expect(sql).not.toContain("delete from public.shops");
+    expect(sql).not.toContain("auth.users");
     expect(sql).toContain("revoke all on function public.reset_demo() from public, anon");
     expect(sql).toContain("grant execute on function public.reset_demo() to authenticated");
     expect(sql).not.toContain("grant execute on function public.reset_demo() to anon");

@@ -433,11 +433,27 @@ async function commitBook(input: {
   const demoShop = (shopDemoResult.data as { is_demo?: boolean } | null)?.is_demo === true;
   const demoResult = await service.from("demo_accounts").select("role").eq("user_id", userId);
   const demoAccount = Array.isArray(demoResult.data) && demoResult.data.length > 0;
+  const gate = { claimed, verifiedOwner, serverReset: false, demoShop, demoAccount };
+  if (!bookWriteAllowed({ ...gate, action: "replace" })) {
+    let room = MAX_MENU_PAGES - livePages.filter((page) => page.status === "live").length;
+    for (const group of groups) {
+      for (const plan of group.plans) {
+        if (plan.action !== "replace") continue;
+        if (room <= 0) {
+          plan.action = "skip";
+          plan.pageId = null;
+          continue;
+        }
+        room -= 1;
+        plan.action = "add";
+        plan.pageId = null;
+      }
+    }
+  }
   const replacing = groups.some((group) => group.plans.some((plan) => plan.action === "replace"));
   const adding = groups.some((group) =>
     group.stored.some((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip")),
   );
-  const gate = { claimed, verifiedOwner, serverReset: false, demoShop, demoAccount };
   if (
     (replacing && !bookWriteAllowed({ ...gate, action: "replace" })) ||
     (adding && !bookWriteAllowed({ ...gate, action: "add" }))

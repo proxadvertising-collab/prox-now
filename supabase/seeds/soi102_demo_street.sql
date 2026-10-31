@@ -124,7 +124,7 @@ insert into public.shop_books (
 select
   shops.id,
   'live',
-  'Mala skewers on Soi 102',
+  'Smoothies, coffee, and brunch',
   '{"swatches":["#E23D28","#1C0E05","#F7F0E8","#FF8A3D","#2A1810"],"accent":"#E23D28","ink":"#1C0E05","mood":"bold","colors":["#E23D28","#1C0E05","#F7F0E8"]}'::jsonb,
   '{"raw":"Daily 16:00-23:00","days":[{"open":"16:00","close":"23:00"}]}'::jsonb,
   'en'
@@ -132,53 +132,3 @@ from public.shops as shops
 where shops.slug = 'mala-mafia'
   and shops.is_demo = true
 on conflict (shop_id) do nothing;
-
-insert into public.shop_book_pages (
-  id,
-  shop_id,
-  kind,
-  position,
-  image_path,
-  status,
-  language,
-  extracted,
-  ai_meta
-)
-select
-  page.id,
-  shops.id,
-  page.kind,
-  page.position,
-  page.image_path,
-  'live',
-  'en',
-  page.extracted::jsonb,
-  '{}'::jsonb
-from (
-  values
-    ('11111111-1111-4111-8111-111111111301'::uuid, 'logo', 0, '/demo/mala-mafia-logo.svg', '{}'),
-    (
-      '11111111-1111-4111-8111-111111111302'::uuid,
-      'menu',
-      0,
-      '/demo/mala-mafia-menu-1.svg',
-      '{"section":"Skewers","items":[{"name":"Mala beef","price":"40","currency":"THB","note":null},{"name":"Mala pork","price":"35","currency":"THB","note":null},{"name":"Mala tofu","price":"25","currency":"THB","note":null}]}'
-    ),
-    (
-      '11111111-1111-4111-8111-111111111303'::uuid,
-      'menu',
-      1,
-      '/demo/mala-mafia-menu-2.svg',
-      '{"section":"Plates","items":[{"name":"Dry pot","price":"89","currency":"THB","note":null},{"name":"Mala soup","price":"79","currency":"THB","note":null}]}'
-    ),
-    (
-      '11111111-1111-4111-8111-111111111304'::uuid,
-      'menu',
-      2,
-      '/demo/mala-mafia-menu-3.svg',
-      '{"section":"Drinks","items":[{"name":"Sour plum","price":"20","currency":"THB","note":null},{"name":"Soy milk","price":"15","currency":"THB","note":null}]}'
-    ),
-    ('11111111-1111-4111-8111-111111111305'::uuid, 'hours', 0, '/demo/mala-mafia-hours.svg', '{}')
-) as page(id, kind, position, image_path, extracted)
-join public.shops as shops on shops.slug = 'mala-mafia' and shops.is_demo = true
-on conflict (id) do nothing;

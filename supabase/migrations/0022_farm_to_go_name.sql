@@ -71,6 +71,36 @@ begin
   where shops.slug = seed.slug
     and shops.is_demo = true;
 
+  -- Café A only. Seeded SVG pages and pages the demo accounts added go away
+  -- so the next judge upload builds the book. Other shops stay.
+  delete from public.shop_book_writes as writes
+  using public.shop_book_pages as pages, public.shops as shops
+  where writes.page_id = pages.id
+    and pages.shop_id = shops.id
+    and shops.is_demo = true
+    and shops.slug = 'mala-mafia'
+    and (
+      pages.image_path like '/demo/mala-mafia-%'
+      or pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+    );
+
+  delete from public.shop_book_pages as pages
+  using public.shops as shops
+  where pages.shop_id = shops.id
+    and shops.is_demo = true
+    and shops.slug = 'mala-mafia'
+    and (
+      pages.image_path like '/demo/mala-mafia-%'
+      or pages.contributed_by in (select demo_accounts.user_id from public.demo_accounts as demo_accounts)
+    );
+
+  update public.shop_books as books
+  set tagline = 'Smoothies, coffee, and brunch'
+  from public.shops as shops
+  where books.shop_id = shops.id
+    and shops.is_demo = true
+    and shops.slug = 'mala-mafia';
+
   select demo_accounts.user_id into v_owner
   from public.demo_accounts as demo_accounts
   where demo_accounts.role = 'owner'

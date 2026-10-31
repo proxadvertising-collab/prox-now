@@ -37,10 +37,23 @@ export const EXPLAINERS: readonly Explainer[] = [
 
 const STEP_IDS = new Set<string>(EXPLAINERS.map((step) => step.id));
 
+const DEMO_SHOP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /** Judge tour writes the existing demo café in improve mode. No shop match. */
 export function judgeSampleSave(tour: Tour | null): { shop: string; mode: "improve" } | null {
   if (!tour) return null;
   return { shop: DEMO_CAFES[tour.cafe].slug, mode: "improve" };
+}
+
+/** Real id for an is_demo shop. A slug is not an id, so the book link can be built. */
+export function demoShopTarget(
+  slug: string,
+  row: { id?: unknown; slug?: unknown; name?: unknown } | null,
+): { id: string; slug: string; name: string } | null {
+  if (!row || typeof row.id !== "string" || !DEMO_SHOP_ID.test(row.id) || row.slug !== slug) return null;
+  const cafe = Object.values(DEMO_CAFES).find((item) => item.slug === slug);
+  const name = typeof row.name === "string" && row.name.trim() ? row.name : (cafe?.name ?? slug);
+  return { id: row.id, slug, name };
 }
 
 export function explainer(id: StepId): Explainer {

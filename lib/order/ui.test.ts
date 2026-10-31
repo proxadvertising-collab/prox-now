@@ -18,7 +18,7 @@ describe("order page", () => {
     const html = renderToStaticMarkup(
       createElement(OrderSheet, {
         shopName: "Mala Mafia",
-        logoUrl: "/demo/mala-mafia-logo.svg",
+        logoUrl: "/demo/shop-logo.svg",
         place: "Soi 102",
         lines: [line],
         note: "no tomatoes",

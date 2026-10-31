@@ -4,7 +4,7 @@ import { cachedSignedUrl, clearSignedUrlCache, SIGNED_URL_REUSE_MS, SIGNED_URL_T
 describe("signed photo urls", () => {
   it("points storage paths at the signing route and never at a public object", () => {
     expect(signedPhotoUrl("user/post-1.jpg", "post-photos")).toBe("/api/media/post-photos/user/post-1.jpg");
-    expect(signedPhotoUrl("/demo/mala-mafia-logo.svg", "shop-book")).toBe("/demo/mala-mafia-logo.svg");
+    expect(signedPhotoUrl("/demo/shop-logo.svg", "shop-book")).toBe("/demo/shop-logo.svg");
     expect(
       signedPhotoUrl("https://example.supabase.co/storage/v1/object/public/shop-book/shop-1/menu.jpg", "shop-book"),
     ).toBe("/api/media/shop-book/shop-1/menu.jpg");

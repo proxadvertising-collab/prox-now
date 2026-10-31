@@ -33,10 +33,8 @@ describe("book view", () => {
   });
 
   it("serves /demo/ pages from public and leaves other paths on storage", () => {
-    expect(bookImageUrl("https://example.supabase.co", "/demo/mala-mafia-logo.svg")).toBe(
-      "/demo/mala-mafia-logo.svg",
-    );
-    expect(bookImageUrl("", "/demo/mala-mafia-hours.svg")).toBe("/demo/mala-mafia-hours.svg");
+    expect(bookImageUrl("https://example.supabase.co", "/demo/shop-logo.svg")).toBe("/demo/shop-logo.svg");
+    expect(bookImageUrl("", "/demo/shop-hours.svg")).toBe("/demo/shop-hours.svg");
     const stored = bookImageUrl("https://example.supabase.co", "shop-1/menu.jpg");
     expect(stored).toBe("/api/media/shop-book/shop-1/menu.jpg");
     expect(stored).not.toContain("/object/public/");
@@ -45,13 +43,13 @@ describe("book view", () => {
         shop: { id: "shop-1", slug: "mala-mafia", name: "Mala Mafia" },
         book: {},
         pages: [
-          { id: "logo", kind: "logo", position: 0, image_path: "/demo/mala-mafia-logo.svg" },
+          { id: "logo", kind: "logo", position: 0, image_path: "/demo/shop-logo.svg" },
           { id: "menu", kind: "menu", position: 0, image_path: "shop-1/menu.jpg" },
         ],
       },
       "https://example.supabase.co",
     );
-    expect(view?.logoUrl).toBe("/demo/mala-mafia-logo.svg");
+    expect(view?.logoUrl).toBe("/demo/shop-logo.svg");
     expect(view?.pages[1]?.imageUrl).toBe(stored);
   });
 

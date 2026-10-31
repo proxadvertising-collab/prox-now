@@ -14,7 +14,8 @@ type Row = Record<string, unknown>;
 
 const { getUser, state, service } = vi.hoisted(() => {
   const state = {
-    shop: null as { id: string; category: string; name?: string; slug?: string; name_local?: string | null } | null,
+    shop: null as { id: string; category: string; name?: string; slug?: string; name_local?: string | null; is_demo?: boolean } | null,
+    demoAccount: false,
     book: null as Row | null,
     pages: [] as Row[],
     uploads: [] as { path: string; bytes: Buffer }[],
@@ -72,6 +73,9 @@ const { getUser, state, service } = vi.hoisted(() => {
     }
 
     finish() {
+      if (this.table === "demo_accounts") {
+        return { data: state.demoAccount ? [{ role: "explorer" }] : [], error: null };
+      }
       if (this.table === "shop_owners") {
         return {
           data: state.ownerIds.map((id) => ({ user_id: id, status: "verified" })),
@@ -296,6 +300,7 @@ describe("POST /api/book/pages", () => {
     state.rpcCalls = [];
     state.bookWrites = 0;
     state.ownerIds = [USER];
+    state.demoAccount = false;
     mode = "ok";
     vi.stubGlobal("fetch", installFetch());
   });
@@ -583,6 +588,47 @@ describe("POST /api/book/pages", () => {
     const addedBody = (await added.json()) as { summary?: string };
     expect(addedBody.summary).toContain("Added 1 menu item");
     expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed").length).toBeGreaterThan(1);
+  });
+
+  it("a judge and a normal user add a page instead of replacing one they do not own", async () => {
+    const pageId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const liveBook = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };
+    state.shop = { id: SHOP, category: "street_food", slug: "mala-mafia", is_demo: true };
+    state.demoAccount = true;
+    state.ownerIds = ["99999999-9999-4999-8999-999999999999"];
+    state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP }];
+    state.book = liveBook;
+    mode = "improve-replace";
+    const judge = await postSession([{ kind: "storefront" }], SHOP, "improve");
+    expect(judge.status).toBe(200);
+    expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
+    expect(state.pages.filter((page) => page.kind === "storefront" && page.status !== "removed").length).toBeGreaterThan(1);
+
+    state.pages = [{ id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP }];
+    state.book = liveBook;
+    state.shop = { id: SHOP, category: "street_food", is_demo: false };
+    state.demoAccount = false;
+    state.ownerIds = [];
+    state.uploads = [];
+    const joined = await postSession([{ kind: "storefront" }], SHOP, "improve");
+    expect(joined.status).toBe(200);
+    expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
+
+    state.pages = [
+      { id: pageId, kind: "storefront", status: "live", extracted: { section: "old" }, shop_id: SHOP },
+      ...Array.from({ length: 11 }, (_, index) => ({
+        id: "eeeeeeee-eeee-4eee-8eee-" + String(index + 1).padStart(12, "0"),
+        kind: "menu",
+        status: "live",
+        extracted: { section: "old" },
+        shop_id: SHOP,
+      })),
+    ];
+    state.book = liveBook;
+    const full = await postSession([{ kind: "storefront" }], SHOP, "improve");
+    expect(full.status).toBe(200);
+    expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
+    expect(state.pages.filter((page) => page.status !== "removed")).toHaveLength(12);
   });
 
   it("joining an existing shop with a live page succeeds", async () => {
