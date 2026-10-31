@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { t } from "@/lib/copy";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
 import { formatRemaining, remainingMs } from "@/lib/freshness";
@@ -20,7 +21,9 @@ export function ShopList({
   const origin = useSyncExternalStore(subscribeWalkOrigin, getWalkOrigin, getServerWalkOrigin);
   if (!fixtures) {
     if (shops.length === 0) {
-      return <p className="mt-3 text-body text-fg-muted">{t("en", "empty.map")}</p>;
+      return (
+        <EmptyState message={t("en", "empty.map")} action={{ href: "/snap", label: t("en", "snap.cta") }} camera />
+      );
     }
     return (
       <ul className="mt-3 flex flex-col gap-3">

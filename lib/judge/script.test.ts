@@ -9,6 +9,8 @@ describe("judge script", () => {
     expect(BOOK_PROGRESS).toContain("about a minute");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");
     expect(DEMO_CAFES.b.slug).toBe("coconut-shake-stand");
+    expect(DEMO_CAFES.b.photos.every((photo) => photo.startsWith("/judge/cafe-b/"))).toBe(true);
+    expect(DEMO_CAFES.b.photos.some((photo) => photo.includes("mala-mafia"))).toBe(false);
     expect(DEMO_CAFES.a.photos.length).toBeGreaterThan(0);
   });
 

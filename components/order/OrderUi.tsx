@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { displayName } from "../../lib/book/display";
 import { t } from "../../lib/copy";
+import { MoreSheet } from "../shell/MoreSheet";
 import {
   browserStorage,
   clearOrder,
@@ -125,24 +126,32 @@ export function OrderSheet({
 }) {
   if (staff) {
     return (
-      <div className="fixed inset-0 z-50 overflow-auto bg-[#FFF8F1] p-6 text-[#1A120B]">
-        <h1 className="text-4xl font-bold">{shopName}</h1>
-        <div className="mt-6 flex flex-col gap-4">
-          {lines.map((line) => (
-            <p key={line.id} className="text-3xl font-bold">
-              {line.qty + " × " + (displayName(line.name) || line.name)}
-            </p>
-          ))}
+      <div className="fixed inset-0 z-50 overflow-auto bg-[#1A120B] p-6 text-[#FFF8F1]">
+        <h1 className="text-4xl font-bold leading-tight">{shopName}</h1>
+        <div className="mt-8 flex flex-col gap-6">
+          {lines.map((line) => {
+            const original = displayName(line.name) || line.name;
+            const shopper = line.title !== original ? line.title : line.subtitle;
+            return (
+              <div key={line.id}>
+                <p className="text-5xl font-bold leading-tight">{line.qty + " × " + original}</p>
+                {shopper ? <p className="mt-1 text-lg text-[#D6C4B4]">{shopper}</p> : null}
+              </div>
+            );
+          })}
         </div>
         {totalLabel ? <p className="mt-8 text-3xl font-bold">{t(lang, "order.total") + " " + totalLabel}</p> : null}
         {translation ? (
-          <p className="mt-8 text-2xl">{translation}</p>
+          <div className="mt-8 rounded-3xl bg-[#FFF8F1] p-5 text-[#1A120B]">
+            <p className="text-sm font-bold">{t(lang, "order.forStaff")}</p>
+            <p className="mt-2 text-4xl font-bold leading-tight">{translation}</p>
+          </div>
         ) : busy ? (
-          <p className="mt-8 text-sm">{t(lang, "order.translating")}</p>
+          <p className="mt-8 text-xl">{t(lang, "order.translating")}</p>
         ) : failed ? (
-          <p className="mt-8 text-2xl">{note}</p>
+          <p className="mt-8 rounded-3xl bg-[#FFF8F1] p-5 text-3xl font-bold text-[#1A120B]">{note}</p>
         ) : null}
-        <button type="button" className="mt-10 h-14 rounded-2xl bg-[#1A120B] px-6 text-xl font-bold text-white" onClick={onDone}>
+        <button type="button" className="mt-10 h-16 w-full rounded-2xl bg-[#FFF8F1] text-2xl font-bold text-[#1A120B]" onClick={onDone}>
           {t(lang, "order.done")}
         </button>
       </div>
@@ -213,20 +222,22 @@ export function OrderSheet({
           {t(lang, "order.translateFail")}
         </p>
       ) : null}
-      <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
-        {t(lang, "order.translate")}
-      </button>
-      <button type="button" className="h-12 rounded-2xl bg-accent font-bold text-accent-ink active:scale-95" onClick={onStaff}>
+      <button type="button" className="h-14 rounded-2xl bg-accent text-lg font-bold text-accent-ink active:scale-95" onClick={onStaff}>
         {t(lang, "order.staff")}
       </button>
-      <button
-        type="button"
-        className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={onClear}
-      >
-        {t(lang, "order.clear")}
-      </button>
+      <MoreSheet label="More">
+        <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
+          {t(lang, "order.translate")}
+        </button>
+        <button
+          type="button"
+          className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={onClear}
+        >
+          {t(lang, "order.clear")}
+        </button>
+      </MoreSheet>
     </div>
   );
 }

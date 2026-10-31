@@ -27,7 +27,8 @@ import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
 import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
-import { BOOK_PROGRESS, DEMO_CAFES, readTour } from "@/lib/judge/script";
+import { BuildProgress } from "@/components/book/BuildProgress";
+import { DEMO_CAFES, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
 import {
@@ -776,8 +777,7 @@ export function LiveCamera({
       ) : null}
       {phase === "building" ? (
         <div className="seed-build">
-          <p>{readTour() ? BOOK_PROGRESS : t(lang, "seed.building")}</p>
-          <div className="seed-skel" />
+          <BuildProgress />
         </div>
       ) : null}
       {phase === "camera" || phase === "seed" ? (

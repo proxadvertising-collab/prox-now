@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+  <rect width="800" height="1000" fill="#ECFEFF"/>
+  <text x="400" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="52" font-weight="700" fill="#0E7490">Coconut shake stand</text>
+  <text x="80" y="240" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#1A120B">Coffee shake 50</text>
+  <text x="80" y="320" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#1A120B">Cocoa shake 50</text>
+  <text x="80" y="400" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#1A120B">Lime soda 35</text>
+  <text x="80" y="480" font-family="Arial, sans-serif" font-size="40" font-weight="700" fill="#1A120B">Mineral water 15</text>
+</svg>

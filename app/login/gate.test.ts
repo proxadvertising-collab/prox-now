@@ -33,10 +33,15 @@ describe("sign-in gate", () => {
 
   it("keeps the home splash and the Google button out of the pages", () => {
     const home = readFileSync(resolve(root, "app/page.tsx"), "utf8");
+    const start = readFileSync(resolve(root, "app/start/page.tsx"), "utf8");
     const login = readFileSync(resolve(root, "app/login/page.tsx"), "utf8");
     const form = readFileSync(resolve(root, "app/login/login-form.tsx"), "utf8");
-    expect(home).toContain("openingDest");
+    expect(start).toContain("openingDest");
+    expect(home).toContain('href="/start"');
+    expect(home).toContain('href="/judge"');
+    expect(home).toContain("Try it");
     expect(home).not.toContain("wonder-full");
+    expect(home).not.toContain("openingDest");
     expect(login).toContain("loginDest");
     expect(login).toContain("Judges: try the demo");
     expect(login).toContain('href="/judge"');

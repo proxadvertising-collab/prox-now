@@ -182,10 +182,7 @@ export function WalletList() {
     return (
       <div className="wallet-empty">
         <h1 className="text-title font-bold text-fg">{t("en", "nav.wallet")}</h1>
-        <div className="wallet-coupon" aria-hidden="true" />
-        <p className="wallet-empty-title">{t("en", "empty.wallet").replace(/\.$/, "")}</p>
-        <p className="wallet-empty-note">Snap a shop to collect its deals</p>
-        <EmptyState message="" camera action={{ href: "/snap", label: t("en", "snap.cta") }} />
+        <EmptyState message={t("en", "empty.wallet")} camera action={{ href: "/snap", label: t("en", "snap.cta") }} />
       </div>
     );
   }

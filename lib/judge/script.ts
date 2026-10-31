@@ -17,7 +17,7 @@ export const DEMO_CAFES: Record<CafeId, { slug: string; name: string; photos: re
   b: {
     slug: "coconut-shake-stand",
     name: "Coconut shake stand",
-    photos: ["/demo/mala-mafia-menu-1.svg", "/demo/mala-mafia-menu-2.svg", "/demo/mala-mafia-menu-3.svg"],
+    photos: ["/judge/cafe-b/menu-1.svg", "/judge/cafe-b/menu-2.svg", "/judge/cafe-b/menu-3.svg"],
   },
 };
 
