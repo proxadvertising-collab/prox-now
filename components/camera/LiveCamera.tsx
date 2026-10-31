@@ -27,6 +27,7 @@ import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
 import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
+import { BOOK_PROGRESS, DEMO_CAFES, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
 import {
@@ -414,6 +415,23 @@ export function LiveCamera({
     void openPicker();
   };
 
+  async function loadSamples() {
+    const tour = readTour();
+    const cafe = DEMO_CAFES[tour?.cafe ?? "a"];
+    const files: File[] = [];
+    for (const url of cafe.photos) {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      files.push(new File([blob], "sample-menu.svg", { type: blob.type || "image/svg+xml" }));
+    }
+    if (files.length === 0) return;
+    const fix = (await placeForShot()) ?? fixRef.current;
+    if (!fix) return;
+    setPhase("seed");
+    await keepUploads(files, fix, true);
+  }
+
   async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {
     fixRef.current = fix;
     try {
@@ -729,6 +747,15 @@ export function LiveCamera({
           </button>
         </div>
       ) : null}
+      {phase === "seed" && readTour()?.role === "shopper" ? (
+        <button
+          type="button"
+          className="absolute left-4 top-16 z-20 inline-flex min-h-11 items-center rounded-full bg-[#C4B5FD] px-4 text-sm font-semibold text-[#2A1848]"
+          onClick={() => void loadSamples()}
+        >
+          Use pre-seeded photos
+        </button>
+      ) : null}
       {phase === "seed" ? (
         <SeedCoach
           seen={chips}
@@ -749,7 +776,7 @@ export function LiveCamera({
       ) : null}
       {phase === "building" ? (
         <div className="seed-build">
-          <p>{t(lang, "seed.building")}</p>
+          <p>{readTour() ? BOOK_PROGRESS : t(lang, "seed.building")}</p>
           <div className="seed-skel" />
         </div>
       ) : null}

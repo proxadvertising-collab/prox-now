@@ -5,12 +5,13 @@ import { POST as keep } from "./keep/route";
 import { POST as pass } from "./pass/route";
 import { POST as redeem } from "./redeem/route";
 
-const { getUser, rpc, remove, spark, shopRow, serviceRpc } = vi.hoisted(() => ({
+const { getUser, rpc, remove, spark, shopRow, demoRows, serviceRpc } = vi.hoisted(() => ({
   getUser: vi.fn(),
   rpc: vi.fn(),
   remove: vi.fn(),
   spark: vi.fn(),
-  shopRow: { current: null as { name: string; lat: number; lng: number; claim_code?: string } | null },
+  shopRow: { current: null as { name: string; lat: number; lng: number; claim_code?: string; is_demo?: boolean } | null },
+  demoRows: { current: [] as { role: string }[] },
   serviceRpc: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ vi.mock("../../../lib/supabase/server", () => ({
       const query = {
         select: () => query,
         eq: () => query,
+        limit: async () => ({ data: demoRows.current, error: null }),
         maybeSingle: async () => ({ data: shopRow.current, error: shopRow.current ? null : { message: "missing" } }),
       };
       return query;
@@ -59,6 +61,7 @@ describe("owner routes", () => {
     spark.mockReset();
     serviceRpc.mockReset();
     shopRow.current = null;
+    demoRows.current = [];
     getUser.mockResolvedValue({ data: { user: { id: "user" } }, error: null });
     serviceRpc.mockResolvedValue({ data: "verified", error: null });
     remove.mockResolvedValue({ data: null, error: null });
@@ -121,6 +124,31 @@ describe("owner routes", () => {
       p_code: body.code,
     });
     expect(serviceRpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects a no-code claim on a real shop", async () => {
+    shopRow.current = { name: "Real Cafe", lat: 12.56, lng: 99.95, is_demo: false };
+    demoRows.current = [{ role: "owner" }];
+    rpc.mockResolvedValue({ data: "pending", error: null });
+    const response = await call("/api/owner/claim", { shopId: "11111111-1111-4111-8111-111111111111" }, claim);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { status: string; demo?: boolean };
+    expect(body.status).toBe("pending");
+    expect(body.demo).toBeUndefined();
+    expect(serviceRpc).not.toHaveBeenCalled();
+  });
+
+  it("verifies a demo café without a paper code for a demo owner", async () => {
+    shopRow.current = { name: "Mala Mafia", lat: 12.56, lng: 99.95, is_demo: true };
+    demoRows.current = [{ role: "owner" }];
+    rpc.mockResolvedValue({ data: "pending", error: null });
+    const response = await call("/api/owner/claim", { shopId: "11111111-1111-4111-8111-111111111111" }, claim);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, status: "verified", demo: true });
+    expect(serviceRpc).toHaveBeenCalledWith("verify_claim", {
+      p_shop_id: "11111111-1111-4111-8111-111111111111",
+      p_user_id: "user",
+    });
   });
 
   function proof(lat: string, lng: string, live = true) {

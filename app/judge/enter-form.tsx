@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { FRESH_DEMO_NEXT } from "@/lib/judge/reset";
+import { startJudgeTour, tourHref } from "@/lib/judge/script";
 import { t } from "@/lib/copy";
 
 const primary = "btn-primary";
@@ -38,6 +39,16 @@ export function JudgeEnter() {
           window.setTimeout(() => window.location.assign(FRESH_DEMO_NEXT), 600);
           return;
         }
+        if (url.includes("role=explorer")) {
+          startJudgeTour({ cafe: "a", role: "shopper", step: "seed" });
+          window.location.assign(tourHref("shopper"));
+          return;
+        }
+        if (url.includes("role=owner")) {
+          startJudgeTour({ cafe: "a", role: "owner", step: "claim" });
+          window.location.assign(tourHref("owner"));
+          return;
+        }
         window.location.assign("/map");
         return;
       }
@@ -61,10 +72,10 @@ export function JudgeEnter() {
       <button type="button" className={primary} disabled={busy} onClick={() => void post("/api/judge/reset")}>
         {t("en", "judge.freshStart")}
       </button>
-      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
+      <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
         {t("en", "judge.shopper")}
       </button>
-      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
+      <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
         {t("en", "judge.owner")}
       </button>
       <p role={message ? "alert" : "status"} className="min-h-6 text-label text-fg">

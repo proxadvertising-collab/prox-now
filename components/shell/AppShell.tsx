@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { TourChrome } from "@/components/judge/TourChrome";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { t } from "@/lib/copy";
 import { bookBarPadClass, useOrderSnap } from "../order/OrderUi";
@@ -44,6 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className={shellClass}>
       <BottomNav />
+      <TourChrome />
       {ownsShop ? (
         <a className="inline-flex min-h-11 items-center px-4 text-label font-semibold text-fg" href="/owner">
           {t("en", "loop.owner")}

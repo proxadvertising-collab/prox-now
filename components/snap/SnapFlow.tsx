@@ -5,6 +5,7 @@ import { DemoBanner } from "@/components/ui/DemoBanner";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, nearestDemoShop } from "@/lib/demo/zone";
+import { readTour } from "@/lib/judge/script";
 import { locate, type LocateResult } from "@/lib/geo/locate";
 import { createClient } from "@/lib/supabase/client";
 import { resizeToJpeg } from "@/lib/image/resize";
@@ -841,6 +842,7 @@ export function SnapFlow({
       form.set("lng", String(postHere.lng));
       const source = placed?.source ?? (demo && !here ? "demo" : "gps");
       form.set("locationSource", source);
+      if (readTour()) form.set("skipWait", "1");
       const chosenFaces = showFacesPayload(faceBoxes, shown);
       if (chosenFaces.length > 0) form.set("showFaces", JSON.stringify(chosenFaces));
       const response = await fetch("/api/posts", { method: "POST", body: form });

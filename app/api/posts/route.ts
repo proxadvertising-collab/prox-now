@@ -4,6 +4,7 @@ import { callSpark, MetaCallError, MetaKeyMissing, MetaParseError } from "../../
 import { haversineMeters } from "../../../lib/geo";
 import { blurFaces, matchShownFaces, normalizeBoxes } from "../../../lib/image/blur";
 import { hasShopEnv } from "../../../lib/shops/source";
+import { allowImmediatePost } from "../../../lib/judge/shortcuts";
 import { allowPostDistance, isUnreadablePhoto } from "../../../lib/snap/place";
 import { postedSource } from "../../../lib/snap/where";
 import { factsWithConsent } from "../../../lib/posts/consent";
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
 
   const { data: shop, error: shopError } = await supabase
     .from("shops")
-    .select("id, name, name_local, category, lat, lng")
+    .select("id, name, name_local, category, lat, lng, is_demo")
     .eq("id", shopId)
     .maybeSingle();
   if (shopError || !shop) return bad("too_far");
@@ -117,6 +118,8 @@ export async function POST(request: Request) {
     demoAccount = false;
   }
   if (!allowPostDistance(distanceM, demoAccount)) return bad("too_far");
+  const shopDemo = (shop as { is_demo?: boolean }).is_demo === true;
+  const readyNow = allowImmediatePost({ shopDemo, demoAccount, requested: form.get("skipWait") === "1" });
 
   const bytes = Buffer.from(await image.arrayBuffer());
   const mime = type === "image/jpg" ? "image/jpeg" : type;
@@ -238,6 +241,7 @@ export async function POST(request: Request) {
     },
     facesBlurred: split.blur.length,
     facesShown: split.shown,
+    readyNow,
   });
 }
 

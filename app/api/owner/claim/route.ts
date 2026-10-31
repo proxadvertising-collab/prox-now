@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { callSpark } from "../../../../lib/ai/meta";
+import { allowNoCodeClaim } from "../../../../lib/judge/shortcuts";
 import { claimCode, claimMatch, claimNear, claimPrompt } from "../../../../lib/owner/claim";
 import { isUuid, ownerClient, ownerFailure, unsigned } from "../../../../lib/owner/http";
 import { createServiceClient } from "../../../../lib/supabase/admin";
@@ -64,10 +65,25 @@ export async function POST(request: Request) {
   if (proof.kind === "bad") return NextResponse.json({ error: "bad_id" }, { status: 400 });
 
   if (proof.kind === "json") {
+    const shopResult = await supabase.from("shops").select("is_demo").eq("id", proof.shopId).maybeSingle();
+    const shopDemo = (shopResult.data as { is_demo?: boolean } | null)?.is_demo === true;
+    const account = await supabase.from("demo_accounts").select("role").limit(1);
+    const demoAccount = !account.error && Array.isArray(account.data) && account.data.length > 0;
     const code = claimCode();
     const opened = await supabase.rpc("open_claim", { p_shop_id: proof.shopId, p_code: code });
     if (opened.error) return ownerFailure(opened.error);
-    return NextResponse.json({ ok: true, status: opened.data ?? "pending", code });
+    if (!allowNoCodeClaim({ shopDemo, demoAccount })) {
+      return NextResponse.json({ ok: true, status: opened.data ?? "pending", code });
+    }
+    let service;
+    try {
+      service = createServiceClient();
+    } catch {
+      return NextResponse.json({ error: "not_configured" }, { status: 503 });
+    }
+    const verified = await service.rpc("verify_claim", { p_shop_id: proof.shopId, p_user_id: user.id });
+    if (verified.error) return ownerFailure(verified.error);
+    return NextResponse.json({ ok: true, status: verified.data ?? "verified", demo: true });
   }
 
   const shopResult = await supabase.from("shops").select("name, lat, lng").eq("id", proof.shopId).maybeSingle();
