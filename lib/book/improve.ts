@@ -1,4 +1,5 @@
 import { callSparkImages } from "../ai/meta";
+import { MAX_MENU_PAGES } from "./limits";
 import type { PageRead } from "./schema";
 import { improvePrompt } from "./prompt";
 
@@ -19,6 +20,47 @@ const SINGLE = new Set(["storefront", "logo", "hours", "qr"]);
 export function blockedReplaceAction(kind: string, room: number): "add" | "skip" {
   if (SINGLE.has(kind) || room <= 0) return "skip";
   return "add";
+}
+
+/**
+ * After the reader assigns kinds. A live storefront, logo, hours, or qr page is
+ * replaced when the caller may replace it, and skipped otherwise. A second photo
+ * of that same kind in this batch is skipped. A compare that already skipped stays
+ * skipped. Menu and other pages are added until that kind is full.
+ */
+export function settleBatch(input: {
+  shots: readonly { index: number; kind: string; plan: ImproveDecision }[];
+  live: readonly { id: string; kind: string }[];
+  canReplace: boolean;
+}): ShotPlan[] {
+  const liveSingle = new Map<string, string>();
+  for (const page of input.live) {
+    if (SINGLE.has(page.kind) && !liveSingle.has(page.kind)) liveSingle.set(page.kind, page.id);
+  }
+  const taken = new Set<string>();
+  const added = new Map<string, number>();
+  const liveOf = (kind: string) => input.live.filter((page) => page.kind === kind).length;
+  return input.shots.map((shot) => {
+    if (shot.plan.action === "skip") return { index: shot.index, action: "skip", pageId: shot.plan.pageId };
+    if (SINGLE.has(shot.kind)) {
+      if (taken.has(shot.kind)) return { index: shot.index, action: "skip", pageId: null };
+      taken.add(shot.kind);
+      const pageId = liveSingle.get(shot.kind) ?? null;
+      if (pageId) {
+        if (input.canReplace) return { index: shot.index, action: "replace", pageId };
+        return { index: shot.index, action: "skip", pageId: null };
+      }
+      return { index: shot.index, action: "add", pageId: null };
+    }
+    if (shot.plan.action === "replace" && input.canReplace && shot.plan.pageId) {
+      return { index: shot.index, action: "replace", pageId: shot.plan.pageId };
+    }
+    const bucket = shot.kind === "menu" ? "menu" : "extra";
+    const used = liveOf(bucket) + (added.get(bucket) ?? 0);
+    if (used >= MAX_MENU_PAGES) return { index: shot.index, action: "skip", pageId: null };
+    added.set(bucket, (added.get(bucket) ?? 0) + 1);
+    return { index: shot.index, action: "add", pageId: null };
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

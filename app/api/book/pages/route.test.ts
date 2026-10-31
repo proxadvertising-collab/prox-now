@@ -100,10 +100,15 @@ const { getUser, state, service } = vi.hoisted(() => {
         if (state.pageInsertError) return { data: null, error: state.pageInsertError };
         const rows = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row];
         const single = new Set(["storefront", "logo", "hours", "qr"]);
+        const seen = new Set<string>();
+        for (const page of state.pages) {
+          if (page.status === "live" && single.has(String(page.kind))) seen.add(String(page.kind));
+        }
         for (const row of rows) {
           if (row.status !== "live" || !single.has(String(row.kind))) continue;
-          const clash = state.pages.some((page) => page.kind === row.kind && page.status === "live");
-          if (clash) return { data: null, error: { code: "23505", message: "shop_book_pages_one_live_single_idx" } };
+          const kind = String(row.kind);
+          if (seen.has(kind)) return { data: null, error: { code: "23505", message: "shop_book_pages_one_live_single_idx" } };
+          seen.add(kind);
         }
         state.pages.push(...rows);
         return { data: rows, error: null };
@@ -176,6 +181,7 @@ function installFetch() {
       .filter((part) => part.text?.startsWith("Image "))
       .map((part) => Number(String(part.text).replace("Image ", "").replace(":", "")));
     if (prompt.includes("Compare this new shop photo")) {
+      if (mode === "auto-camera" || mode === "auto-two-front") return metaResponse("not-json");
       if (mode === "improve-skip") return metaResponse(JSON.stringify({ action: "skip", pageId: null }));
       if (mode === "improve-replace") {
         const id = /id=([0-9a-f-]{36})/i.exec(prompt)?.[1] ?? null;
@@ -230,6 +236,24 @@ function installFetch() {
           photos: indexes.map((index) => ({ index, kind: "menu" })),
           hero: indexes[0] ?? 1,
           category: "drinks",
+        }),
+      );
+    }
+    if (mode === "auto-camera" || mode === "auto-two-front") {
+      return metaResponse(
+        JSON.stringify({
+          menu: [
+            {
+              category: "Coffee",
+              items: [{ name: "Americano", price: "45", currency: "THB", note: null }],
+            },
+          ],
+          info: { hours: { days: [{ d: "mon", open: "08:00", close: "17:00" }], raw: "Mon 8-5" } },
+          photos:
+            mode === "auto-two-front"
+              ? indexes.map((index) => ({ index, kind: "storefront" }))
+              : indexes.map((index, position) => ({ index, kind: position === 0 ? "storefront" : "menu" })),
+          hero: indexes[0] ?? 1,
         }),
       );
     }
@@ -466,7 +490,7 @@ describe("POST /api/book/pages", () => {
   });
 
   async function postSession(
-    items: { kind: "storefront" | "logo" | "menu" | "hours" | "extra"; file?: File }[],
+    items: { kind: "storefront" | "logo" | "menu" | "hours" | "extra" | "auto"; file?: File }[],
     shop = SHOP,
     bookMode?: string,
     fresh = false,
@@ -655,6 +679,73 @@ describe("POST /api/book/pages", () => {
     expect(state.pages.find((page) => page.id === pageId)?.status).toBe("live");
     expect(state.pages.filter((page) => page.kind === "storefront" && page.status === "live")).toHaveLength(1);
     expect(state.pages.filter((page) => page.kind === "menu" && page.status === "live")).toHaveLength(2);
+  });
+
+  const coffeeFacts = {
+    section: "Coffee",
+    items: [{ name: "Americano", price: "45", currency: "THB", note: null, category: "Coffee" }],
+    hours: null,
+  };
+  const blankFacts = { section: null, items: [] as unknown[], hours: null };
+  const liveBook = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };
+
+  function stockedDemo(owner: boolean) {
+    const frontId = "12121212-1212-4121-8121-121212121212";
+    const menuA = "13131313-1313-4131-8131-131313131313";
+    const menuB = "14141414-1414-4141-8141-141414141414";
+    state.shop = { id: SHOP, category: "drinks", slug: "mala-mafia", is_demo: true };
+    state.demoAccount = !owner;
+    state.ownerIds = owner ? [USER] : ["99999999-9999-4999-8999-999999999999"];
+    state.book = liveBook;
+    state.pages = [
+      { id: frontId, kind: "storefront", status: "live", extracted: { section: "door" }, shop_id: SHOP },
+      { id: menuA, kind: "menu", status: "live", extracted: coffeeFacts, shop_id: SHOP },
+      { id: menuB, kind: "menu", status: "live", extracted: blankFacts, shop_id: SHOP },
+    ];
+    mode = "auto-camera";
+    return frontId;
+  }
+
+  it("a demo explorer re-uploads auto photos without a second storefront or duplicate menus", async () => {
+    const frontId = stockedDemo(false);
+    const response = await postSession(
+      [{ kind: "auto" }, { kind: "auto" }, { kind: "auto" }],
+      SHOP,
+      "improve",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toMatchObject({ error: "already_there" });
+    expect(state.pages).toEqual([
+      { id: frontId, kind: "storefront", status: "live", extracted: { section: "door" }, shop_id: SHOP },
+      { id: "13131313-1313-4131-8131-131313131313", kind: "menu", status: "live", extracted: coffeeFacts, shop_id: SHOP },
+      { id: "14141414-1414-4141-8141-141414141414", kind: "menu", status: "live", extracted: blankFacts, shop_id: SHOP },
+    ]);
+  });
+
+  it("a verified owner re-uploads auto photos by replacing the storefront and keeping the menus", async () => {
+    const frontId = stockedDemo(true);
+    const response = await postSession(
+      [{ kind: "auto" }, { kind: "auto" }, { kind: "auto" }],
+      SHOP,
+      "improve",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toMatchObject({ error: "already_there" });
+    expect(state.pages.find((page) => page.id === frontId)?.status).toBe("removed");
+    expect(state.pages.filter((page) => page.kind === "storefront" && page.status === "live")).toHaveLength(1);
+    expect(
+      state.pages.filter((page) => page.kind === "menu" && page.status === "live").map((page) => page.id),
+    ).toEqual(["13131313-1313-4131-8131-131313131313", "14141414-1414-4141-8141-141414141414"]);
+  });
+
+  it("two auto photos that both read as storefront keep one live page", async () => {
+    state.book = liveBook;
+    mode = "auto-two-front";
+    const response = await postSession([{ kind: "auto" }, { kind: "auto" }], SHOP, "improve");
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toMatchObject({ error: "already_there" });
+    expect(state.pages.filter((page) => page.status !== "removed")).toHaveLength(1);
+    expect(state.pages[0]?.kind).toBe("storefront");
   });
 
   it("joining an existing shop with a live page succeeds", async () => {

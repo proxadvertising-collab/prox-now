@@ -6,7 +6,7 @@ import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
 import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReadable, type BrandTheme } from "../../../../lib/book/brand";
-import { blockedReplaceAction, improveSummary, pageFacts, readImprove, type ShotPlan } from "../../../../lib/book/improve";
+import { improveSummary, pageFacts, readImprove, settleBatch, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
 import { applyCutouts } from "../../../../lib/book/cutouts";
@@ -121,8 +121,10 @@ function fileKind(kind: string | null): UploadKind {
 }
 
 function finalPageKind(group: Ingested, index: number): string {
-  if (group.read?.read.rich) return fileKind(group.pageByIndex.get(index)?.kindGuess ?? null);
-  return group.kind;
+  if (!group.read?.read.rich) return group.kind;
+  const guess = group.pageByIndex.get(index)?.kindGuess ?? null;
+  if (guess === "qr") return "qr";
+  return fileKind(guess);
 }
 
 function heroPathOf(groups: readonly Ingested[], hero: number | null): string | null {
@@ -439,16 +441,30 @@ async function commitBook(input: {
   const demoResult = await service.from("demo_accounts").select("role").eq("user_id", userId);
   const demoAccount = Array.isArray(demoResult.data) && demoResult.data.length > 0;
   const gate = { claimed, verifiedOwner, serverReset: false, demoShop, demoAccount };
-  if (!bookWriteAllowed({ ...gate, action: "replace" })) {
-    let room = MAX_MENU_PAGES - livePages.filter((page) => page.status === "live").length;
-    for (const group of groups) {
-      for (const plan of group.plans) {
-        if (plan.action !== "replace") continue;
-        const next = blockedReplaceAction(finalPageKind(group, plan.index), room);
-        if (next === "add") room -= 1;
-        plan.action = next;
-        plan.pageId = null;
-      }
+  const canReplace = bookWriteAllowed({ ...gate, action: "replace" });
+  const batch = groups.flatMap((group) =>
+    group.stored.map((page) => ({
+      group,
+      index: page.index,
+      kind: finalPageKind(group, page.index),
+      plan: group.plans.find((item) => item.index === page.index) ?? { action: "add" as const, pageId: null },
+    })),
+  );
+  const settled = settleBatch({
+    shots: batch.map((shot) => ({ index: shot.index, kind: shot.kind, plan: shot.plan })),
+    live: livePages.filter((page) => page.status === "live").map((page) => ({ id: page.id, kind: page.kind })),
+    canReplace,
+  });
+  for (let i = 0; i < batch.length; i += 1) {
+    const shot = batch[i];
+    const next = settled[i];
+    if (!shot || !next) continue;
+    const plan = shot.group.plans.find((item) => item.index === shot.index);
+    if (plan) {
+      plan.action = next.action;
+      plan.pageId = next.pageId;
+    } else if (next.action !== "add") {
+      shot.group.plans.push({ index: shot.index, action: next.action, pageId: next.pageId });
     }
   }
   const replacing = groups.some((group) => group.plans.some((plan) => plan.action === "replace"));
@@ -594,7 +610,7 @@ async function commitBook(input: {
       const meta = group.read?.perPage.get(page.index);
       const extracted =
         group.resting || group.upstream || !group.read ? {} : extractedOf(group.pageByIndex.get(page.index) ?? null);
-      const kind = group.read?.read.rich ? fileKind(group.pageByIndex.get(page.index)?.kindGuess ?? null) : group.kind;
+      const kind = finalPageKind(group, page.index);
       let position = 0;
       if (kind === "menu") {
         position = menuCursor;
@@ -956,8 +972,11 @@ async function handleGroups(
   const ingested: Ingested[] = [];
   const kept: string[] = [];
   for (const group of preparedGroups) {
+    const ranked = livePages.filter((page) => page.status === "live" && page.id);
     const existing = improve
-      ? livePages.filter((page) => page.kind === group.kind && page.id).map((page) => ({ id: page.id, extracted: page.extracted }))
+      ? [...ranked.filter((page) => page.kind === group.kind), ...ranked.filter((page) => page.kind !== group.kind)].map(
+          (page) => ({ id: page.id, extracted: page.extracted }),
+        )
       : [];
     const result = await runPrepared(
       service,
