@@ -63,7 +63,7 @@ describe("mapLiveRows", () => {
       shopId: "shop-1",
       shopName: "Shop",
       shopNameLocal: "ร้าน",
-      photoUrl: "https://example.supabase.co/storage/v1/object/public/post-photos/user/post-1.jpg",
+      photoUrl: "/api/media/post-photos/user/post-1.jpg",
       textTranslated: { en: "Shop" },
       seed: false,
     });

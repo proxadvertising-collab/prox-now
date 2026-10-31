@@ -24,8 +24,9 @@ describe("claim at the shop", () => {
     expect(claimStatus(true, false)).toBe("pending");
     const route = readFileSync(new URL("../../app/api/owner/claim/route.ts", import.meta.url), "utf8");
     expect(route).toContain("claimGranted");
+    expect(route).toContain("claimNear");
+    expect(route).toContain("consume_claim_capture");
     expect(route).toContain("allowNoCodeClaim");
-    expect(route).not.toContain("claimNear");
     expect(route).not.toContain('form.get("live")');
     expect(quoteShopName('Say "hi"\n')).toBe('Say \\"hi\\" ');
     expect(claimPrompt('Say "hi"', "mango 1234")).toContain('\\"hi\\"');

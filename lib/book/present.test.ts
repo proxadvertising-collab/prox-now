@@ -38,9 +38,8 @@ describe("book view", () => {
     );
     expect(bookImageUrl("", "/demo/mala-mafia-hours.svg")).toBe("/demo/mala-mafia-hours.svg");
     const stored = bookImageUrl("https://example.supabase.co", "shop-1/menu.jpg");
-    expect(stored).toBe(
-      "https://example.supabase.co/storage/v1/object/public/shop-book/shop-1/menu.jpg",
-    );
+    expect(stored).toBe("/api/media/shop-book/shop-1/menu.jpg");
+    expect(stored).not.toContain("/object/public/");
     const view = presentBook(
       {
         shop: { id: "shop-1", slug: "mala-mafia", name: "Mala Mafia" },

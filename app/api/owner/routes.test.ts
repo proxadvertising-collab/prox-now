@@ -63,7 +63,11 @@ describe("owner routes", () => {
     shopRow.current = null;
     demoRows.current = [];
     getUser.mockResolvedValue({ data: { user: { id: "user" } }, error: null });
-    serviceRpc.mockResolvedValue({ data: "verified", error: null });
+    serviceRpc.mockImplementation(async (name: string) => {
+      if (name === "consume_claim_capture") return { data: true, error: null };
+      if (name === "issue_claim_capture") return { data: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", error: null };
+      return { data: "verified", error: null };
+    });
     remove.mockResolvedValue({ data: null, error: null });
   });
 
@@ -151,14 +155,15 @@ describe("owner routes", () => {
     });
   });
 
-  function proof(lat: string, lng: string, live = true) {
+  function proof(lat: string, lng: string, capture = true) {
     const form = new FormData();
     form.set("shopId", "11111111-1111-4111-8111-111111111111");
     form.set("lat", lat);
     form.set("lng", lng);
     form.set("code", "mango 1234");
     form.set("image", new File([Uint8Array.from([1, 2, 3])], "sign.jpg", { type: "image/jpeg" }));
-    if (live) form.set("live", "1");
+    if (capture) form.set("capture", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    form.set("live", "1");
     return claim(
       new Request("http://localhost/api/owner/claim", {
         method: "POST",
@@ -167,18 +172,15 @@ describe("owner routes", () => {
     );
   }
 
-  it("verifies a matching photo when the live flag is missing", async () => {
+  it("rejects a matching photo when the capture token is missing", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });
     const response = await proof("12.5685", "99.9575", false);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, status: "verified" });
-    expect(spark).toHaveBeenCalled();
-    expect(serviceRpc).toHaveBeenCalledWith("verify_claim", {
-      p_shop_id: "11111111-1111-4111-8111-111111111111",
-      p_user_id: "user",
-    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "bad_capture" });
+    expect(spark).not.toHaveBeenCalled();
+    expect(serviceRpc).not.toHaveBeenCalled();
   });
 
   it("verifies when the sign matches", async () => {
@@ -198,18 +200,15 @@ describe("owner routes", () => {
     expect(ownerToolsOpen([{ status: "verified" }])).toBe(true);
   });
 
-  it("verifies a matching photo when the client GPS is far from the shop", async () => {
+  it("rejects a spoofed GPS even when the photo matches and a token is sent", async () => {
     shopRow.current = { name: "Mala Mafia", lat: 12.5685, lng: 99.9575, claim_code: "mango 1234" };
     spark.mockResolvedValue({ raw: '{"match":true}', model: "muse-spark-1.3", ms: 1 });
     rpc.mockResolvedValue({ data: null, error: null });
     const response = await proof("13.8", "100.5");
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, status: "verified" });
-    expect(spark).toHaveBeenCalled();
-    expect(serviceRpc).toHaveBeenCalledWith("verify_claim", {
-      p_shop_id: "11111111-1111-4111-8111-111111111111",
-      p_user_id: "user",
-    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "too_far" });
+    expect(spark).not.toHaveBeenCalled();
+    expect(serviceRpc).not.toHaveBeenCalled();
   });
 
   it("stays in review when GPS is at the shop, live is set, and the photo does not match", async () => {
@@ -225,6 +224,6 @@ describe("owner routes", () => {
       message: "We'll review this within 48 hours",
     });
     expect(rpc).toHaveBeenCalledWith("mark_claim_review", { p_shop_id: "11111111-1111-4111-8111-111111111111" });
-    expect(serviceRpc).not.toHaveBeenCalled();
+    expect(serviceRpc).not.toHaveBeenCalledWith("verify_claim", expect.anything());
   });
 });

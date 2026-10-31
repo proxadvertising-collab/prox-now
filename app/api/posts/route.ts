@@ -9,6 +9,7 @@ import { allowPostDistance, isUnreadablePhoto } from "../../../lib/snap/place";
 import { postedSource } from "../../../lib/snap/where";
 import { factsWithConsent } from "../../../lib/posts/consent";
 import { getLivePosts, photoPublicUrl } from "../../../lib/posts/source";
+import { createServiceClient } from "../../../lib/supabase/admin";
 import { createClient } from "../../../lib/supabase/server";
 
 export const maxDuration = 60;
@@ -186,14 +187,21 @@ export async function POST(request: Request) {
     },
     p_facts: factsWithConsent(result.facts, split.shown),
   };
-  let created = await supabase.rpc("create_post", postArgs);
+  let service;
+  try {
+    service = createServiceClient();
+  } catch {
+    return NextResponse.json({ error: "not_configured" }, { status: 503 });
+  }
+  const serverArgs = { ...postArgs, p_author_id: userId };
+  let created = await service.rpc("create_post", serverArgs);
   if (created.error && missingFactsFunction(created.error)) {
     if (!loggedFactsFallback) {
       loggedFactsFallback = true;
       console.warn("create_post facts argument is not available yet");
     }
-    const { p_facts: _facts, ...withoutFacts } = postArgs;
-    created = await supabase.rpc("create_post", withoutFacts);
+    const { p_facts: _facts, ...withoutFacts } = serverArgs;
+    created = await service.rpc("create_post", withoutFacts);
   }
 
   if (created.error) {
@@ -222,6 +230,10 @@ export async function POST(request: Request) {
     expires_at?: string;
   } | null;
   if (!row?.id) return NextResponse.json({ error: "upstream" }, { status: 502 });
+
+  if (readyNow) {
+    await service.from("posts").update({ ready_at: new Date().toISOString() }).eq("id", row.id);
+  }
 
   const source = postedSource(typeof form.get("locationSource") === "string" ? String(form.get("locationSource")) : "", demoAccount);
   if (source !== "gps") {

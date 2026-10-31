@@ -1,4 +1,4 @@
-import { photoPublicUrl } from "../posts/source";
+import { signedPhotoUrl } from "../photos/sign";
 import { contrastRatio, MIN_CONTRAST } from "./palette";
 import { cleanNameEn, type PageContacts } from "./schema";
 
@@ -92,7 +92,6 @@ function stringList(value: unknown, max: number): string[] {
 function cutoutUrl(supabaseUrl: string, value: unknown): string | null {
   const raw = text(value, 300);
   if (!raw || !raw.includes("book-cutouts/")) return null;
-  if (raw.startsWith("http")) return raw;
   return bookImageUrl(supabaseUrl, raw);
 }
 
@@ -123,11 +122,8 @@ function readFailed(value: unknown): boolean {
   return typeof meta?.error === "string" && meta.error.trim().length > 0;
 }
 
-export function bookImageUrl(supabaseUrl: string, imagePath: string | null): string | null {
-  if (imagePath?.startsWith("/demo/")) return imagePath;
-  const url = photoPublicUrl(supabaseUrl, imagePath);
-  if (!url) return null;
-  return url.replace("/post-photos/", "/shop-book/");
+export function bookImageUrl(_supabaseUrl: string, imagePath: string | null): string | null {
+  return signedPhotoUrl(imagePath, "shop-book");
 }
 
 function hoursLabel(value: unknown): string | null {

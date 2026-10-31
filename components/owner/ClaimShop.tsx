@@ -76,6 +76,21 @@ export function ClaimShop({
           timeout: 12000,
         });
       });
+      const issued = await fetch("/api/owner/claim/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shopId }),
+      });
+      const issuedBody = (await issued.json().catch(() => null)) as { token?: string } | null;
+      if (issued.status === 401) {
+        const next = window.location.pathname + window.location.search;
+        window.location.assign("/login?next=" + encodeURIComponent(next));
+        return;
+      }
+      if (!issued.ok || !issuedBody?.token) {
+        setNote(t("en", "claim.fail"));
+        return;
+      }
       const image = await livePhoto();
       if (!image) {
         setNote(t("en", "claim.camera"));
@@ -85,8 +100,8 @@ export function ClaimShop({
       form.set("shopId", shopId);
       form.set("lat", String(position.coords.latitude));
       form.set("lng", String(position.coords.longitude));
-      form.set("live", "1");
       form.set("code", code);
+      form.set("capture", issuedBody.token);
       form.set("image", image, "sign.jpg");
       const response = await fetch("/api/owner/claim", { method: "POST", body: form });
       const body = (await response.json().catch(() => null)) as { status?: string } | null;

@@ -14,6 +14,17 @@ const { getUser, maybeSingle, upload, remove, rpc, demoLimit } = vi.hoisted(() =
   demoLimit: vi.fn(),
 }));
 
+vi.mock("../../../lib/supabase/admin", () => ({
+  createServiceClient: () => ({
+    rpc,
+    from: () => ({
+      update: () => ({
+        eq: async () => ({ data: null, error: null }),
+      }),
+    }),
+  }),
+}));
+
 vi.mock("../../../lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser },

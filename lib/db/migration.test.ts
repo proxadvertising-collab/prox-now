@@ -513,3 +513,60 @@ describe("desktop loop migration", () => {
     expect(sql.toLowerCase()).not.toContain("service_role");
   });
 });
+
+describe("security migrations 0018 through 0021", () => {
+  const claim = readFileSync(resolve(root, "supabase/migrations/0018_claim_capture.sql"), "utf8");
+  const posts = readFileSync(resolve(root, "supabase/migrations/0019_posts_server_only.sql"), "utf8");
+  const book = readFileSync(resolve(root, "supabase/migrations/0020_book_writes.sql"), "utf8");
+  const photos = readFileSync(resolve(root, "supabase/migrations/0021_private_photos.sql"), "utf8");
+
+  it("issues a single-use capture token only to the server", () => {
+    expect(claim).toContain("Apply it only after the captain writes apply");
+    expect(claim).toContain("create table if not exists public.claim_captures");
+    expect(claim).toContain("alter table public.claim_captures enable row level security");
+    expect(claim).toContain("revoke all on table public.claim_captures from public, anon, authenticated");
+    expect(claim).toContain("function public.issue_claim_capture");
+    expect(claim).toContain("function public.consume_claim_capture");
+    expect(claim).toContain("used_at is null");
+    expect(claim).toContain("grant execute on function public.issue_claim_capture(uuid, uuid) to service_role");
+    expect(claim).not.toContain("grant execute on function public.issue_claim_capture(uuid, uuid) to authenticated");
+    expect(claim).toContain("Rollback:");
+  });
+
+  it("denies a direct insert or update on posts and stamps expiry on the server", () => {
+    expect(posts).toContain("Apply it only after the captain writes apply");
+    expect(posts).toContain("drop policy if exists posts_insert_own_live on public.posts");
+    expect(posts).toContain("drop policy if exists posts_update_own on public.posts");
+    expect(posts).toContain("revoke insert, update, delete on table public.posts from public, anon, authenticated");
+    expect(posts).not.toMatch(/create policy posts_\w* on public\.posts/);
+    expect(posts).toContain("new.expires_at := new.created_at + interval '2 hours'");
+    expect(posts).toContain("new.ready_at := new.expires_at");
+    expect(posts).toContain("raise exception 'server_only'");
+    expect(posts).toContain("p_author_id");
+    expect(posts).toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) to service_role");
+    expect(posts).not.toContain("grant execute on function public.create_post(uuid, text, text, jsonb, jsonb, uuid) to authenticated");
+    expect(posts).toContain("coalesce(v_ready_at, v_expires_at)");
+    expect(posts).toContain("Rollback:");
+  });
+
+  it("logs book writes and lets only the server clear pages", () => {
+    expect(book).toContain("Apply it only after the captain writes apply");
+    expect(book).toContain("create table if not exists public.shop_book_writes");
+    expect(book).toContain("alter table public.shop_book_writes enable row level security");
+    expect(book).toContain("revoke all on table public.shop_book_writes from public, anon, authenticated");
+    expect(book).toContain("check (action in ('add', 'replace', 'delete'))");
+    expect(book).toContain("function public.book_server_clear");
+    expect(book).toContain("grant execute on function public.book_server_clear(uuid) to service_role");
+    expect(book).not.toContain("for insert");
+    expect(book).toContain("Rollback:");
+  });
+
+  it("makes both photo buckets private", () => {
+    expect(photos).toContain("Apply it only after the captain writes apply");
+    expect(photos).toContain("set public = false");
+    expect(photos).toContain("'post-photos', 'shop-book'");
+    expect(photos).toContain("drop policy if exists post_photos_select_anon");
+    expect(photos).toContain("drop policy if exists shop_book_select_anon");
+    expect(photos).toContain("Rollback:");
+  });
+});

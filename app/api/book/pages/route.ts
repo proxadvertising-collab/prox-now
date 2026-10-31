@@ -11,6 +11,7 @@ import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
 import { applyCutouts } from "../../../../lib/book/cutouts";
 import { categoryFromOther, extractedOf, type PageRead } from "../../../../lib/book/schema";
+import { bookWriteAllowed } from "../../../../lib/book/writes";
 import { isPlaceholderShopName, seedBrand, seedSlug } from "../../../../lib/book/seedName";
 import { allowBook, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
@@ -421,6 +422,29 @@ async function commitBook(input: {
   fresh?: boolean;
 }): Promise<NextResponse> {
   const { service, shop, userId, livePages, groups, uploaded, summary } = input;
+  const ownerResult = await service.from("shop_owners").select("user_id").eq("shop_id", shop.id).eq("status", "verified");
+  const owners = Array.isArray(ownerResult.data) ? ownerResult.data : [];
+  const claimed = owners.length > 0;
+  const verifiedOwner = owners.some((row) => {
+    const id = row && typeof row === "object" ? (row as { user_id?: unknown }).user_id : null;
+    return id === userId;
+  });
+  const shopDemoResult = await service.from("shops").select("is_demo").eq("id", shop.id).maybeSingle();
+  const demoShop = (shopDemoResult.data as { is_demo?: boolean } | null)?.is_demo === true;
+  const demoResult = await service.from("demo_accounts").select("role").eq("user_id", userId);
+  const demoAccount = Array.isArray(demoResult.data) && demoResult.data.length > 0;
+  const replacing = groups.some((group) => group.plans.some((plan) => plan.action === "replace"));
+  const adding = groups.some((group) =>
+    group.stored.some((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip")),
+  );
+  const gate = { claimed, verifiedOwner, serverReset: false, demoShop, demoAccount };
+  if (
+    (replacing && !bookWriteAllowed({ ...gate, action: "replace" })) ||
+    (adding && !bookWriteAllowed({ ...gate, action: "add" }))
+  ) {
+    await removePaths(service, uploaded);
+    return json({ error: "not_owner" }, 403);
+  }
   const bookResult = await service
     .from("shop_books")
     .select("hours, theme, tagline, source_language, built_by_model, status")
@@ -600,6 +624,21 @@ async function commitBook(input: {
     return json({ error: "upload_failed" }, 502);
   }
 
+  const logs = [
+    ...groups.flatMap((group) =>
+      group.plans
+        .filter((plan) => plan.action === "replace" && plan.pageId)
+        .map((plan) => ({ shop_id: shop.id, page_id: plan.pageId, user_id: userId, action: "replace" })),
+    ),
+    ...rows.map((row) => ({ shop_id: shop.id, page_id: row.id, user_id: userId, action: "add" })),
+  ];
+  if (logs.length > 0) {
+    const logged = await service.from("shop_book_writes").insert(logs);
+    if (logged.error) {
+      // Migration 0020 adds the log. The page rows are already stored.
+    }
+  }
+
   const missingResult = await service.rpc("book_missing", { p_shop_id: shop.id });
   const missing = Array.isArray(missingResult.data)
     ? missingResult.data.filter((item): item is string => typeof item === "string")
@@ -700,11 +739,23 @@ async function ingestSeed(
     }
   }
 
+  let faceBoxes = new Map<number, number[][]>();
+  if (flat.length > 0) {
+    try {
+      const faces = await detectFaces(flat.map((item) => item.image));
+      faceBoxes = faces.faces;
+    } catch (error) {
+      if (error instanceof MetaKeyMissing) return json({ error: "ai_not_configured" }, 503);
+      return json({ error: "blur_failed" }, 422);
+    }
+  }
+
   const storedByKind = new Map<UploadKind, StoredPage[]>();
   const uploaded: string[] = [];
   try {
     for (const item of flat) {
-      const jpeg = await storedJpeg(item.image.original, []);
+      const boxes = faceBoxes.get(item.image.index) ?? [];
+      const jpeg = await storedJpeg(item.image.original, boxes);
       const id = crypto.randomUUID();
       const path = shop.id + "/" + id + ".jpg";
       const uploadedFile = await service.storage.from("shop-book").upload(path, jpeg.bytes, {
@@ -720,7 +771,7 @@ async function ingestSeed(
         path,
         width: dimension(jpeg.width),
         height: dimension(jpeg.height),
-        facesBlurred: 0,
+        facesBlurred: (faceBoxes.get(item.image.index) ?? []).length,
         bytes: jpeg.bytes,
       });
       storedByKind.set(item.kind, list);

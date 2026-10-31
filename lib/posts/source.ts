@@ -1,4 +1,5 @@
 import { parseMatcherResult, type PlaceFacts } from "../ai/matcher";
+import { signedPhotoUrl } from "../photos/sign";
 import { hasShopEnv } from "../shops/source";
 
 export type LivePost = {
@@ -67,11 +68,8 @@ export function walkingMinutes(distanceM: number): number {
   return Math.max(1, Math.ceil(distanceM / 80));
 }
 
-export function photoPublicUrl(supabaseUrl: string, photoPath: string | null): string | null {
-  if (!photoPath) return null;
-  const base = supabaseUrl.replace(/\/$/, "");
-  if (!base) return null;
-  return base + "/storage/v1/object/public/post-photos/" + photoPath.replace(/^\/+/, "");
+export function photoPublicUrl(_supabaseUrl: string, photoPath: string | null): string | null {
+  return signedPhotoUrl(photoPath, "post-photos");
 }
 
 export function mapLiveRows(

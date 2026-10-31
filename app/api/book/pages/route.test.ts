@@ -26,6 +26,7 @@ const { getUser, state, service } = vi.hoisted(() => {
     filters: [] as [string, string, unknown][],
     rpcCalls: [] as string[],
     bookWrites: 0,
+    ownerIds: ["22222222-2222-4222-8222-222222222222"] as string[],
   };
   const getUser = vi.fn();
 
@@ -71,6 +72,12 @@ const { getUser, state, service } = vi.hoisted(() => {
     }
 
     finish() {
+      if (this.table === "shop_owners") {
+        return {
+          data: state.ownerIds.map((id) => ({ user_id: id, status: "verified" })),
+          error: null,
+        };
+      }
       if (this.table === "shops" && this.op === "update") {
         state.shop = { ...(state.shop ?? { id: "", category: "other" }), ...(this.payload as Row) };
         return { data: state.shop, error: state.shopError };
@@ -288,6 +295,7 @@ describe("POST /api/book/pages", () => {
     state.filters = [];
     state.rpcCalls = [];
     state.bookWrites = 0;
+    state.ownerIds = [USER];
     mode = "ok";
     vi.stubGlobal("fetch", installFetch());
   });
@@ -562,6 +570,13 @@ describe("POST /api/book/pages", () => {
     expect(replacedBody.summary).toContain("Updated 1 menu item");
     expect(state.pages.find((page) => page.id === menuId)?.status).toBe("removed");
 
+    state.ownerIds = ["99999999-9999-4999-8999-999999999999"];
+    mode = "improve-replace";
+    const blocked = await postSession([{ kind: "menu" }], SHOP, "improve");
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toEqual({ error: "not_owner" });
+    state.ownerIds = [USER];
+
     mode = "improve-add";
     const added = await postSession([{ kind: "menu" }], SHOP, "improve");
     expect(added.status).toBe(200);
@@ -591,7 +606,7 @@ describe("POST /api/book/pages", () => {
     const response = await postSession([{ kind: "logo" }, { kind: "menu" }, { kind: "menu" }]);
     expect(response.status).toBe(200);
     const fetchMock = vi.mocked(fetch);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const reads = contentCalls(fetchMock);
     expect(reads).toHaveLength(1);
     const menu = state.pages.filter((page) => page.kind === "menu");
