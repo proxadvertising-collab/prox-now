@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BOOK_PROGRESS, DEMO_CAFES, EXPLAINERS, rememberSeen, showExplainer, swapTour } from "./script";
 
@@ -9,9 +11,14 @@ describe("judge script", () => {
     expect(BOOK_PROGRESS).toContain("about a minute");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");
     expect(DEMO_CAFES.b.slug).toBe("coconut-shake-stand");
+    expect(DEMO_CAFES.a.photos.every((photo) => photo.startsWith("/judge/cafe-a/"))).toBe(true);
     expect(DEMO_CAFES.b.photos.every((photo) => photo.startsWith("/judge/cafe-b/"))).toBe(true);
     expect(DEMO_CAFES.b.photos.some((photo) => photo.includes("mala-mafia"))).toBe(false);
-    expect(DEMO_CAFES.a.photos.length).toBeGreaterThan(0);
+    const root = resolve(import.meta.dirname, "../..");
+    for (const photo of [...DEMO_CAFES.a.photos, ...DEMO_CAFES.b.photos]) {
+      expect(photo).toMatch(/\.(jpg|png|webp)$/);
+      expect(existsSync(resolve(root, "public", photo.slice(1)))).toBe(true);
+    }
   });
 
   it("shows every card to a judge and once to everyone else", () => {

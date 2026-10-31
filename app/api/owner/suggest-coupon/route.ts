@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { COUPON_FALLBACK, suggestCouponOffer, type MenuHint } from "../../../../lib/coupon/suggest";
 import { isUuid, ownerClient, ownerFailure, unsigned } from "../../../../lib/owner/http";
-import { photoPublicUrl } from "../../../../lib/posts/source";
+import { SIGNED_URL_TTL_SECONDS } from "../../../../lib/photos/sign";
 import { allowSnap, clientIp } from "../../../../lib/rate/window";
+import { createServiceClient } from "../../../../lib/supabase/admin";
 
 export const maxDuration = 60;
 
@@ -74,8 +75,11 @@ export async function POST(request: Request) {
 
   try {
     const photoPath = post.data && typeof post.data.photo_path === "string" ? post.data.photo_path : null;
-    const url = photoPublicUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", photoPath);
-    if (!url) return NextResponse.json({ offer: COUPON_FALLBACK });
+    if (!photoPath) return NextResponse.json({ offer: COUPON_FALLBACK });
+    const service = createServiceClient();
+    const signed = await service.storage.from("post-photos").createSignedUrl(photoPath, SIGNED_URL_TTL_SECONDS);
+    const url = signed.data?.signedUrl;
+    if (typeof url !== "string" || !url.includes("token=")) return NextResponse.json({ offer: COUPON_FALLBACK });
     const image = await fetch(url);
     if (!image.ok) return NextResponse.json({ offer: COUPON_FALLBACK });
     const type = (image.headers.get("content-type") || "image/jpeg").split(";")[0] || "image/jpeg";

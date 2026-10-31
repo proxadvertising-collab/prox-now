@@ -12,12 +12,12 @@ export const DEMO_CAFES: Record<CafeId, { slug: string; name: string; photos: re
   a: {
     slug: "mala-mafia",
     name: "Mala Mafia",
-    photos: ["/demo/mala-mafia-menu-1.svg", "/demo/mala-mafia-menu-2.svg", "/demo/mala-mafia-menu-3.svg"],
+    photos: ["/judge/cafe-a/menu-1.jpg", "/judge/cafe-a/menu-2.jpg", "/judge/cafe-a/menu-3.jpg"],
   },
   b: {
     slug: "coconut-shake-stand",
     name: "Coconut shake stand",
-    photos: ["/judge/cafe-b/menu-1.svg", "/judge/cafe-b/menu-2.svg", "/judge/cafe-b/menu-3.svg"],
+    photos: ["/judge/cafe-b/menu-1.jpg", "/judge/cafe-b/menu-2.jpg", "/judge/cafe-b/menu-3.jpg"],
   },
 };
 

@@ -21,7 +21,12 @@ export function signedPhotoUrl(value: string | null, bucket: "post-photos" | "sh
 type CacheEntry = { url: string; freshUntil: number };
 
 const cache = new Map<string, CacheEntry>();
-const FRESH_MS = 8 * 60 * 1000;
+
+/** Server reuse window. A signed URL must outlive this by at least 10 minutes. */
+export const SIGNED_URL_REUSE_MS = 8 * 60 * 1000;
+export const SIGNED_URL_TTL_SECONDS = 8 * 60 + 10 * 60;
+
+const FRESH_MS = SIGNED_URL_REUSE_MS;
 
 export function clearSignedUrlCache(): void {
   cache.clear();

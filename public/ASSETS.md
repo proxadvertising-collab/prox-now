@@ -15,6 +15,12 @@ Every file under `public/` is listed here. `scripts/audit-fresh.mjs` fails when 
 - icons/icon-192.png
 - icons/icon-512.png
 - icons/icon-maskable-512.png
+- judge/cafe-a/menu-1.jpg
+- judge/cafe-a/menu-2.jpg
+- judge/cafe-a/menu-3.jpg
+- judge/cafe-b/menu-1.jpg
+- judge/cafe-b/menu-2.jpg
+- judge/cafe-b/menu-3.jpg
 - next.svg
 - vercel.svg
 - window.svg

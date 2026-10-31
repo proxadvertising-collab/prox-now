@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cachedSignedUrl, clearSignedUrlCache, signedPhotoUrl } from "./sign";
+import { cachedSignedUrl, clearSignedUrlCache, SIGNED_URL_REUSE_MS, SIGNED_URL_TTL_SECONDS, signedPhotoUrl } from "./sign";
 
 describe("signed photo urls", () => {
   it("points storage paths at the signing route and never at a public object", () => {
@@ -26,5 +26,9 @@ describe("signed photo urls", () => {
     expect(second).toBe(first);
     expect(calls).toBe(1);
     clearSignedUrlCache();
+  });
+
+  it("keeps a signed url alive 10 minutes past the reuse window", () => {
+    expect(SIGNED_URL_TTL_SECONDS * 1000).toBeGreaterThanOrEqual(SIGNED_URL_REUSE_MS + 10 * 60 * 1000);
   });
 });
