@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
+import { signInDemoRole } from "../../../../lib/judge/demo";
 import { allowJudge, clientIp } from "../../../../lib/rate/window";
 import { createClient } from "../../../../lib/supabase/server";
-
-function demoCredentials(role: "explorer" | "owner"): { email: string; password: string } | null {
-  const emailName = role === "explorer" ? "DEMO_EXPLORER_EMAIL" : "DEMO_OWNER_EMAIL";
-  const passwordName = role === "explorer" ? "DEMO_EXPLORER_PASSWORD" : "DEMO_OWNER_PASSWORD";
-  const email = process.env[emailName]?.trim() ?? "";
-  const password = process.env[passwordName] ?? "";
-  if (!email || !password) return null;
-  return { email, password };
-}
 
 async function signIn(email: string, password: string) {
   let supabase;
@@ -33,9 +25,18 @@ export async function POST(request: Request) {
     if (role !== "explorer" && role !== "owner") {
       return NextResponse.json({ error: "bad_role" }, { status: 400 });
     }
-    const creds = demoCredentials(role);
-    if (!creds) return NextResponse.json({ error: "demo_not_ready" }, { status: 503 });
-    return signIn(creds.email, creds.password);
+    let supabase;
+    try {
+      supabase = await createClient();
+    } catch {
+      return NextResponse.json({ error: "demo_not_ready" }, { status: 503 });
+    }
+    const signed = await signInDemoRole(supabase, role);
+    if (!signed.ok) {
+      const status = signed.error === "demo_not_ready" ? 503 : 401;
+      return NextResponse.json({ error: signed.error }, { status });
+    }
+    return NextResponse.json({ ok: true, next: "/map" });
   }
 
   let payload: unknown;

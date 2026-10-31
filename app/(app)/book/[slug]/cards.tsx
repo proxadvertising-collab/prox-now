@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { ShopName } from "../../../../components/book/ShopName";
 import { MenuBoard } from "../../../../components/menu/MenuBoard";
+import { pagesByCategory } from "../../../../lib/book/categories";
 import { bookText, displayName, parseHours } from "../../../../lib/book/display";
 import { t } from "../../../../lib/copy";
 import type { ShopInfo } from "../../../../lib/book/present";
@@ -27,7 +28,7 @@ export type DeckCard =
   | { type: "cover" }
   | { type: "info" }
   | { type: "deals"; deals: DealTile[] }
-  | { type: "menu"; index: number; total: number; items: MenuTileData[]; category: string | null; continued: boolean }
+  | { type: "menu"; index: number; total: number; items: MenuTileData[]; category: string | null; continued: boolean; part: number }
   | { type: "extra"; id: string };
 
 export function bookFontFamily(font: string | null): string {
@@ -60,17 +61,6 @@ export function chunkMenu<T>(items: readonly T[], size = MENU_PAGE_SIZE): T[][] 
   return pages;
 }
 
-function groupMenu(items: readonly MenuTileData[]): { category: string | null; items: MenuTileData[] }[] {
-  const groups: { category: string | null; items: MenuTileData[] }[] = [];
-  for (const item of items) {
-    const category = item.category ?? null;
-    const last = groups[groups.length - 1];
-    if (last && last.category === category) last.items.push(item);
-    else groups.push({ category, items: [item] });
-  }
-  return groups;
-}
-
 export function buildDeck(input: {
   menuItems: readonly MenuTileData[];
   extras: readonly string[];
@@ -78,13 +68,7 @@ export function buildDeck(input: {
 }): DeckCard[] {
   const cards: DeckCard[] = [{ type: "cover" }];
   if (input.deals && input.deals.length > 0) cards.push({ type: "deals", deals: [...input.deals] });
-  const menus = groupMenu(input.menuItems).flatMap((group) =>
-    chunkMenu(group.items).map((items, chunk) => ({
-      items,
-      category: group.category,
-      continued: chunk > 0,
-    })),
-  );
+  const menus = pagesByCategory(input.menuItems, MENU_PAGE_SIZE);
   menus.forEach((group, index) => {
     cards.push({
       type: "menu",
@@ -92,7 +76,8 @@ export function buildDeck(input: {
       total: menus.length,
       items: group.items,
       category: group.category,
-      continued: group.continued,
+      continued: group.part > 1,
+      part: group.part,
     });
   });
   cards.push({ type: "info" });
@@ -513,10 +498,11 @@ export function InfoCard({
   );
 }
 
-export function menuPageTitle(category: string | null | undefined, continued: boolean): string | null {
+export function menuPageTitle(category: string | null | undefined, continued = false, part = 1): string | null {
   const label = (category ?? "").trim();
   if (!label) return null;
-  return continued ? t("en", "book.continued", { name: label }) : label;
+  const n = part > 1 ? part : continued ? 2 : 1;
+  return n > 1 ? label + " (" + n + ")" : label;
 }
 
 export function MenuCard({
@@ -526,6 +512,7 @@ export function MenuCard({
   style,
   category = null,
   continued = false,
+  part = 1,
   slug = "shop",
 }: {
   index: number;
@@ -534,9 +521,10 @@ export function MenuCard({
   style: CSSProperties;
   category?: string | null;
   continued?: boolean;
+  part?: number;
   slug?: string;
 }) {
-  const title = menuPageTitle(category, continued);
+  const title = menuPageTitle(category, continued, part);
   return (
     <article
       className="book-card"

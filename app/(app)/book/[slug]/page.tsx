@@ -245,6 +245,7 @@ export default async function BookPage({
                   items={card.items}
                   category={card.category}
                   continued={card.continued}
+                  part={card.part}
                   slug={view.slug}
                   style={cardStyle}
                 />

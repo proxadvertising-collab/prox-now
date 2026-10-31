@@ -174,7 +174,14 @@ export function bookSurface(view: {
     kind: string;
     imageUrl: string | null;
     section: string | null;
-    items: readonly { name: string; nameEn?: string | null; price: string | null; photoUrl?: string | null; tags?: readonly string[] }[];
+    items: readonly {
+      name: string;
+      nameEn?: string | null;
+      price: string | null;
+      photoUrl?: string | null;
+      tags?: readonly string[];
+      category?: string | null;
+    }[];
   }[];
 }): BookSurface {
   const menuBoards = new Set(
@@ -189,6 +196,7 @@ export function bookSurface(view: {
       extras.push({ id: page.id, imageUrl: null });
       continue;
     }
+    if (page.kind === "storefront" || page.kind === "logo" || page.kind === "hours" || page.kind === "qr") continue;
     if (page.kind !== "menu" && page.items.length === 0) continue;
     for (const item of page.items) {
       const row: BookSurface["menu"][number] = {
@@ -196,7 +204,7 @@ export function bookSurface(view: {
         nameEn: item.nameEn ?? null,
         price: item.price,
         photo: displayPhoto(item.photoUrl ?? null),
-        category: page.section,
+        category: item.category ?? page.section,
       };
       const tags = (item.tags ?? []).filter((tag) => tag === "spicy" || tag === "vegan");
       if (tags.length > 0) row.tags = tags;

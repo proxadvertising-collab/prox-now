@@ -68,7 +68,7 @@ describe("tidy book cards", () => {
     const continued = renderToStaticMarkup(
       createElement(MenuCard, { index: 1, total: 5, style: {}, category: "Drinks", continued: true, items: [tile(0)] }),
     );
-    expect(continued).toContain("Drinks, continued");
+    expect(continued).toContain("Drinks (2)");
     expect(continued).toContain('id="menu-section-1"');
     expect(continued.match(/<h2/g)?.length).toBe(1);
     const first = renderToStaticMarkup(

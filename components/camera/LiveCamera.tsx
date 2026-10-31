@@ -28,6 +28,7 @@ import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { stageSnapFile } from "@/lib/snap/handoff";
+import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
 import {
   COACH_TIMEOUT_MS,
   canAddShot,
@@ -149,6 +150,17 @@ export function LiveCamera({
   const pendingPick = useRef(false);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+  const navLive = useRef(false);
+  const navShoot = useRef<() => void>(() => undefined);
+  const navPick = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    return listenNavShutter(() => {
+      const action = navShutterAction("/snap", navLive.current);
+      if (action === "shoot") navShoot.current();
+      else if (action === "pick") navPick.current();
+    });
+  }, []);
 
   function commitShots(next: SeedShot[]) {
     shotsRef.current = next;
@@ -393,6 +405,14 @@ export function LiveCamera({
     commitShots([...shotsRef.current, shot]);
     askCoach(shot, previous);
   }
+
+  navLive.current = !cameraClosed && cameraReady && liveFile == null && (phase === "camera" || phase === "seed");
+  navShoot.current = () => {
+    void shoot();
+  };
+  navPick.current = () => {
+    void openPicker();
+  };
 
   async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {
     fixRef.current = fix;

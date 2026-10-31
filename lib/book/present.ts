@@ -9,6 +9,7 @@ export type BookLine = {
   nameEn?: string;
   tags?: string[];
   photoUrl?: string;
+  category?: string;
 };
 
 export type BookPageView = {
@@ -110,6 +111,8 @@ function menuLines(value: unknown, supabaseUrl: string): { section: string | nul
     if (tags.length > 0) line.tags = tags;
     const photoUrl = cutoutUrl(supabaseUrl, row?.photo_url) ?? cutoutUrl(supabaseUrl, row?.photoUrl);
     if (photoUrl) line.photoUrl = photoUrl;
+    const category = text(row?.category, 80);
+    if (category) line.category = category;
     items.push(line);
   }
   return { section: text(record.section, 80), items };

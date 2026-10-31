@@ -1,3 +1,4 @@
+import { tidyCategory } from "./categories";
 import { parseHours, type BookHours } from "./hours";
 import { EXTRACTED_JSON_BUDGET, MAX_ITEMS_PER_PAGE } from "./limits";
 import { buildTagline } from "./tagline";
@@ -61,6 +62,7 @@ export type MenuItem = {
   note: string | null;
   nameEn?: string;
   tags?: string[];
+  category?: string | null;
   photo?: number;
   photoBox?: PhotoBox;
   photoUrl?: string;
@@ -457,12 +459,25 @@ function isRichRecord(record: Record<string, unknown>): boolean {
 
 function plainItem(item: MenuItem, section: string | null): MenuItem {
   const nameEn = item.nameEn ? cleanNameEn(item.nameEn, section) : null;
+  const category = tidyCategory(section);
   const next: MenuItem = { name: item.name, price: item.price, currency: item.currency, note: item.note };
   if (nameEn) next.nameEn = nameEn;
+  if (category) next.category = category;
   if (item.tags && item.tags.length > 0) next.tags = item.tags;
   if (item.photoBox) next.photoBox = item.photoBox;
   if (item.photoUrl) next.photoUrl = item.photoUrl;
   return next;
+}
+
+function sharedSection(items: readonly MenuItem[]): string | null {
+  const first = tidyCategory(items[0]?.category ?? null);
+  if (!first) return null;
+  const key = first.toLowerCase();
+  for (const item of items) {
+    const label = tidyCategory(item.category ?? null);
+    if (!label || label.toLowerCase() !== key) return null;
+  }
+  return first;
 }
 
 function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookRead } | SchemaFailure {
@@ -633,49 +648,33 @@ function parseRichBook(record: Record<string, unknown>): { ok: true; read: BookR
     }
   }
   if (indexes.size === 0) indexes.add(hero ?? 1);
-  const itemsByIndex = new Map<number, { section: string | null; items: MenuItem[] }>();
-  const loose: { section: string | null; items: MenuItem[] }[] = [];
-  for (const group of groups) {
-    const placed = new Map<number, MenuItem[]>();
-    const rest: MenuItem[] = [];
-    for (const item of group.items) {
-      const cleaned = plainItem(item, group.category);
-      if (item.photo && indexes.has(item.photo)) {
-        const list = placed.get(item.photo) ?? [];
-        list.push(cleaned);
-        placed.set(item.photo, list);
-      } else rest.push(cleaned);
-    }
-    for (const [index, list] of placed) {
-      const bucket = itemsByIndex.get(index) ?? { section: group.category, items: [] };
-      bucket.items.push(...list);
-      if (!bucket.section) bucket.section = group.category;
-      itemsByIndex.set(index, bucket);
-    }
-    if (rest.length > 0) loose.push({ section: group.category, items: rest });
-  }
   const sorted = [...indexes].sort((a, b) => a - b);
   const home = hero != null && indexes.has(hero) ? hero : sorted[0];
-  for (const group of loose) {
-    const bucket = itemsByIndex.get(home) ?? { section: group.section, items: [] };
-    bucket.items.push(...group.items);
-    if (!bucket.section) bucket.section = group.section;
-    itemsByIndex.set(home, bucket);
+  const menuHosts = sorted.filter((index) => {
+    const kind = photoKinds.get(index) ?? null;
+    return kind === "menu" || kind === "product";
+  });
+  const host = menuHosts[0] ?? null;
+  const queued: MenuItem[] = [];
+  for (const group of groups) {
+    for (const item of group.items) queued.push(plainItem(item, group.category));
   }
+  const itemsByIndex = new Map<number, MenuItem[]>();
+  if (host != null) itemsByIndex.set(host, queued);
   const contactIndex = home;
   if (hoursText) contacts = { ...contacts, hoursText };
   if (address) contacts = { ...contacts, address };
   const pages: PageRead[] = sorted.map((index) => {
-    const bucket = itemsByIndex.get(index);
     const kind = photoKinds.get(index) ?? null;
     const isMenu = kind === "menu" || kind === "product";
+    const items = isMenu ? fitItems(itemsByIndex.get(index) ?? []) : [];
     return {
       index,
       kindGuess: kind,
       isMenu,
       language,
-      section: bucket?.section ?? null,
-      items: fitItems(bucket?.items ?? []),
+      section: sharedSection(items),
+      items,
       hours: index === contactIndex ? hours : null,
       contacts: index === contactIndex ? contacts : emptyContacts(),
     };
@@ -818,6 +817,7 @@ export function extractedOf(page: PageRead | null): {
         note: item.note,
       };
       if (item.nameEn) stored.nameEn = item.nameEn;
+      if (item.category) stored.category = item.category;
       if (item.tags && item.tags.length > 0) stored.tags = item.tags;
       if (item.photoUrl) stored.photoUrl = item.photoUrl;
       return stored;

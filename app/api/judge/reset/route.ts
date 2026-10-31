@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { signInDemoRole } from "../../../../lib/judge/demo";
 import { FRESH_DEMO_NEXT } from "../../../../lib/judge/reset";
 import { ownerFailure } from "../../../../lib/owner/http";
 import { allowReset, clientIp } from "../../../../lib/rate/window";
@@ -19,7 +20,11 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
-    return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+    const signed = await signInDemoRole(supabase, "explorer");
+    if (!signed.ok) {
+      const status = signed.error === "demo_not_ready" ? 503 : 401;
+      return NextResponse.json({ error: signed.error }, { status });
+    }
   }
 
   const reset = await supabase.rpc("reset_demo");

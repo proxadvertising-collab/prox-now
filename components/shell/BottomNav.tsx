@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { t, type CopyKey } from "@/lib/copy";
+import { navSnapMode, pressNavShutter } from "@/lib/snap/navShutter";
 import { OrderBar, useOrderSnap } from "../order/OrderUi";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
@@ -75,17 +76,28 @@ function Glyph({ name }: { name: SlotIcon }) {
 function SnapCapture({
   current,
   raised,
+  shutter,
 }: {
   current: boolean;
   raised?: boolean;
+  shutter: boolean;
 }) {
+  const className = "nav-cam" + (raised ? " nav-cam-raised" : "");
+  if (shutter) {
+    return (
+      <button
+        type="button"
+        aria-label="Take a photo"
+        aria-current={current ? "page" : undefined}
+        className={className}
+        onClick={() => pressNavShutter()}
+      >
+        <Glyph name="snap" />
+      </button>
+    );
+  }
   return (
-    <Link
-      href="/snap"
-      aria-label="Take a photo"
-      aria-current={current ? "page" : undefined}
-      className={"nav-cam" + (raised ? " nav-cam-raised" : "")}
-    >
+    <Link href="/snap" aria-label="Take a photo" aria-current={current ? "page" : undefined} className={className}>
       <Glyph name="snap" />
     </Link>
   );
@@ -118,6 +130,7 @@ function ItemLink({
 
 export function BottomNav() {
   const pathname = usePathname() ?? "";
+  const shutter = navSnapMode(pathname) === "shutter";
   const onBook = pathname.startsWith("/book");
   const order = useOrderSnap(pathname);
   const rowLink =
@@ -130,7 +143,7 @@ export function BottomNav() {
           const current = isCurrent(pathname, slot.href);
           if (slot.icon === "snap") {
             return (
-              <SnapCapture key={slot.href} current={current} />
+              <SnapCapture key={slot.href} current={current} shutter={shutter} />
             );
           }
           return (
@@ -167,7 +180,7 @@ export function BottomNav() {
             );
           })}
           {onBook || (order && order.count > 0) ? null : (
-            <SnapCapture raised current={isCurrent(pathname, "/snap")} />
+            <SnapCapture raised current={isCurrent(pathname, "/snap")} shutter={shutter} />
           )}
         </div>
       </nav>

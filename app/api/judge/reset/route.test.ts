@@ -3,11 +3,12 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-const { getUser, rpc, remove, allowReset } = vi.hoisted(() => ({
+const { getUser, rpc, remove, allowReset, signInWithPassword } = vi.hoisted(() => ({
   getUser: vi.fn(),
   rpc: vi.fn(),
   remove: vi.fn(),
   allowReset: vi.fn(),
+  signInWithPassword: vi.fn(),
 }));
 
 vi.mock("../../../../lib/rate/window", () => ({
@@ -23,7 +24,7 @@ vi.mock("../../../../lib/supabase/admin", () => ({
 
 vi.mock("../../../../lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { getUser },
+    auth: { getUser, signInWithPassword },
     rpc,
   }),
 }));
@@ -34,6 +35,10 @@ describe("POST /api/judge/reset", () => {
     rpc.mockReset();
     remove.mockReset();
     allowReset.mockReset();
+    signInWithPassword.mockReset();
+    signInWithPassword.mockResolvedValue({ error: null });
+    vi.stubEnv("DEMO_EXPLORER_EMAIL", "");
+    vi.stubEnv("DEMO_EXPLORER_PASSWORD", "");
     allowReset.mockResolvedValue(true);
     remove.mockResolvedValue({ data: null, error: null });
     getUser.mockResolvedValue({ data: { user: { id: "demo" } }, error: null });
@@ -46,10 +51,12 @@ describe("POST /api/judge/reset", () => {
     expect(await response.json()).toEqual({ ok: true, next: "/snap" });
     expect(allowReset).toHaveBeenCalledWith("203.0.113.10");
     expect(rpc).toHaveBeenCalledWith("reset_demo");
+    expect(signInWithPassword).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
     const source = readFileSync(resolve(process.cwd(), "app/api/judge/reset/route.ts"), "utf8");
     expect(source).not.toContain("signInWithPassword");
     expect(source).not.toContain("DEMO_EXPLORER");
+    expect(source).toContain('signInDemoRole(supabase, "explorer")');
     expect(source).toContain("allowReset");
     expect(source).not.toContain("allowJudge");
   });
@@ -63,11 +70,23 @@ describe("POST /api/judge/reset", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("refuses a signed-out visitor", async () => {
+  it("signs in the demo shopper when nobody is signed in, then resets", async () => {
+    vi.stubEnv("DEMO_EXPLORER_EMAIL", "shopper@example.com");
+    vi.stubEnv("DEMO_EXPLORER_PASSWORD", "demo-pass");
     getUser.mockResolvedValue({ data: { user: null }, error: null });
     const response = await POST(new Request("http://localhost/api/judge/reset", { method: "POST" }));
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ error: "not_signed_in" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, next: "/snap" });
+    expect(signInWithPassword).toHaveBeenCalledWith({ email: "shopper@example.com", password: "demo-pass" });
+    expect(rpc).toHaveBeenCalledWith("reset_demo");
+  });
+
+  it("does not reset a signed-out visitor when the demo shopper is not configured", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
+    const response = await POST(new Request("http://localhost/api/judge/reset", { method: "POST" }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "demo_not_ready" });
+    expect(signInWithPassword).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });
 

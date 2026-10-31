@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MetaTruncated } from "../ai/meta";
 import { themeIfReadable } from "./brand";
 import { readSeedBatch } from "./read";
+import { pagesByCategory } from "./categories";
 import { categoryFromOther, cleanNameEn, logoOrHero, parseBookRead } from "./schema";
 
 describe("rich book read", () => {
@@ -57,6 +58,50 @@ describe("rich book read", () => {
     expect(themeIfReadable("#FF8A3D", "#1C0E05")).toEqual({ accent: "#FF8A3D", ink: "#1C0E05" });
     expect(themeIfReadable("#FFFFFF", "#FFFFFF")).toBeNull();
     expect(themeIfReadable(null, "#000000")).toBeNull();
+  });
+
+  it("keeps one page per category across photos, and names an overflow (2)", () => {
+    const coffee = (name: string, photo?: number) => ({
+      name,
+      price: "40",
+      currency: "THB",
+      note: null,
+      ...(photo ? { photo } : {}),
+    });
+    const parsed = parseBookRead({
+      menu: [
+        { category: " Coffee ", items: [coffee("A"), coffee("B"), coffee("C", 2)] },
+        { category: "TEA", items: [coffee("Green", 3)] },
+        { category: "coffee", items: [coffee("D"), coffee("E"), coffee("F")] },
+        { category: "  ", items: [coffee("Extra")] },
+      ],
+      photos: [
+        { index: 1, kind: "storefront" },
+        { index: 2, kind: "menu" },
+        { index: 3, kind: "menu" },
+      ],
+      hero: 1,
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.read.pages.find((page) => page.index === 1)?.items).toEqual([]);
+    const menu = parsed.read.pages.filter((page) => page.kindGuess === "menu").flatMap((page) => page.items);
+    expect(menu.map((item) => item.category ?? null)).toEqual([
+      "Coffee",
+      "Coffee",
+      "Coffee",
+      "TEA",
+      "coffee",
+      "coffee",
+      "coffee",
+      null,
+    ]);
+    const pages = pagesByCategory(menu);
+    expect(pages.map((page) => page.title)).toEqual(["Coffee", "Coffee (2)", "TEA", "More"]);
+    expect(new Set(pages.map((page) => page.title)).size).toBe(pages.length);
+    expect(pages[0]?.items).toHaveLength(5);
+    expect(pages[1]?.items.map((item) => item.name)).toEqual(["F"]);
+    expect(pages[3]?.items.map((item) => item.name)).toEqual(["Extra"]);
   });
 
   it("sets a category only from other and never uses a category label as nameEn", () => {
