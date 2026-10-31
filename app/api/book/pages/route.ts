@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Cache Components requires the Node.js runtime and rejects the runtime segment config.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MAX_BYTES = 1_048_576;
 const TYPES = new Set(["image/jpeg", "image/jpg", "image/webp"]);
@@ -420,7 +420,7 @@ async function commitBook(input: {
   summary: string | null;
   fresh?: boolean;
 }): Promise<NextResponse> {
-  const { service, shop, userId, livePages, groups, uploaded, summary, fresh = false } = input;
+  const { service, shop, userId, livePages, groups, uploaded, summary } = input;
   const bookResult = await service
     .from("shop_books")
     .select("hours, theme, tagline, source_language, built_by_model, status")
@@ -470,7 +470,7 @@ async function commitBook(input: {
   }
 
   let publishedSlug = shop.slug;
-  if (fresh && isPlaceholderShopName(shop.name)) {
+  if (isPlaceholderShopName(shop.name)) {
     const found = groups.map((group) => group.read?.read).find((read) => read && (read.shopName || read.nameEn));
     const brand = seedBrand(found?.shopName, found?.nameEn ?? null);
     if (brand) {

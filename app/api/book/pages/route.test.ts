@@ -637,6 +637,18 @@ describe("POST /api/book/pages", () => {
     expect(state.shop?.slug).toBe("juice-menu");
   });
 
+  it("names a New shop on a retry that is not fresh", async () => {
+    state.shop = { id: SHOP, category: "other", name: "New shop", slug: "new-shop-abc" };
+    state.pages = [];
+    state.book = null;
+    mode = "named";
+    const response = await postSession([{ kind: "menu" }], SHOP, undefined, false);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.slug).toBe("mala-mafia-111111");
+    expect(state.shop?.name).toBe("Mala Mafia");
+  });
+
   it("never renames a shop and sets category only from other", async () => {
     state.shop = { id: SHOP, category: "street_food", name: "Blended fruit juice menu" };
     mode = "named";

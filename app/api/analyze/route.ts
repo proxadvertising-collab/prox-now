@@ -26,7 +26,7 @@ import { createClient } from "../../../lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // Cache Components requires the Node.js runtime and rejects the runtime segment config.
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const MAX_BYTES = 3 * 1024 * 1024;
 const AREA_LABEL = "Soi 102, Hua Hin, Thailand";

@@ -24,6 +24,7 @@ import { resizeToJpeg } from "@/lib/image/resize";
 import { afterPin, chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
 import { PinDrop } from "@/components/camera/PinDrop";
 import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
+import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { stageSnapFile } from "@/lib/snap/handoff";
@@ -142,6 +143,7 @@ export function LiveCamera({
   const [askWhere, setAskWhere] = useState(false);
   const [askJoin, setAskJoin] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const pinRef = useRef<{ lat: number; lng: number } | null>(null);
   const pendingUploads = useRef<File[] | null>(null);
   const pendingPick = useRef(false);
@@ -488,7 +490,8 @@ export function LiveCamera({
   }
 
   async function save(shop: Picked | null, force = false) {
-    if (busy) return;
+    if (busy || saving.current) return;
+    saving.current = true;
     setAskJoin(null);
     setBusy(true);
     setPhase("building");
@@ -546,7 +549,26 @@ export function LiveCamera({
         kind: "auto",
         file: shot.file,
       }));
-      const result = await uploadBookSession(target.id, bookShots, fetch, undefined, createdHere);
+      const saveFor = target;
+      const result = await uploadBookSession(saveFor.id, bookShots, fetch, undefined, createdHere).catch(() => null);
+      if (!result || savedMaybe(result.status)) {
+        const slug = await waitForBook(saveFor.id, async (shopId) => {
+          const supabase = createClient();
+          const [book, row] = await Promise.all([
+            supabase.from("shop_books").select("status").eq("shop_id", shopId).maybeSingle(),
+            supabase.from("shops").select("slug").eq("id", shopId).maybeSingle(),
+          ]);
+          return { live: book.data?.status === "live", slug: (row.data?.slug as string | undefined) ?? null };
+        });
+        const late = slug ? seedBookPath(saveFor.id, saveFor.slug, slug) : null;
+        if (late) {
+          window.location.assign(late + "?seeded=1");
+          return;
+        }
+        setNote("The book did not save.");
+        setPhase("seed");
+        return;
+      }
       if (result.status === 401) {
         setNote("Sign in to save.");
         setPhase("seed");
@@ -576,6 +598,7 @@ export function LiveCamera({
       setNote("The book did not save.");
       setPhase("seed");
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }

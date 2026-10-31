@@ -1,8 +1,22 @@
 {
   "functions": {
     "app/api/**/route.ts": {
-      "regions": ["sin1"],
+      "regions": [
+        "sin1"
+      ],
       "maxDuration": 60
+    },
+    "app/api/book/pages/route.ts": {
+      "regions": [
+        "sin1"
+      ],
+      "maxDuration": 300
+    },
+    "app/api/analyze/route.ts": {
+      "regions": [
+        "sin1"
+      ],
+      "maxDuration": 300
     }
   }
 }
