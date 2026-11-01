@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { t } from "@/lib/copy";
 import { readOwnerShops, type OwnerShop } from "@/lib/owner/shops";
+
+/** Verified owners see the coupon desk before their shops. */
+export function ownerDeskOrder(verified: boolean): readonly ("coupons" | "redeem" | "shops" | "hint")[] {
+  return verified ? ["coupons", "redeem", "shops"] : ["shops", "hint"];
+}
 
 type Card = {
   id: string;
@@ -176,42 +182,70 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
   }
 
   const pending = shops.find((shop) => shop.status === "pending" || shop.status === "in_review");
+  const couponsFirst = ownerDeskOrder(verified)[0] === "coupons";
+  const shopList =
+    shops.length === 0 ? (
+      <EmptyState message={t("en", "empty.owner")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
+    ) : (
+      <ul className="flex flex-col gap-2">
+        {shops.map((shop) => (
+          <li key={shop.shopId} className="flex flex-col gap-2">
+            {shop.slug ? (
+              <Link
+                href={"/book/" + encodeURIComponent(shop.slug)}
+                className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 p-4 text-heading font-bold text-fg no-underline active:bg-surface-2"
+              >
+                <span>{shop.name}</span>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              </Link>
+            ) : (
+              <p className="rounded-lg bg-surface-1 p-4 text-heading font-bold text-fg">{shop.name}</p>
+            )}
+            {shop.status === "pending" || shop.status === "in_review" ? (
+              <>
+                {shop.status === "in_review" ? (
+                  <p className="text-sm text-fg">{t("en", "claim.review")}</p>
+                ) : null}
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-fg underline disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() => void cancelClaim(shop.shopId)}
+                >
+                  {t("en", "claim.cancel")}
+                </button>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  const claimNote =
+    !verified && shops.length > 0 ? (
+      <p className="text-body text-fg">{pending ? t("en", "loop.waiting") : t("en", "loop.claimHint")}</p>
+    ) : null;
+  const noteLine = note ? <p className="text-body text-fg motion-safe:animate-pulse">{note}</p> : null;
+  const errorLine = error ? <p role="alert" className="text-body text-danger">{error}</p> : null;
 
   return (
     <div className="flex flex-col gap-3">
       <h1 className="text-title font-bold text-fg">{t("en", "loop.owner")}</h1>
-      {shops.length === 0 ? (
-        <EmptyState message={t("en", "empty.owner")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
+      {couponsFirst ? (
+        <>
+          {noteLine}
+          {errorLine}
+        </>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {shops.map((shop) => (
-            <li key={shop.shopId} className="rounded-lg bg-surface-1 p-4">
-              <p className="text-heading font-bold text-fg">{shop.name}</p>
-              {shop.status === "pending" || shop.status === "in_review" ? (
-                <>
-                  {shop.status === "in_review" ? (
-                    <p className="mt-1 text-sm text-fg">{t("en", "claim.review")}</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-fg underline disabled:opacity-60"
-                    disabled={busy}
-                    onClick={() => void cancelClaim(shop.shopId)}
-                  >
-                    {t("en", "claim.cancel")}
-                  </button>
-                </>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <>
+          {shopList}
+          {claimNote}
+          {noteLine}
+          {errorLine}
+        </>
       )}
-      {!verified && shops.length > 0 ? (
-        <p className="text-body text-fg">{pending ? t("en", "loop.waiting") : t("en", "loop.claimHint")}</p>
-      ) : null}
-      {note ? <p className="text-body text-fg motion-safe:animate-pulse">{note}</p> : null}
-      {error ? <p role="alert" className="text-body text-danger">{error}</p> : null}
-      {verified ? (
+      {couponsFirst ? (
       <>
       {liveNow.length > 0 ? (
         <section className="flex flex-col gap-2">
@@ -318,6 +352,8 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       <a className="inline-flex min-h-11 items-center text-body font-semibold text-fg" href="/owner/redeem">
         {t("en", "loop.redeem")}
       </a>
+      {shopList}
+      {claimNote}
       </>
       ) : null}
     </div>
