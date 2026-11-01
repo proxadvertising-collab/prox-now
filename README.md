@@ -1,150 +1,83 @@
-# prox-now
-Prox Now: Meta Global AI Developer Hackathon
+# Prox Now
 
-## What Prox Now is
+**Live:** https://prox-now.vercel.app · **Judges:** https://prox-now.vercel.app/judge ([JUDGES.md](JUDGES.md)) · **Video:** TODO (captain adds link)
 
-Prox Now is a mobile-first web app. A shopper snaps a photo of a local shop, the AI matches the shop, and a live pin shows on a map for 2 hours.
+Prox Now makes a street's small shops readable and orderable in any language. A shopper snaps a shop's sign or menu. Meta's `muse-spark-1.3` turns the photos into the shop's **book**, with one page per real category, items, and prices only when they're readable. The shopper asks the map what's good right now, builds an order, and shows staff a translated order screen. The owner claims the shop and thanks the people who snapped it or built its book with a coupon, and the shopper scratches it in their wallet.
 
-## Hackathon
+Built for one street we know first-hand: Soi 102, Hua Hin, Thailand. Tourists can't read the Thai menus, and the tiny shops have no website or English menu.
 
-Built during the Meta Global AI Developer Hackathon, Oct 26 to Nov 4 2026, all code written this week.
+Indie track, theme "Build for Your World". Built during the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026). See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
-## Repository timeline
+## Try it in 3 minutes
+Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as one of two shared demo accounts. You need no password, camera, location or phone. Do **Judge 1 (shopper) first, then Judge 2 (owner)**, one after the other. Full steps and what each one proves are in [JUDGES.md](JUDGES.md).
 
-The repo was created on GitHub on 2026-10-26 at 14:28 +0700 (07:28 UTC), before kickoff, with a GitHub-generated initial commit that holds only README.md; all application code, schema, assets and data start at commit 370d5b7 (2026-10-26 16:27 UTC, after the 16:00 UTC start).
+## Meta models used
+Every AI call in the app goes to **`muse-spark-1.3`** on the Meta Model API (`https://api.meta.ai/v1/responses`). No other AI provider is used. The shared client is `lib/ai/meta.ts` (`callSpark`, `callSparkImages`, 25 s timeout).
 
-The same paragraph, and the split between existing tools and event work, is in [docs/PROVENANCE.md](docs/PROVENANCE.md).
+| Feature | What the model does | Files |
+|---|---|---|
+| Book building | Reads up to 8 photos per call (chunked) into pages by real category, with items, readable prices and the shop's language | `app/api/book/pages/route.ts`, `lib/book/read.ts`, `lib/book/chunk.ts` |
+| Book improve / brand | Adds a new photo to an existing book; reads brand cues from the storefront | `lib/book/improve.ts`, `lib/book/brand.ts` |
+| Seed coach | Per photo: what's in it, whether it's a duplicate or blurry | `app/api/seed/check/route.ts` |
+| Shop match | Matches a snapped photo to a nearby shop using GPS and the sign text | `app/api/analyze/route.ts` |
+| New shop from a sign | Creates a shop from the sign it reads (confidence ≥ 0.6, distance rules) | `app/api/shops/route.ts` |
+| Posts: faces and place facts | Marks face boxes so the server can blur them; reads items, prices, crowd level, open/closed and sign language | `app/api/posts/route.ts` |
+| Ask the map | "What's good right now" over open shops | `lib/gonow/spark.ts`, `app/api/go-now/route.ts` |
+| Order translation | Translates menu item names and the shopper's note into the shop's language for staff | `lib/order/translate.ts`, `app/api/order/translate/route.ts` |
+| Claim check | Checks a real shop's claim photo (handwritten code next to the sign) | `app/api/owner/claim/route.ts` |
+| Coupon suggestion | Suggests a thank-you offer for the owner | `lib/coupon/suggest.ts`, `app/api/owner/suggest-coupon/route.ts` |
+| Proof call | One server-side call that shows the key works | `app/api/meta-ping/route.ts` |
 
-## How to run
+## How it maps to the judging criteria
+| Criterion | Evidence |
+|---|---|
+| Impact | Real pilot street, real shop photos in the demo; tourists and shops with no English menu; places people add are exported as public GeoJSON (`app/api/places/export/route.ts`) |
+| Use of Meta AI | 11 features on `muse-spark-1.3`, including multi-image book reading, vision-based face blur, claim-photo checks and translation (table above) |
+| Demo | One-tap `/judge`, a 9-step guided tour with an explainer on every step (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`), pre-seeded real photos so no camera is needed, and End demo resets (`lib/judge/runReset.ts`) |
+| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 521 unit tests |
 
-Install dependencies and start the dev server:
+## Architecture
+```mermaid
+flowchart LR
+  P[Phone browser<br/>Next.js 16 app] -->|photos, order, ask| API[Next.js route handlers<br/>Vercel sin1]
+  API -->|/v1/responses| M[Meta Model API<br/>muse-spark-1.3]
+  API -->|RLS + RPCs| DB[(Supabase Postgres)]
+  API -->|signed URLs| S[(Supabase Storage<br/>private buckets)]
+  P -->|session, realtime wallet| DB
+  J[/judge one tap/] -->|server-only demo creds| API
+```
 
+## Privacy rules in the code
+- Faces are blurred on the server before anything is saved. The original photo is never stored, and EXIF/GPS is stripped. A person can unblur only their own face.
+- The model never identifies people and never describes their appearance beyond crowd level.
+- The owner chooses Keep or Pass. Pass deletes the blurred photo for good.
+
+## Run it locally
 ```bash
 npm install
-npm run dev
-```
-
-Open http://localhost:3000.
-
-Copy `.env.example` to `.env.local` and set the values on your machine. Do not commit that file.
-
-```bash
-npm test
+cp .env.example .env.local   # fill in values on your machine; never commit it
+npm run dev                  # http://localhost:3000
+npm test                     # vitest: 116 files, 521 tests
 npm run build
 ```
-
-## Design system
-
-Tokens, type, motion, and the app shell are specified in [docs/design/DESIGN.md](docs/design/DESIGN.md). Screen notes are in [docs/design/SCREENS.md](docs/design/SCREENS.md).
-
-Regenerate the home-screen icons (180, 192, 512, and maskable 512) with:
-
-```bash
-npm run icons
+`.env.example` (names only):
 ```
+META_API_KEY=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DEMO_EXPLORER_EMAIL=
+DEMO_EXPLORER_PASSWORD=
+DEMO_OWNER_EMAIL=
+DEMO_OWNER_PASSWORD=
+```
+Without `META_API_KEY`, the AI routes return `ai_not_configured` ("The shop reader is offline"). Without the `DEMO_*` values, `/judge` shows "Demo sign-in is not ready yet." Those values stay on the server and are never sent to the browser (`lib/judge/demo.ts`).
 
-Routes in this scaffold:
+## Known limits
+- One pilot street. Prices appear only when the model can read them.
+- The demo uses two shared accounts. Judges running at the same time share one demo state.
+- Demo shops skip the claim code; a real shop needs the code photo.
+- A book takes about a minute to build.
 
-- `/login` signs in with Google or a 6-digit email code.
-- `/judge` signs in as the shopper or the shop owner with one tap. Email and password are the fallback.
-- `/auth/callback` finishes the sign-in redirect.
-- `/map` shows shops from the database when the Supabase env vars are set, and the local fixture otherwise.
-- `/snap` matches a photo to a nearby shop. It does not require a session. Adding a shop does.
-- `/wallet` and `/inbox` send a signed-out visitor to `/login`.
-- `GET /api/health` returns `{ ok: true, time }`.
-- `GET /api/meta-ping` makes one server-side Meta API call.
-
-## Environment variables
-
-`.env.example` lists the names only. Set values in `.env.local`.
-
-- `META_API_KEY`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `DEMO_EXPLORER_EMAIL`
-- `DEMO_EXPLORER_PASSWORD`
-- `DEMO_OWNER_EMAIL`
-- `DEMO_OWNER_PASSWORD`
-
-`SUPABASE_SERVICE_ROLE_KEY` is REQUIRED for book uploads. The `DEMO_*` values stay on the server. They are not in client code.
-
-## Where Meta models are used
-
-- `muse-spark-1.3` in `GET /api/meta-ping` (one server-side proof call to `https://api.meta.ai/v1/responses`).
-- `muse-spark-1.3` in `POST /api/analyze` matches a shop photo. The photo is not stored.
-
-## Snap pipeline
-
-`/snap` opens the phone camera, resizes the photo on the device, and asks Spark which nearby shop it is. Confirm the guess, pick from the list, or add the shop. Posting that shop to the map is a separate step. The original photo is not stored.
-
-`META_API_KEY` is required for `/api/analyze`. The name is the only value in the repo. Without it the route returns `ai_not_configured`.
-
-## Shops
-
-Shops on the map and in the photo matcher come from `public.shops` when `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set. Otherwise the app uses the local Soi 102 fixture and shows the demo banner.
-
-A signed-in person can add a shop from `/snap`. That calls `create_shop_from_snap`. The new row has `source = user` and can be claimed later. The photo is not stored.
-
-## Posts
-
-A signed-in person can post a confirmed, picked, or newly added shop. The pin stays up for 2 hours. Spark marks faces, and the server blurs them before anything is saved. Only that blurred JPEG is stored, in the public `post-photos` bucket. The original photo is not stored. EXIF, including GPS, is stripped and not stored.
-
-The map draws a countdown ring on shops that have a live post. `POST /api/posts` and the live pin query need `META_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `SUPABASE_SERVICE_ROLE_KEY` is not used.
-
-`supabase/migrations/0003_post_photos.sql` is a migration file only until it is applied.
-
-## Faces
-
-Every face is blurred unless the person posting taps "That's me". That choice is explicit. The screen says they are showing their own face and that everyone else stays blurred. A second face can be shown only when that person agrees, and a post can show at most two faces. The person cannot unblur anyone else.
-
-The server reads faces again on the uploaded photo. It keeps a face visible only when the requested box overlaps a face it found, with an overlap of at least 0.4. Any other box stays blurred. If the face read fails, nothing is published. The original photo is never stored. Only the blurred JPEG is kept. The saved post records how many faces were shown, not where they were.
-
-After a successful post, the success screen has a button to save the original on the phone. It opens the phone share sheet when the browser can share a file, and otherwise downloads `prox-now-original.jpg`. iPhone and Android web pages cannot always save to the camera roll silently, so we ask the person to tap Save. Leaving that screen drops the original from memory. The shop only ever receives the edited photo.
-
-## The loop
-
-A photographer posts a moment. For two hours it is a live pin. After that, a verified shop owner has 7 days to Keep or Pass. Keep sends that person one coupon for that shop for the local day. Pass deletes the blurred photo for good. There is no undo.
-
-The owner sees one undecided card at a time on `/owner`, with Keep and Pass. The photographer sees the coupon in `/wallet`, scratches it, and shows the QR or the short code at the till. The owner types or scans that code on `/owner/redeem`. The map shows how many active coupons are waiting.
-
-Someone who says "I own this shop" is only marked pending. Nothing is verified automatically. The captain verifies an account by hand.
-
-One coupon is allowed per person, per shop, per local day. A missing or invalid shop time zone is treated as UTC.
-
-Moments still undecided after 7 days leave the inbox and count as passed on screen. TODO: deleting those files needs a server cleanup job with an admin key. That key does not exist yet, so the files stay until an owner passes them or the author deletes the post.
-
-`supabase/migrations/0006_loop.sql` is a migration file only until the captain writes apply.
-
-## What we keep
-
-A post can also leave anonymous place facts: item names, a price only when it was readable, a currency, crowd level, open or closed, a few signals, and the sign language. Captions and any free text from the person are not stored in that record.
-
-Those facts stay linked to the post while the photo is kept. When the owner passes, the photo, the sign text, and the post facts are cleared, and the place record is unlinked so it names no one. If the author deletes their own post, that place record is deleted too.
-
-`GET /api/places/[shopId]/facts` returns the latest 20 of those records for a shop. The shop page shows a usual price when at least three exist. The public place export and the stats route are unchanged. The original photo is never stored.
-
-## What we read from a photo
-
-One Spark call reads facts about the place and the moment. Missing or malformed facts are dropped. They are not invented.
-
-- A caption of what is shown or sold, at most 140 characters, with no people. English and Thai captions are kept when the model can write them. The sheet shows the viewer's language, then English, then the original sign text.
-- Up to eight item names. A price and an ISO currency stay only when the number is clearly readable.
-- Crowd level: empty, a few people, busy, or a queue.
-- Whether the place looks open, closed, or unknown.
-- Up to five signals: a fresh batch, a promo, sold out, an event, music, or a new item.
-- The language of the sign, as a BCP-47 tag, when it is clear. If it differs from the viewer's language, the sheet says it was translated.
-
-The model never identifies anyone and never describes a person's appearance beyond crowd level. The original photo is never stored. Only the blurred JPEG is kept.
-
-`supabase/migrations/0005_post_facts.sql` is a migration file only until the captain writes apply. Until that file is applied, a post still saves and the facts are left unsaved.
-
-## Places
-
-Prox Now adds a live layer and seeds places that map data is missing. It does not replace any map.
-
-`GET /api/places/export` is a public GeoJSON FeatureCollection of shops people added. Each feature is a point with the shop name, a local name when one was saved, the category, a country and address hint when present, a public phone when present, and a `prox-now` source record. Confidence is 0.6 because a person reported the place. The list is capped at 5000 and can be filtered with `country` and `since`.
-
-The export does not include who added the shop, email addresses, or any user id. Demo shops and seed shops are left out. `GET /api/places/stats` counts places, countries, posts, and how many posts are still live.
-
-A new shop stores a country from the `x-vercel-ip-country` header when that header is present, the browser timezone when it is a real IANA zone, and a currency only when the country is in the tested table. Missing values stay empty. They are not filled in with a Thailand default. `supabase/migrations/0004_shop_worldwide_fields.sql` is a migration file only until it is applied. The export and the stats query need `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+## More
+Design: [docs/design/DESIGN.md](docs/design/DESIGN.md) · Build notes: `docs/build/` · Provenance: [docs/PROVENANCE.md](docs/PROVENANCE.md)
