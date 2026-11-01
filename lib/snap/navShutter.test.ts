@@ -25,8 +25,7 @@ describe("nav radar", () => {
     expect(nav).toContain('href="/snap"');
     expect(nav).toContain("size={64}");
     expect(nav).toContain("size={40}");
-    expect(nav).not.toContain("pressNavShutter");
-    expect(nav).not.toContain("SnapCapture");
+    expect(nav).toContain('className="nav-radar"');
     expect(camera).not.toContain("listenNavShutter");
     expect(camera).not.toContain("navShutterAction");
     expect(camera).toContain("RadarButton");
