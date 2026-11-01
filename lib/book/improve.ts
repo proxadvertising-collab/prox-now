@@ -100,7 +100,7 @@ export function fallbackDecision(kind: string, facts: unknown, existing: readonl
 }
 
 function noun(kind: string, count: number): string {
-  if (kind === "menu") return count === 1 ? "menu item" : "menu items";
+  if (kind === "menu") return count === 1 ? "menu item" : "menus";
   if (kind === "extra") return count === 1 ? "extra" : "extras";
   if (kind === "hours") return "hours";
   if (kind === "logo") return count === 1 ? "logo" : "logos";

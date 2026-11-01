@@ -40,7 +40,17 @@ describe("improve a book", () => {
         { kind: "menu", action: "add" },
         { kind: "menu", action: "skip" },
       ]),
-    ).toBe("Updated hours, added 2 menu items, 1 skipped as duplicate");
+    ).toBe("Updated hours, added 2 menus, 1 skipped as duplicate");
+  });
+
+  it("counts settled menu adds and a skipped storefront", () => {
+    expect(
+      improveSummary([
+        { kind: "menu", action: "add" },
+        { kind: "menu", action: "add" },
+        { kind: "storefront", action: "skip" },
+      ]),
+    ).toBe("Added 2 menus, 1 skipped as duplicate");
   });
 
   it("renders extras as their own section", () => {
