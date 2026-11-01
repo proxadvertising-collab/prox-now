@@ -20,7 +20,7 @@ import { SeedCoach } from "./SeedCoach";
 import { ShopPicker } from "./ShopPicker";
 import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
-import { cameraStart } from "@/lib/camera/camera-gate";
+import { cameraStart, shutterAction } from "@/lib/camera/camera-gate";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { getFix } from "@/lib/geo/fix-cache";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
@@ -777,44 +777,94 @@ export function LiveCamera({
   const flipMode = flipControl(cameraCount, flipFailed);
   const chips = seenChips(shots);
 
-  if (liveFile) {
+  function pressShutter() {
+    const action = shutterAction({
+      streamOpen: streamRef.current != null,
+      cameraClosed,
+      phase,
+      reviewing: liveFile != null,
+    });
+    if (action === "open") {
+      openCameraRef.current?.();
+      return;
+    }
+    if (action === "upload") {
+      uploadRef.current?.click();
+      return;
+    }
+    if (action === "shoot") void shoot();
+  }
+
+  function shutterRow(reviewing: boolean) {
     return (
-      <div className="fixed inset-x-0 top-0 z-20 overflow-y-auto bg-bg p-4 bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
-        <button type="button" className="mb-3 min-h-11 text-label font-semibold text-fg" onClick={() => setLiveFile(null)}>
-          ← Camera
+      <div
+        className={
+          reviewing
+            ? "fixed inset-x-0 z-30 flex items-center justify-center gap-3 bottom-[calc(7.5rem+env(safe-area-inset-bottom))]"
+            : cameraClosed
+              ? "absolute inset-x-4 top-[11.5rem] z-20 flex items-center justify-center gap-3"
+              : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
+        }
+      >
+        <RadarButton label="Take a photo" onClick={pressShutter} />
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
+          onClick={() => uploadRef.current?.click()}
+        >
+          {t(lang, "snap.upload")}
         </button>
-        <SnapFlow
-          preselected={preselected}
-          placed={
-            fixRef.current
-              ? { lat: fixRef.current.lat, lng: fixRef.current.lng, source: fixRef.current.source ?? "gps" }
-              : null
-          }
-          onRetake={() => setLiveFile(null)}
+      </div>
+    );
+  }
+
+  function whereSheet(reviewing: boolean) {
+    if (!askWhere) return null;
+    const shop = shopPointRef.current;
+    return (
+      <div
+        className={
+          (reviewing
+            ? "fixed inset-x-4 z-40 bottom-[calc(13rem+env(safe-area-inset-bottom))] "
+            : "absolute inset-x-4 bottom-8 z-30 ") +
+          "flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-3 text-fg"
+        }
+      >
+        <p className="text-body">{t(lang, "snap.where")}</p>
+        {shop ? (
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-fg"
+            onClick={() => {
+              const here = shopPointRef.current;
+              if (!here) return;
+              takePin({ lat: here.lat, lng: here.lng });
+            }}
+          >
+            {t(lang, "snap.useShop", { name: shop.name })}
+          </button>
+        ) : null}
+        <PinDrop
+          onPick={(point) => {
+            takePin(point);
+          }}
         />
-        {cameraClosed ? null : (
-          <div className="pointer-events-none fixed bottom-8 left-1/2 z-30 flex -translate-x-1/2">
-            <div className="pointer-events-auto">
-              <RadarButton
-                label="Take a photo"
-                onClick={() => {
-                  if (!streamRef.current) {
-                    openCameraRef.current?.();
-                    return;
-                  }
-                  void shoot();
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-x-0 top-0 z-20 bg-[#12100C] text-white bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
-      <video ref={videoRef} className={previewClass(facing)} autoPlay muted playsInline />
+    <>
+    <div className={"fixed inset-x-0 top-0 z-10 bg-[#12100C] text-white bottom-[calc(7.5rem+env(safe-area-inset-bottom))]" + (liveFile ? " pointer-events-none" : "")}>
+      <video
+        ref={videoRef}
+        className={(liveFile ? "pointer-events-none opacity-0 " : "") + previewClass(facing)}
+        autoPlay
+        muted
+        playsInline
+      />
+      {!liveFile ? (
+      <>
       {!cameraReady && !cameraClosed ? (
         <div className="absolute inset-0 z-10 bg-[#12100C] p-4 pt-20">
           <SkeletonCards />
@@ -897,47 +947,7 @@ export function LiveCamera({
           <BuildProgress />
         </div>
       ) : null}
-      {phase === "camera" || phase === "seed" ? (
-        <div
-          className={
-            cameraClosed
-              ? "absolute inset-x-4 top-[11.5rem] z-20 flex justify-center"
-              : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
-          }
-        >
-          {cameraClosed ? null : (
-            <RadarButton
-              label="Take a photo"
-              onClick={() => {
-                if (!streamRef.current) {
-                  openCameraRef.current?.();
-                  return;
-                }
-                void shoot();
-              }}
-            />
-          )}
-          <button
-            type="button"
-            className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
-            onClick={() => uploadRef.current?.click()}
-          >
-            {t(lang, "snap.upload")}
-          </button>
-        </div>
-      ) : null}
-      <input
-        ref={uploadRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="sr-only"
-        onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          event.target.value = "";
-          void acceptUploads(files);
-        }}
-      />
+      {phase === "camera" || phase === "seed" ? shutterRow(false) : null}
       {flipMode === "hide" || cameraClosed || !cameraReady ? null : (
         <button
           type="button"
@@ -954,29 +964,7 @@ export function LiveCamera({
           </svg>
         </button>
       )}
-      {askWhere ? (
-        <div className="absolute inset-x-4 bottom-8 z-30 flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-3 text-fg">
-          <p className="text-body">{t(lang, "snap.where")}</p>
-          {shopPointRef.current ? (
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-fg"
-              onClick={() => {
-                const shop = shopPointRef.current;
-                if (!shop) return;
-                takePin({ lat: shop.lat, lng: shop.lng });
-              }}
-            >
-              {t(lang, "snap.useShop", { name: shopPointRef.current.name })}
-            </button>
-          ) : null}
-          <PinDrop
-            onPick={(point) => {
-              takePin(point);
-            }}
-          />
-        </div>
-      ) : null}
+      {whereSheet(false)}
       {note ? (
         <div className="absolute inset-x-4 bottom-32 z-20 flex flex-col items-center gap-2">
           <p className="text-center text-body">{note}</p>
@@ -987,6 +975,41 @@ export function LiveCamera({
           ) : null}
         </div>
       ) : null}
+      </>
+      ) : null}
     </div>
+    {liveFile ? (
+      <>
+        <div className="fixed inset-x-0 top-0 z-20 overflow-y-auto bg-bg p-4 bottom-[calc(13rem+env(safe-area-inset-bottom))]">
+          <button type="button" className="mb-3 min-h-11 text-label font-semibold text-fg" onClick={() => setLiveFile(null)}>
+            ← Camera
+          </button>
+          <SnapFlow
+            preselected={preselected}
+            placed={
+              fixRef.current
+                ? { lat: fixRef.current.lat, lng: fixRef.current.lng, source: fixRef.current.source ?? "gps" }
+                : null
+            }
+            onRetake={() => setLiveFile(null)}
+          />
+        </div>
+        {shutterRow(true)}
+        {whereSheet(true)}
+      </>
+    ) : null}
+    <input
+      ref={uploadRef}
+      type="file"
+      accept="image/*"
+      multiple
+      className="sr-only"
+      onChange={(event) => {
+        const files = Array.from(event.target.files ?? []);
+        event.target.value = "";
+        void acceptUploads(files);
+      }}
+    />
+    </>
   );
 }

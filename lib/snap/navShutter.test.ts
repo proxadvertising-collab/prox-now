@@ -9,9 +9,12 @@ describe("nav radar", () => {
     expect(navRadar("/wallet", false, 0)).toBe(true);
     expect(navRadar("/snap", false, 0)).toBe(false);
     expect(navRadar("/snap/extra", false, 0)).toBe(false);
+    expect(navRadar("/snap?x", false, 0)).toBe(false);
     expect(navRadar("/snap?seed=1", false, 0)).toBe(false);
+    expect(navRadar("/book/a", false, 0)).toBe(false);
     expect(navRadar("/book/cafe", false, 0)).toBe(false);
     expect(navRadar("/map", true, 0)).toBe(false);
+    expect(navRadar("/wallet", false, 1)).toBe(false);
     expect(navRadar("/me", false, 2)).toBe(false);
   });
 
