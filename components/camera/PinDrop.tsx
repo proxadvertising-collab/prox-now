@@ -30,7 +30,7 @@ export function PinDrop({ onPick }: { onPick: (point: { lat: number; lng: number
     let marker: Marker | null = null;
     const onClick = (event: { lngLat: { lat: number; lng: number } }) => {
       const point = { lat: event.lngLat.lat, lng: event.lngLat.lng };
-      if (!marker) marker = new Marker({ color: "#FF8A2B" }).setLngLat([point.lng, point.lat]).addTo(map);
+      if (!marker) marker = new Marker({ color: "var(--color-accent)" }).setLngLat([point.lng, point.lat]).addTo(map);
       else marker.setLngLat([point.lng, point.lat]);
       pick.current(point);
     };

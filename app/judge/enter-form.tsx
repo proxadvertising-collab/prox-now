@@ -6,9 +6,8 @@ import { startJudgeTour, tourHref } from "@/lib/judge/script";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/client";
 
-const primary = "btn-primary";
-const outline =
-  "inline-flex min-h-12 w-full items-center justify-center rounded-md border border-accent bg-transparent px-4 text-base font-semibold text-accent";
+const primary = "btn-primary w-full";
+const outline = "btn-secondary min-h-12 w-full";
 const field = "field";
 
 function noteFor(status: number, error: string | undefined): string {

@@ -30,8 +30,18 @@ function ScratchCard({
     const rect = canvas.getBoundingClientRect();
     canvas.width = Math.max(1, Math.floor(rect.width));
     canvas.height = Math.max(1, Math.floor(rect.height));
-    ctx.fillStyle = "#2a2a2a";
+    const tone = getComputedStyle(document.documentElement);
+    ctx.fillStyle = tone.getPropertyValue("--color-surface-2").trim() || "rgb(24 24 36)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = tone.getPropertyValue("--color-border-strong").trim() || "rgb(58 58 82)";
+    ctx.lineWidth = 1;
+    const gap = 8;
+    for (let offset = -canvas.height; offset < canvas.width; offset += gap) {
+      ctx.beginPath();
+      ctx.moveTo(offset, canvas.height);
+      ctx.lineTo(offset + canvas.height, 0);
+      ctx.stroke();
+    }
   }, [revealed]);
 
   useEffect(() => {
@@ -70,7 +80,7 @@ function ScratchCard({
   }
 
   return (
-    <div className="relative min-h-48 overflow-hidden rounded-lg bg-surface-2">
+    <div className="relative min-h-48 overflow-hidden rounded-lg border border-dashed border-border-strong bg-surface-2">
       {revealed ? (
         <div className="flex flex-col items-center gap-2 p-4">
           <canvas ref={qr} className="rounded-md bg-white" aria-hidden="true" />

@@ -1,5 +1,5 @@
 const block =
-  "h-24 animate-shimmer rounded-lg border border-border bg-[linear-gradient(90deg,#1E1611_25%,#2E231B_50%,#1E1611_75%)] bg-[length:200%_100%]";
+  "h-24 animate-shimmer rounded-lg border border-border bg-[linear-gradient(90deg,var(--color-surface-1)_25%,var(--color-surface-3)_50%,var(--color-surface-1)_75%)] bg-[length:200%_100%]";
 
 export function SkeletonCards() {
   return (

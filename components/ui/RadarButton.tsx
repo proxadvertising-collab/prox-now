@@ -35,14 +35,15 @@ export function RadarButton({
   };
   const mark = (
     <span
-      className="inline-flex"
-      style={{ transform: fast ? "scale(0.92)" : "none", transition: "transform 150ms ease" }}
+      className="radar-mark inline-flex"
+      style={{ transform: fast ? "scale(0.93)" : "none", transition: "transform 150ms ease" }}
     >
       <svg viewBox="-91 -91 182 182" width={size} height={size} aria-hidden="true">
         <style>
           {
-            ".sw{transform-origin:0 0;animation:sw 4s linear infinite}" +
+            ".sw{transform-origin:0 0;animation:sw 3.6s linear infinite}" +
             ".bl{animation:bl 2s ease-in-out infinite}" +
+            ".radar-sweep{width:156px;height:156px;border-radius:999px;background:conic-gradient(from -90deg, color-mix(in srgb, var(--color-accent) 75%, white), transparent 78deg)}" +
             "@keyframes sw{to{transform:rotate(360deg)}}" +
             "@keyframes bl{50%{opacity:.45}}" +
             "@media (prefers-reduced-motion:reduce){.sw,.bl{animation:none}}"
@@ -57,15 +58,24 @@ export function RadarButton({
             </feMerge>
           </filter>
         </defs>
-        <circle r="78" fill="none" stroke="#ff7a35" strokeWidth="4" opacity="0.54" />
-        <circle r="56" fill="none" stroke="#ff7a35" strokeWidth="4" opacity="0.7" />
-        <circle r="34" fill="none" stroke="#ff7a35" strokeWidth="4" opacity="0.92" />
-        <path d={TICKS} fill="none" stroke="#ff7a35" strokeWidth="4" />
+        <circle r="78" fill="none" stroke="var(--color-accent)" strokeWidth="3" opacity="0.35" />
+        <circle r="56" fill="none" stroke="var(--color-accent)" strokeWidth="3" opacity="0.6" />
+        <circle r="34" fill="none" stroke="var(--color-accent)" strokeWidth="3" opacity="0.9" />
+        <path d={TICKS} fill="none" stroke="var(--color-accent)" strokeWidth="3" />
         <g className="sw" style={fast ? { animationDuration: "0.45s" } : undefined}>
-          <path d={SWEEP} fill="#ff7a35" opacity="0.22" />
-          <path d={ARM} fill="none" stroke="#ff7a35" strokeWidth="4" />
+          <foreignObject x="-78" y="-78" width="156" height="156">
+            <div className="radar-sweep" />
+          </foreignObject>
+          <path d={SWEEP} fill="none" />
+          <path
+            d={ARM}
+            fill="none"
+            stroke="color-mix(in srgb, white 42%, var(--color-accent))"
+            strokeWidth="3"
+            filter={"url(#" + filterId + ")"}
+          />
         </g>
-        <circle className="bl" r="7" fill="#ff7a35" filter={"url(#" + filterId + ")"} />
+        <circle className="bl" r="7" fill="var(--color-accent)" filter={"url(#" + filterId + ")"} />
       </svg>
     </span>
   );

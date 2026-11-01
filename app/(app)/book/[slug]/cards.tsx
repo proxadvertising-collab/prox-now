@@ -474,7 +474,7 @@ export function InfoCard({
   if (place && !mapUrl) rows.push(<Row key="address" icon="pin" label={place} />);
 
   return (
-    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "#FFF4E8" }}>
+    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "var(--color-fg)" }}>
       <h2 className="book-card-title text-fg">{t("en", "book.about")}</h2>
       <div className="book-card-body">
         {safeHours ? (
@@ -530,7 +530,7 @@ export function MenuCard({
       className="book-card"
       data-menu-page={index + 1}
       data-menu-total={total}
-      style={{ ...style, aspectRatio: "auto", height: "calc(min(78dvh, 760px) - var(--order-bar, 0px))", overflow: "hidden", color: "#FFF4E8" }}
+      style={{ ...style, aspectRatio: "auto", height: "calc(min(78dvh, 760px) - var(--order-bar, 0px))", overflow: "hidden", color: "var(--color-fg)" }}
     >
       {title ? <h2 className="book-card-title text-fg">{title}</h2> : null}
       <div className="book-card-body" style={{ overflow: "hidden" }}>
@@ -556,7 +556,7 @@ export function ExtraCard({
   style: CSSProperties;
 }) {
   return (
-    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "#FFF4E8" }}>
+    <article className="book-card" style={{ ...style, aspectRatio: "auto", height: "auto", overflow: "visible", color: "var(--color-fg)" }}>
       <h2 className="book-card-title text-fg">{title}</h2>
       <div className="book-card-body book-extra">
         {imageUrl ? <img src={imageUrl} alt="" className="book-extra-photo" width="320" height="240" /> : null}

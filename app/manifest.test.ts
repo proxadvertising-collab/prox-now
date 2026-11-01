@@ -6,8 +6,8 @@ import manifest from "./manifest";
 describe("manifest", () => {
   it("ships png icons, the dark theme colour, and a maskable icon", () => {
     const data = manifest();
-    expect(data.theme_color).toBe("#14100D");
-    expect(data.background_color).toBe("#14100D");
+    expect(data.theme_color).toBe("#0B0B12");
+    expect(data.background_color).toBe("#0B0B12");
     expect(data.name).toBe("Prox Now");
     expect(data.short_name).toBe("Prox Now");
     expect(data.display).toBe("standalone");

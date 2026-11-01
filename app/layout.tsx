@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Noto_Sans_Thai, Plus_Jakarta_Sans } from "next/font/google";
+import { Geist, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
 
-const latin = Plus_Jakarta_Sans({
+const latin = Geist({
   subsets: ["latin"],
   variable: "--font-latin",
   display: "swap",
+  weight: ["400", "500", "600", "700", "800", "900"],
 });
 
 const thai = Noto_Sans_Thai({
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   viewportFit: "cover",
-  themeColor: "#14100D",
+  themeColor: "#0B0B12",
   colorScheme: "dark",
 };
 
@@ -41,7 +42,7 @@ export default function RootLayout({
   const fontClass = [latin.variable, thai.variable].join(" ");
   return (
     <html lang="en" className={fontClass}>
-      <body className="min-h-dvh bg-bg font-medium text-fg">{children}</body>
+      <body className="min-h-dvh bg-bg font-normal text-fg">{children}</body>
     </html>
   );
 }

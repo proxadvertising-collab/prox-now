@@ -49,7 +49,7 @@ export function MenuBoard({
   return (
     <div>
       {single ? null : (
-      <div className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto bg-[var(--book-ink,#1E1611)] py-2">
+      <div className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto bg-[var(--book-ink,var(--color-surface-1))] py-2">
         {groups.map((group, index) => (
           <button
             key={(group.category ?? "menu") + "-" + index}

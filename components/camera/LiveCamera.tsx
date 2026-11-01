@@ -795,25 +795,13 @@ export function LiveCamera({
     if (action === "shoot") void shoot();
   }
 
-  function shutterRow(reviewing: boolean) {
+  function shutterRow() {
     return (
-      <div
-        className={
-          reviewing
-            ? "fixed inset-x-0 z-30 flex items-center justify-center gap-3 bottom-[calc(7.5rem+env(safe-area-inset-bottom))]"
-            : cameraClosed
-              ? "absolute inset-x-4 top-[11.5rem] z-20 flex items-center justify-center gap-3"
-              : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
-        }
-      >
-        <RadarButton label="Take a photo" onClick={pressShutter} />
-        <button
-          type="button"
-          className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
-          onClick={() => uploadRef.current?.click()}
-        >
+      <div className="snap-shutter">
+        <button type="button" className="btn-secondary min-h-12" onClick={() => uploadRef.current?.click()}>
           {t(lang, "snap.upload")}
         </button>
+        <RadarButton label="Take a photo" size={64} onClick={pressShutter} />
       </div>
     );
   }
@@ -855,7 +843,7 @@ export function LiveCamera({
 
   return (
     <>
-    <div className={"fixed inset-x-0 top-0 z-10 bg-[#12100C] text-white bottom-[calc(7.5rem+env(safe-area-inset-bottom))]" + (liveFile ? " pointer-events-none" : "")}>
+    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))]" + (liveFile ? " pointer-events-none" : "")}>
       <video
         ref={videoRef}
         className={(liveFile ? "pointer-events-none opacity-0 " : "") + previewClass(facing)}
@@ -866,7 +854,7 @@ export function LiveCamera({
       {!liveFile ? (
       <>
       {!cameraReady && !cameraClosed ? (
-        <div className="absolute inset-0 z-10 bg-[#12100C] p-4 pt-20">
+        <div className="absolute inset-0 z-10 bg-bg p-4 pt-20">
           <SkeletonCards />
         </div>
       ) : null}
@@ -903,7 +891,7 @@ export function LiveCamera({
       {askJoin && phase === "seed" ? (
         <div className="absolute inset-x-4 bottom-36 z-30 flex flex-col gap-2 rounded-lg bg-surface-1 p-3">
           <p className="text-sm text-fg">{t(lang, "confirm.named", { name: askJoin.name })}</p>
-          <button type="button" className="btn-primary min-h-12" onClick={() => void save(askJoin)}>
+          <button type="button" className="btn-primary min-h-12 w-full" onClick={() => void save(askJoin)}>
             {t(lang, "confirm.yes")}
           </button>
           <button
@@ -918,7 +906,7 @@ export function LiveCamera({
       {phase === "seed" && readTour()?.role === "shopper" ? (
         <button
           type="button"
-          className="absolute top-[7.5rem] inset-x-0 z-20 mx-auto inline-flex min-h-11 w-fit items-center rounded-full bg-[#C4B5FD] px-4 text-sm font-semibold text-[#2A1848]"
+          className="absolute top-[7.5rem] inset-x-0 z-20 mx-auto inline-flex min-h-11 w-fit items-center rounded-full bg-accent-soft px-4 text-sm font-semibold text-accent"
           onClick={() => void loadSamples()}
         >
           Use pre-seeded photos
@@ -947,7 +935,6 @@ export function LiveCamera({
           <BuildProgress />
         </div>
       ) : null}
-      {phase === "camera" || phase === "seed" ? shutterRow(false) : null}
       {flipMode === "hide" || cameraClosed || !cameraReady ? null : (
         <button
           type="button"
@@ -994,10 +981,10 @@ export function LiveCamera({
             onRetake={() => setLiveFile(null)}
           />
         </div>
-        {shutterRow(true)}
         {whereSheet(true)}
       </>
     ) : null}
+    {shutterRow()}
     <input
       ref={uploadRef}
       type="file"

@@ -21,7 +21,7 @@ export function MoreSheet({
     <>
       <button
         type="button"
-        className="inline-flex min-h-12 items-center justify-center rounded-full border border-accent bg-transparent px-4 text-sm font-semibold text-accent"
+        className="btn-secondary min-h-12 rounded-full px-4"
         onClick={() => setOpen(true)}
       >
         {label}
@@ -29,12 +29,12 @@ export function MoreSheet({
       {open ? (
         <div className="fixed inset-0 z-50 flex items-end bg-black/50" onClick={close}>
           <div
-            className="flex w-full flex-col gap-3 rounded-t-3xl bg-[#FFF6EE] p-5 text-[#1A120B]"
+            className="flex w-full flex-col gap-3 rounded-t-3xl bg-surface-1 p-5 text-fg shadow-sheet"
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-lg font-bold">More</p>
             {body}
-            <button type="button" className="min-h-12 rounded-full bg-[#1A120B] font-bold text-white" onClick={close}>
+            <button type="button" className="btn-primary min-h-12 rounded-full" onClick={close}>
               Close
             </button>
           </div>

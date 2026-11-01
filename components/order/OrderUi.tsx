@@ -144,7 +144,7 @@ export function OrderSheet({
   }, [clearPhase]);
   if (staff) {
     return (
-      <div className="fixed inset-0 z-50 overflow-auto bg-[#1A120B] p-6 text-[#FFF8F1]">
+      <div className="fixed inset-0 z-50 overflow-auto bg-bg p-6 text-fg">
         <h1 className="text-4xl font-bold leading-tight">{shopName}</h1>
         <div className="mt-8 flex flex-col gap-6">
           {lines.map((line) => {
@@ -153,23 +153,23 @@ export function OrderSheet({
             return (
               <div key={line.id}>
                 <p className="text-5xl font-bold leading-tight">{line.qty + " × " + original}</p>
-                {shopper ? <p className="mt-1 text-lg text-[#D6C4B4]">{shopper}</p> : null}
+                {shopper ? <p className="mt-1 text-lg text-fg-muted">{shopper}</p> : null}
               </div>
             );
           })}
         </div>
         {totalLabel ? <p className="mt-8 text-3xl font-bold">{t(lang, "order.total") + " " + totalLabel}</p> : null}
         {translation ? (
-          <div className="mt-8 rounded-3xl bg-[#FFF8F1] p-5 text-[#1A120B]">
+          <div className="mt-8 rounded-3xl bg-surface-1 p-5 text-fg shadow-sheet">
             <p className="text-sm font-bold">{t(lang, "order.forStaff")}</p>
             <p className="mt-2 text-4xl font-bold leading-tight">{translation}</p>
           </div>
         ) : busy ? (
           <p className="mt-8 text-xl">{t(lang, "order.translating")}</p>
         ) : failed ? (
-          <p className="mt-8 rounded-3xl bg-[#FFF8F1] p-5 text-3xl font-bold text-[#1A120B]">{note}</p>
+          <p className="mt-8 rounded-3xl bg-surface-1 p-5 text-3xl font-bold text-fg shadow-sheet">{note}</p>
         ) : null}
-        <button type="button" className="mt-10 h-16 w-full rounded-2xl bg-[#FFF8F1] text-2xl font-bold text-[#1A120B]" onClick={onDone}>
+        <button type="button" className="btn-primary mt-10 h-16" onClick={onDone}>
           {t(lang, "order.done")}
         </button>
       </div>
@@ -246,7 +246,7 @@ export function OrderSheet({
       <MoreSheet label="More" onClose={() => setClearPhase(nextClearState(clearPhase, "close").state)}>
         {(close) => (
           <>
-            <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
+            <button type="button" className="btn-secondary h-12 w-full" onClick={onTranslate}>
               {t(lang, "order.translate")}
             </button>
             <button

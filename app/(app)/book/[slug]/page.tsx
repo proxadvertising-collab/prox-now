@@ -135,7 +135,7 @@ export default async function BookPage({
 
     const menuPages = view.pages.filter((page) => page.kind === "menu");
     const extraPages = view.pages.filter((page) => page.kind === "extra");
-    const { accent, ink } = bookCardColors(view.accent ?? "#FF8A2B", view.ink);
+    const { accent, ink } = bookCardColors(view.accent, view.ink);
     let liveLabel: string | null = null;
     if (shop?.id) {
       try {
@@ -167,7 +167,7 @@ export default async function BookPage({
     const mapUrl =
       view.maps && /^https?:\/\//i.test(view.maps) ? view.maps : mapHref(info.address?.value ?? null, point);
     const cardStyle = { background: "var(--book-ink)", color: "var(--book-accent)", fontFamily: "var(--book-font)" };
-    const coverStyle = { color: "#fff", fontFamily: "var(--book-font)" };
+    const coverStyle = { color: "var(--color-fg)", fontFamily: "var(--book-font)" };
     const deck = assembleDeck({
       menuItems: surface.menu,
       extras: extraPages.map((page) => ({

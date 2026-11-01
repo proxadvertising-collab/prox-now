@@ -61,7 +61,7 @@ describe("palette", () => {
 describe("bookCardColors", () => {
   it("keeps every card on the dark surface, even for a light brand ink", () => {
     expect(bookCardColors("#6B2B00", "#EAC98A")).toEqual({ ink: BOOK_CARD_BG, accent: "#EAC98A" });
-    expect(bookCardColors("#FF8A2B", "#1A120B").ink).toBe("#1E1611");
+    expect(bookCardColors("#3B82F6", "#1A120B").ink).toBe("#1E1611");
   });
 
   it("falls back to cream text when no brand colour reads on dark", () => {

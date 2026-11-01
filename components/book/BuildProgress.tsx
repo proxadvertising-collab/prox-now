@@ -17,7 +17,7 @@ export function BuildProgress() {
   }, []);
 
   return (
-    <div className="w-[min(92vw,420px)] rounded-3xl bg-[#FFF6EE] p-6 text-[#1A120B]">
+    <div className="w-[min(92vw,420px)] rounded-3xl bg-surface-1 p-6 text-fg shadow-card">
       <h1 className="text-2xl font-bold leading-tight">{BOOK_PROGRESS}</h1>
       <ol className="mt-5 flex flex-col gap-3">
         {STEPS.map((label, index) => {
@@ -28,13 +28,13 @@ export function BuildProgress() {
               <span
                 className={
                   "grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm " +
-                  (done ? "bg-[#1A120B] text-white" : active ? "bg-[#E4572E] text-white" : "bg-[#F0E2D4] text-[#5C4636]")
+                  (done ? "bg-fg text-bg" : active ? "bg-accent text-accent-ink" : "bg-surface-3 text-fg-subtle")
                 }
                 aria-hidden="true"
               >
                 {done ? "✓" : String(index + 1)}
               </span>
-              <span className={active ? "text-[#1A120B]" : done ? "text-[#1A120B]" : "text-[#8A7364]"}>{label}</span>
+              <span className={active || done ? "text-fg" : "text-fg-subtle"}>{label}</span>
             </li>
           );
         })}

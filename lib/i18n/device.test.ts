@@ -29,7 +29,7 @@ describe("device language", () => {
     const staff = readFileSync(resolve(import.meta.dirname, "../../components/order/OrderUi.tsx"), "utf8");
     expect(staff).toContain("shopStaffLanguage");
     expect(staff).toContain("onPointerDown");
-    expect(staff).toContain("border-accent bg-transparent");
+    expect(staff).toContain("btn-secondary");
   });
 
   it("shows dark skeletons and a dark fallback snap screen instead of a cream one", () => {
@@ -40,14 +40,16 @@ describe("device language", () => {
     expect(wallet).toContain("SkeletonCards");
     expect(owner).toContain("SkeletonCards");
     expect(camera).toContain("SkeletonCards");
-    expect(camera).toContain("bg-[#12100C]");
+    expect(camera).toContain("bg-bg");
     expect(camera).not.toContain("bg-[#FFF8F1]");
+    expect(camera).toContain("snap-shutter");
+    expect(camera).toContain("size={64}");
     expect(camera).toContain("bottom-[calc(7.5rem+env(safe-area-inset-bottom))]");
     expect(camera).toContain("Array.from(event.target.files");
     const skeleton = readFileSync(resolve(root, "components/ui/SkeletonCards.tsx"), "utf8");
     expect(skeleton).toContain("animate-shimmer");
     expect(skeleton).not.toContain("#FFF4E8");
     expect(camera).not.toContain("fixed inset-0 z-40 bg-black");
-    expect(camera).toContain("border-accent bg-transparent");
+    expect(camera).toContain("btn-secondary");
   });
 });

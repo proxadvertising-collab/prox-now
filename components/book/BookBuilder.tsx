@@ -33,8 +33,7 @@ type Queued = BookShot & { url: string };
 
 const primary =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline touch-manipulation disabled:opacity-60";
-const upload =
-  "inline-flex min-h-12 w-full items-center justify-center rounded-md border border-accent bg-transparent px-4 text-base font-semibold text-accent no-underline touch-manipulation disabled:opacity-60";
+const upload = "btn-secondary min-h-12 w-full no-underline touch-manipulation disabled:opacity-60";
 const quiet =
   "inline-flex min-h-12 w-full items-center justify-center rounded-md bg-surface-2 px-4 text-base font-semibold text-fg no-underline touch-manipulation disabled:opacity-60";
 

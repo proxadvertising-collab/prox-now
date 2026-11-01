@@ -125,7 +125,7 @@ export function BottomNav() {
               label={slot.label}
               icon={slot.icon}
               current={current}
-                            className={rowLink + " nav-item"}
+                            className={rowLink + " nav-item" + (current ? " nav-glow" : "")}
             />
           );
         })}
@@ -147,7 +147,7 @@ export function BottomNav() {
                 label={slot.label}
                 icon={slot.icon}
                 current={current}
-                              className={rowLink + " nav-item"}
+                              className={rowLink + " nav-item" + (current ? " nav-glow" : "")}
               />
             );
           })}

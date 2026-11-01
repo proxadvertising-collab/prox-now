@@ -37,8 +37,16 @@
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  border: 2px solid var(--color-fg);
+  border: 2.5px solid #fff;
   border-radius: 999px;
+}
+.prox-pin__dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-accent-ink);
+  z-index: 1;
 }
 
 .prox-pin__dot::after {

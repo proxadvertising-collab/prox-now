@@ -58,7 +58,7 @@ describe("order page", () => {
     expect(html).toContain("Total");
     expect(html).toContain("฿80");
     expect(html).toContain("ไม่ใส่มะเขือเทศ");
-    expect(html).toContain("bg-[#FFF8F1]");
+    expect(html).toContain("bg-surface-1");
     expect(html).toContain("Done");
   });
 

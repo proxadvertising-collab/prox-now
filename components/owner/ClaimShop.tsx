@@ -5,8 +5,7 @@ import { t } from "../../lib/copy";
 
 const button =
   "inline-flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-accent-ink";
-const outline =
-  "inline-flex min-h-11 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent";
+const outline = "btn-secondary min-h-11 px-4";
 const quiet =
   "inline-flex min-h-11 items-center justify-center rounded-md bg-surface-2 px-4 text-sm font-semibold text-fg";
 

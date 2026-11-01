@@ -12,7 +12,7 @@ import {
   shouldClearTabSession,
 } from "@/lib/supabase/client";
 
-const primary = "btn-primary";
+const primary = "btn-primary w-full";
 const field = "field";
 
 function isEmail(value: string): boolean {
