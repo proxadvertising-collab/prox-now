@@ -5,6 +5,22 @@ import { JUDGE_COOKIE } from "../../../../lib/judge/session";
 import { allowJudge, clientIp } from "../../../../lib/rate/window";
 import { createClient } from "../../../../lib/supabase/server";
 
+/** A role swap of someone who already has a demo account. First sign-ins return false. */
+async function swappingDemoRoles(role: string | null): Promise<boolean> {
+  if (role !== "explorer" && role !== "owner") return false;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    const id = data.user?.id;
+    if (!id) return false;
+    const found = await supabase.from("demo_accounts").select("role").eq("user_id", id).limit(1);
+    if (found.error) return false;
+    return Array.isArray(found.data) && found.data.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function signIn(email: string, password: string) {
   let supabase;
   try {
@@ -21,11 +37,11 @@ async function signIn(email: string, password: string) {
 }
 
 export async function POST(request: Request) {
-  if (!(await allowJudge(clientIp(request)))) {
+  const role = new URL(request.url).searchParams.get("role");
+  if (!(await swappingDemoRoles(role)) && !(await allowJudge(clientIp(request)))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
-  const role = new URL(request.url).searchParams.get("role");
   if (role !== null) {
     if (role !== "explorer" && role !== "owner") {
       return NextResponse.json({ error: "bad_role" }, { status: 400 });

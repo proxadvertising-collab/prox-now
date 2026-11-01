@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { seedBookPath } from "../book/seedName";
-import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, tourHref, TOUR_KEY, writeSeen } from "./script";
+import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapShopperHref, swapTour, tourHref, TOUR_KEY, writeSeen } from "./script";
 
 describe("judge script", () => {
   it("has a step for each named beat, including a book thanks", () => {
@@ -98,6 +98,15 @@ describe("judge script", () => {
     expect(swapTour({ cafe: "b", role: "owner", step: "claim" })).toMatchObject({ cafe: "a", role: "shopper", enter: "explorer", step: "seed" });
     expect(swapTour({ cafe: "a", role: "owner", step: "claim" })).toMatchObject({ cafe: "b", role: "shopper", step: "seed" });
     expect(DEMO_CAFES[swapTour({ cafe: "a", role: "owner", step: "claim" }).cafe].photos.every((photo) => photo.startsWith("/judge/cafe-b/") && photo.endsWith(".jpg"))).toBe(true);
+  });
+
+  it("reseeds a shopper swap until thanks, then opens the wallet", () => {
+    for (const step of ["seed", "book", "ask", "translate", "order", "post", "claim"] as const) {
+      expect(swapShopperHref(step)).toBe("/snap?tour=1&samples=1");
+    }
+    expect(swapShopperHref("thanks")).toBe("/wallet");
+    expect(swapShopperHref("coupon")).toBe("/wallet");
+    expect(pathStep(swapShopperHref("thanks"))).toBe("coupon");
   });
 
   it("walks all eight steps forward and never goes back", () => {

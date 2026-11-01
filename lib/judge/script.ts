@@ -82,6 +82,13 @@ export function swapTour(tour: Tour): { cafe: CafeId; role: TourRole; enter: "ex
   return { cafe, role, enter: role === "shopper" ? "explorer" : "owner", step: role === "shopper" ? "seed" : "claim" };
 }
 
+/** A shopper swap after thanks opens the wallet. Earlier steps reseed the camera. */
+export function swapShopperHref(step: StepId): "/snap?tour=1&samples=1" | "/wallet" {
+  const at = STEP_ORDER.indexOf(step);
+  const thanks = STEP_ORDER.indexOf("thanks");
+  return at >= thanks ? "/wallet" : "/snap?tour=1&samples=1";
+}
+
 export function pathStep(pathname: string): StepId | null {
   const [path, query = ""] = pathname.split("?");
   const params = new URLSearchParams(query);

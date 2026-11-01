@@ -13,6 +13,7 @@ import {
   rememberSeen,
   showExplainer,
   startJudgeTour,
+  swapShopperHref,
   swapTour,
   tourHref,
   writeSeen,
@@ -89,9 +90,13 @@ export function TourChrome() {
     const response = await fetch("/api/judge/enter?role=" + next.enter, { method: "POST" });
     const payload = (await response.json().catch(() => null)) as { ok?: boolean } | null;
     if (!response.ok || !payload?.ok) return;
-    const saved = { cafe: next.cafe, role: next.role, step: next.step };
+    const href = next.role === "shopper" ? swapShopperHref(tour.step) : tourHref(next.role);
+    const saved = {
+      cafe: next.cafe,
+      role: next.role,
+      step: href === "/wallet" ? "coupon" : next.step,
+    };
     startJudgeTour(saved);
-    const href = next.role === "shopper" ? "/snap?tour=1&samples=1" : tourHref(next.role);
     window.location.assign(href);
   }
 
