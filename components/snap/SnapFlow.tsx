@@ -1193,9 +1193,7 @@ export function SnapFlow({
             </p>
           ) : null}
           {photoMissing ? (
-            <button type="button" className={primary + " min-h-16"} onClick={() => onRetake?.()}>
-              {t("en", "snap.cta")}
-            </button>
+            <RadarButton onClick={() => onRetake?.()} size={56} caption={t("en", "snap.cta")} />
           ) : (
             <>
               <p className="text-body text-fg">{t("en", "post.honest")}</p>
