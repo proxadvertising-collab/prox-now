@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { seedBookPath } from "../book/seedName";
-import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, TOUR_KEY, writeSeen } from "./script";
+import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, tourHref, TOUR_KEY, writeSeen } from "./script";
 
 describe("judge script", () => {
   it("has a step for each named beat, including a book thanks", () => {
@@ -57,6 +57,11 @@ describe("judge script", () => {
     expect(seedBookPath("mala-mafia", "mala-mafia", "mala-mafia")).toBeNull();
     expect(demoShopTarget("coconut-shake-stand", { id: shopId, slug: "coconut-shake-stand", name: "Coconut shake stand" })?.id).toBe(shopId);
     expect(demoShopTarget("mala-mafia", { id: "mala-mafia", slug: "mala-mafia" })).toBeNull();
+    expect(tourHref("shopper")).toBe("/snap?tour=1&samples=1");
+    expect(tourHref("owner")).toBe("/owner?tour=1");
+    expect(camera).toContain('explainer("seed").body');
+    expect(camera).toContain("truncate whitespace-nowrap");
+    expect(camera).toContain("Use pre-seeded photos");
     expect(camera).toContain("Turn on location to use sample photos");
     expect(camera).toContain("top-[7.5rem] inset-x-0 z-20 mx-auto");
   });

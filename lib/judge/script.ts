@@ -63,7 +63,7 @@ export function explainer(id: StepId): Explainer {
 }
 
 export function tourHref(role: TourRole): string {
-  return role === "shopper" ? "/snap?tour=1" : "/owner?tour=1";
+  return role === "shopper" ? "/snap?tour=1&samples=1" : "/owner?tour=1";
 }
 
 const STEP_ORDER: readonly StepId[] = EXPLAINERS.map((step) => step.id);

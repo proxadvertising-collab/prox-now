@@ -17,7 +17,7 @@ async function signOut(): Promise<void> {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (url && anonKey) {
     const supabase = await createClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
   }
   const jar = await cookies();
   jar.set(JUDGE_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax" });

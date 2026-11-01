@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("demo reset failed", error instanceof Error ? error.message : "unknown");
     }
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
   } catch {
     // The cookies still have to expire so a real sign-in cannot inherit the tour.
   }

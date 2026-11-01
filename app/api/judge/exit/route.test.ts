@@ -68,6 +68,7 @@ describe("POST /api/judge/exit", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, next: "/judge", reset: true });
     expect(order).toEqual(["reset", "signOut"]);
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(rpc).toHaveBeenCalledWith("reset_demo");
     expect(remove).toHaveBeenCalledWith(["demo/one.jpg"]);
     const rows = expired(response);
