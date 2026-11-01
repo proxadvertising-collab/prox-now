@@ -275,14 +275,21 @@ function installFetch() {
   });
 }
 
+let jpegStamp = 0;
+
 async function jpegFile(name = "page.jpg"): Promise<File> {
+  const stamp = ++jpegStamp;
   const buf = await sharp({
-    create: { width: 48, height: 32, channels: 3, background: { r: 220, g: 80, b: 20 } },
+    create: {
+      width: 40 + (stamp % 30),
+      height: 24 + (stamp % 11),
+      channels: 3,
+      background: { r: (stamp * 47) % 256, g: (stamp * 91) % 256, b: (stamp * 13) % 256 },
+    },
   })
-    .jpeg()
+    .jpeg({ quality: 100 })
     .toBuffer();
-  const copy = Uint8Array.from(buf);
-  return new File([copy.buffer], name, { type: "image/jpeg" });
+  return new File([new Uint8Array(buf)], name, { type: "image/jpeg" });
 }
 
 async function postPages(count = 1, fields?: Record<string, string>, files?: File[]) {
@@ -599,7 +606,8 @@ describe("POST /api/book/pages", () => {
     expect(state.removed.length).toBeGreaterThan(0);
 
     mode = "improve-replace";
-    const replaced = await postSession([{ kind: "menu" }], SHOP, "improve");
+    const menuFile = await jpegFile("menu.jpg");
+    const replaced = await postSession([{ kind: "menu", file: menuFile }], SHOP, "improve");
     expect(replaced.status).toBe(200);
     const replacedBody = (await replaced.json()) as { summary?: string };
     expect(replacedBody.summary).toContain("Updated 1 menu item");
@@ -607,7 +615,7 @@ describe("POST /api/book/pages", () => {
 
     state.ownerIds = ["99999999-9999-4999-8999-999999999999"];
     mode = "improve-replace";
-    const blocked = await postSession([{ kind: "menu" }], SHOP, "improve");
+    const blocked = await postSession([{ kind: "menu", file: menuFile }], SHOP, "improve");
     expect(blocked.status).toBe(200);
     expect(await blocked.json()).toMatchObject({ summary: "1 skipped as duplicate" });
     expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed")).toHaveLength(1);
@@ -628,6 +636,22 @@ describe("POST /api/book/pages", () => {
     const addedBody = (await added.json()) as { summary?: string };
     expect(addedBody.summary).toContain("Added 1 menu item");
     expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed").length).toBeGreaterThan(1);
+  });
+
+  it("saves one page when a batch repeats the same photo", async () => {
+    const file = await jpegFile("dup.jpg");
+    mode = "improve-add";
+    const response = await postSession(
+      [
+        { kind: "menu", file },
+        { kind: "menu", file },
+      ],
+      SHOP,
+      "improve",
+    );
+    expect(response.status).toBe(200);
+    expect(state.pages.filter((page) => page.status !== "removed")).toHaveLength(1);
+    expect(await response.json()).toMatchObject({ summary: "Added 1 menu item, 1 skipped as duplicate" });
   });
 
   it("a judge and a normal user add a page instead of replacing one they do not own", async () => {

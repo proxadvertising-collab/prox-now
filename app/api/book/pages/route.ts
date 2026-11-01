@@ -6,7 +6,7 @@ import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
 import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReadable, type BrandTheme } from "../../../../lib/book/brand";
-import { dupePlan, photoHash } from "../../../../lib/book/dedupe";
+import { batchDupes, dupePlan, photoHash } from "../../../../lib/book/dedupe";
 import { improveSummary, pageFacts, readImprove, settleBatch, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
@@ -400,11 +400,17 @@ async function runPrepared(
     return { ok: false, response: json({ error: "upload_failed" }, 502) };
   }
 
-  const dupeByIndex = new Map<number, { action: "skip"; pageId: string }>();
-  for (const image of prepared) {
-    const dupe = dupePlan(photoHash(image.original), liveHashes);
+  const hashes = prepared.map((image) => photoHash(image.original));
+  const repeated = batchDupes(hashes);
+  const dupeByIndex = new Map<number, { action: "skip"; pageId: string | null }>();
+  prepared.forEach((image, position) => {
+    if (repeated.has(position)) {
+      dupeByIndex.set(image.index, { action: "skip", pageId: null });
+      return;
+    }
+    const dupe = dupePlan(hashes[position] ?? "", liveHashes);
     if (dupe) dupeByIndex.set(image.index, dupe);
-  }
+  });
   const forModel = prepared.filter((image) => !dupeByIndex.has(image.index));
 
   let read: BookPass | null = null;
@@ -422,7 +428,7 @@ async function runPrepared(
   }
 
   if (read && kind === "menu" && !menuSession) {
-    const notMenu = prepared.some((image) => {
+    const notMenu = forModel.some((image) => {
       const page = read?.read.pages.find((item) => item.index === image.index);
       return !page || !page.isMenu;
     });
@@ -742,7 +748,11 @@ async function commitBook(input: {
     );
   }
   const resting = groups.some((group) => group.resting);
-  const upstream = groups.some((group) => group.upstream || !group.read);
+  const upstream = groups.some((group) => {
+    if (group.upstream) return true;
+    if (group.read) return false;
+    return group.stored.some((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip"));
+  });
   const ai = aiPayload(null, faceCalls);
   if (resting) {
     return json(bodyOf({ error: "ai_resting", message: AI_RESTING_MESSAGE, pages, missing, ai }), 503);
