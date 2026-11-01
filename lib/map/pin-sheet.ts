@@ -27,7 +27,7 @@ export type PinSheetShop = {
 export type PinSheet = {
   name: string;
   nameLocal: string | null;
-  walkMinutes: number;
+  walkMinutes: number | null;
   photoUrl: string | null;
   freshness: { kind: "none" } | { kind: "live"; label: string } | { kind: "seed" };
   goNowHref: string;
@@ -44,22 +44,26 @@ export function newestLivePost(posts: readonly PinSheetPost[], now: number): Pin
   return live[0] ?? null;
 }
 
+export function showOpenBook(pages: number | null): boolean {
+  return pages !== 0;
+}
+
 export function pinSheetContent(input: {
   shop: PinSheetShop;
   posts: readonly PinSheetPost[];
   now: number;
-  origin: LatLng;
+  origin: LatLng | null;
   missing?: readonly string[] | null;
 }): PinSheet {
   const post = newestLivePost(input.posts, input.now);
-  const meters = haversineMeters(input.origin, input.shop);
+  const meters = input.origin ? haversineMeters(input.origin, input.shop) : null;
   let freshness: PinSheet["freshness"] = { kind: "none" };
   if (post?.seed) freshness = { kind: "seed" };
   else if (post) freshness = { kind: "live", label: formatRemaining(remainingMs(post.expiresAt, input.now)) };
   return {
     name: input.shop.name,
     nameLocal: input.shop.nameLocal ?? null,
-    walkMinutes: walkingMinutes(meters),
+    walkMinutes: meters === null ? null : walkingMinutes(meters),
     photoUrl: post?.photoUrl ?? null,
     freshness,
     goNowHref: walkingDirectionsUrl(input.shop),

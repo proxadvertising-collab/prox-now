@@ -11,12 +11,12 @@ import { pickLanguage } from "@/lib/i18n/viewer";
 import { GoNowSheet } from "./GoNowSheet";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
-import { FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
+import { DEMO_CENTER, FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
 import { phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, type LatLng } from "@/lib/geo";
 import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
-import { newestLivePost, pinSheetContent } from "@/lib/map/pin-sheet";
+import { newestLivePost, pinSheetContent, showOpenBook } from "@/lib/map/pin-sheet";
 import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
 import { PhotoStack } from "./PhotoStack";
 import { PlaceSheet } from "./PlaceSheet";
@@ -169,6 +169,7 @@ export function ProxMap({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteNote, setDeleteNote] = useState<string | null>(null);
   const [bookMissing, setBookMissing] = useState<string[] | null>(null);
+  const [bookPages, setBookPages] = useState<number | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [askOpen, setAskOpen] = useState(false);
   const [stackShop, setStackShop] = useState<string | null>(null);
@@ -192,21 +193,31 @@ export function ProxMap({
   useEffect(() => {
     if (fixtures || !selectedId) {
       setBookMissing(null);
+      setBookPages(null);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
         const supabase = createClient();
-        const result = await supabase.rpc("book_missing", { p_shop_id: selectedId });
+        const [result, pages] = await Promise.all([
+          supabase.rpc("book_missing", { p_shop_id: selectedId }),
+          supabase
+            .from("shop_book_pages")
+            .select("id", { count: "exact", head: true })
+            .eq("shop_id", selectedId)
+            .eq("status", "live"),
+        ]);
         if (cancelled) return;
-        if (result.error || !Array.isArray(result.data)) {
-          setBookMissing(null);
-          return;
-        }
-        setBookMissing(result.data.filter((item: unknown) => typeof item === "string"));
+        if (result.error || !Array.isArray(result.data)) setBookMissing(null);
+        else setBookMissing(result.data.filter((item: unknown) => typeof item === "string"));
+        if (pages.error || typeof pages.count !== "number") setBookPages(null);
+        else setBookPages(pages.count);
       } catch {
-        if (!cancelled) setBookMissing(null);
+        if (!cancelled) {
+          setBookMissing(null);
+          setBookPages(null);
+        }
       }
     })();
     return () => {
@@ -507,6 +518,8 @@ export function ProxMap({
         return;
       }
       if (nearestShopMeters(result.point, shops) > FAR_METERS) {
+        setUserPoint(result.point);
+        setWalkOrigin(result.point);
         setLocProblem(false);
         setLocMessage(t("en", "loc.far"));
         return;
@@ -524,6 +537,25 @@ export function ProxMap({
       setLocBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (fixtures) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const permissions = navigator.permissions;
+        if (!permissions?.query) return;
+        const status = await permissions.query({ name: "geolocation" });
+        if (cancelled || status.state !== "granted") return;
+        await useMyLocation();
+      } catch {
+        return;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fixtures]);
 
   if (stackShop !== selectedId) {
     setStackShop(selectedId);
@@ -572,7 +604,7 @@ export function ProxMap({
         shop: selectedShop,
         posts: sheetPosts,
         now: tick,
-        origin: userPoint ?? origin,
+        origin: fixtures || demoSession ? DEMO_CENTER : userPoint ?? origin,
         missing: bookMissing,
       })
     : null;
@@ -679,18 +711,27 @@ export function ProxMap({
               {t("en", "demo.live")}
             </p>
           ) : null}
-          <p className="text-label text-fg-muted">{t("en", "map.walk", { n: String(sheet.walkMinutes) })}</p>
+          <p className="text-label text-fg-muted">
+            {sheet.walkMinutes === null
+              ? t(sheetLang, "map.walkUnknown")
+              : t(sheetLang, "map.walk", { n: String(sheet.walkMinutes) })}
+          </p>
           {liveFocus?.facts ? <LiveFacts post={liveFocus} lang={sheetLang} /> : null}
           <a className={"mt-3 " + linkClass} href={sheet.goNowHref} target="_blank" rel="noopener noreferrer">
             {t("en", "post.go")}
           </a>
-          <a className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
-            {t("en", "sheet.openBook")}
-          </a>
+          {showOpenBook(bookPages) ? (
+            <a className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
+              {t(sheetLang, "sheet.openBook")}
+            </a>
+          ) : null}
           {sheet.showBuild ? (
             <a className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
               {t("en", "book.build")}
             </a>
+          ) : null}
+          {bookPages === 0 ? (
+            <p className="mt-2 text-label text-fg-muted">{t(sheetLang, "book.noneYet")}</p>
           ) : null}
           <a
             className={

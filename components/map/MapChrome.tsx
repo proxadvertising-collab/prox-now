@@ -86,7 +86,7 @@ export function MapChrome({
         <h1 id="shops-near" className="text-heading font-bold text-fg">
           {t("en", "map.near")}
         </h1>
-        <ShopList shops={shown} fixtures={fixtures} />
+        <ShopList shops={shown} fixtures={fixtures} demoSession={demoSession} />
       </section>
     </div>
   );

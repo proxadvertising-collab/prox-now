@@ -1,7 +1,6 @@
-import { DEMO_CENTER } from "@/lib/fixtures/shops";
 import type { LatLng } from "@/lib/geo";
 
-let origin: LatLng = DEMO_CENTER;
+let origin: LatLng | null = null;
 const listeners = new Set<() => void>();
 
 export function subscribeWalkOrigin(listener: () => void): () => void {
@@ -11,12 +10,12 @@ export function subscribeWalkOrigin(listener: () => void): () => void {
   };
 }
 
-export function getWalkOrigin(): LatLng {
+export function getWalkOrigin(): LatLng | null {
   return origin;
 }
 
-export function getServerWalkOrigin(): LatLng {
-  return DEMO_CENTER;
+export function getServerWalkOrigin(): LatLng | null {
+  return null;
 }
 
 export function setWalkOrigin(next: LatLng): void {

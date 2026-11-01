@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bookHref, pinSheetContent, type PinSheetPost, type PinSheetShop } from "./pin-sheet";
+import { haversineMeters, walkingMinutes } from "../geo";
+import { bookHref, pinSheetContent, showOpenBook, type PinSheetPost, type PinSheetShop } from "./pin-sheet";
 
 const shop: PinSheetShop = {
   id: "shop-1",
@@ -76,5 +77,27 @@ describe("pin sheet", () => {
     expect(sheet.showBuild).toBe(false);
     expect(sheet.buildHref).toBe("/book/dawn-cafe/build");
     expect(sheet.bookHref).toBe("/book/dawn-cafe");
+  });
+
+  it("leaves walk time unknown until there is a real origin", () => {
+    const sheet = pinSheetContent({ shop, posts: [], now, origin: null });
+    expect(sheet.walkMinutes).toBeNull();
+  });
+
+  it("turns 4500 m into a 57 minute walk", () => {
+    const north = {
+      lat: shop.lat + 4500 / ((6_371_000 * Math.PI) / 180),
+      lng: shop.lng,
+    };
+    const distance = haversineMeters(north, shop);
+    expect(walkingMinutes(distance)).toBe(57);
+    const sheet = pinSheetContent({ shop, posts: [], now, origin: north });
+    expect(sheet.walkMinutes).toBe(57);
+  });
+
+  it("hides open book only when the shop has no live pages", () => {
+    expect(showOpenBook(0)).toBe(false);
+    expect(showOpenBook(null)).toBe(true);
+    expect(showOpenBook(3)).toBe(true);
   });
 });
