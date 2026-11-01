@@ -6,6 +6,7 @@ import { isUploadKind, MAX_MENU_PAGES, MAX_UPLOAD_IMAGES, type UploadKind } from
 import { AI_RESTING_MESSAGE } from "../../../../lib/book/message";
 import { bookMissing } from "../../../../lib/book/missing";
 import { cropFraction, readLogoFix, straightenLogo, themeFromBrand, themeIfReadable, type BrandTheme } from "../../../../lib/book/brand";
+import { dupePlan, photoHash } from "../../../../lib/book/dedupe";
 import { improveSummary, pageFacts, readImprove, settleBatch, type ShotPlan } from "../../../../lib/book/improve";
 import { fallbackTheme, paletteFromImage, type BookTheme } from "../../../../lib/book/palette";
 import { detectFaces, readBook, readSeedBatch, type BookPass } from "../../../../lib/book/read";
@@ -64,6 +65,7 @@ type StoredPage = {
   height: number | null;
   facesBlurred: number;
   bytes: Buffer;
+  photoHash: string;
 };
 
 function json(body: unknown, status = 200) {
@@ -162,7 +164,13 @@ function existingOf(data: unknown): ExistingBook | null {
   };
 }
 
-type LivePage = { id: string; kind: string; status: string; extracted: unknown };
+type LivePage = { id: string; kind: string; status: string; extracted: unknown; hash: string | null };
+
+function photoHashOf(meta: unknown): string | null {
+  const row = asRecord(meta);
+  const hash = row?.photo_hash;
+  return typeof hash === "string" && hash.length > 0 ? hash : null;
+}
 
 function livePagesOf(data: unknown): LivePage[] {
   if (!Array.isArray(data)) return [];
@@ -175,6 +183,7 @@ function livePagesOf(data: unknown): LivePage[] {
       kind: row.kind,
       status: typeof row.status === "string" ? row.status : "live",
       extracted: row.extracted ?? {},
+      hash: photoHashOf(row.ai_meta),
     });
   }
   return pages;
@@ -316,6 +325,17 @@ function sessionMenuParts(ingested: Ingested, menuSession: boolean): Ingested[] 
   ];
 }
 
+function emptyBookPass(): BookPass {
+  return {
+    read: { pages: [], shopLanguage: null, tagline: null, shopName: null, colors: [] },
+    model: null,
+    latencyMs: 0,
+    calls: 0,
+    chunks: [],
+    perPage: new Map(),
+  };
+}
+
 async function runPrepared(
   service: SupabaseClient,
   shop: ShopRow,
@@ -323,6 +343,7 @@ async function runPrepared(
   prepared: readonly PreparedImage[],
   improve: { existing: readonly { id: string; extracted: unknown }[] } | null = null,
   menuSession = false,
+  liveHashes: readonly { id: string; hash: string | null }[] = [],
 ): Promise<{ ok: true; ingested: Ingested } | { ok: false; response: NextResponse }> {
   let faceCalls = 0;
   let faceBoxes: Map<number, number[][]>;
@@ -370,6 +391,7 @@ async function runPrepared(
         height: dimension(jpeg.height),
         facesBlurred: boxes.length,
         bytes: jpeg.bytes,
+        photoHash: photoHash(image.original),
       });
     }
   } catch (error) {
@@ -378,14 +400,25 @@ async function runPrepared(
     return { ok: false, response: json({ error: "upload_failed" }, 502) };
   }
 
+  const dupeByIndex = new Map<number, { action: "skip"; pageId: string }>();
+  for (const image of prepared) {
+    const dupe = dupePlan(photoHash(image.original), liveHashes);
+    if (dupe) dupeByIndex.set(image.index, dupe);
+  }
+  const forModel = prepared.filter((image) => !dupeByIndex.has(image.index));
+
   let read: BookPass | null = null;
   let resting = false;
   let upstream = false;
-  try {
-    read = await readBook(prepared);
-  } catch (error) {
-    if (error instanceof MetaCallError) resting = true;
-    else upstream = true;
+  if (forModel.length === 0 && dupeByIndex.size > 0) {
+    read = emptyBookPass();
+  } else {
+    try {
+      read = await readBook(forModel);
+    } catch (error) {
+      if (error instanceof MetaCallError) resting = true;
+      else upstream = true;
+    }
   }
 
   if (read && kind === "menu" && !menuSession) {
@@ -402,15 +435,19 @@ async function runPrepared(
   const pageByIndex = new Map<number, PageRead>();
   for (const page of read?.read.pages ?? []) pageByIndex.set(page.index, page);
   const plans: ShotPlan[] = [];
-  if (improve) {
-    for (const page of stored) {
-      const facts = pageFacts(pageByIndex.get(page.index) ?? null);
-      const image = prepared.find((item) => item.index === page.index);
-      const decision = image
-        ? await readImprove({ kind, facts, existing: improve.existing, image })
-        : { action: "add" as const, pageId: null };
-      plans.push({ index: page.index, ...decision });
+  for (const page of stored) {
+    const dupe = dupeByIndex.get(page.index);
+    if (dupe) {
+      plans.push({ index: page.index, ...dupe });
+      continue;
     }
+    if (!improve) continue;
+    const facts = pageFacts(pageByIndex.get(page.index) ?? null);
+    const image = prepared.find((item) => item.index === page.index);
+    const decision = image
+      ? await readImprove({ kind, facts, existing: improve.existing, image })
+      : { action: "add" as const, pageId: null };
+    plans.push({ index: page.index, ...decision });
   }
   return {
     ok: true,
@@ -425,10 +462,10 @@ async function commitBook(input: {
   livePages: readonly LivePage[];
   groups: readonly Ingested[];
   uploaded: string[];
-  summary: string | null;
+  improve?: boolean;
   fresh?: boolean;
 }): Promise<NextResponse> {
-  const { service, shop, userId, livePages, groups, uploaded, summary } = input;
+  const { service, shop, userId, livePages, groups, uploaded } = input;
   const ownerResult = await service.from("shop_owners").select("user_id").eq("shop_id", shop.id).eq("status", "verified");
   const owners = Array.isArray(ownerResult.data) ? ownerResult.data : [];
   const claimed = owners.length > 0;
@@ -455,10 +492,12 @@ async function commitBook(input: {
     live: livePages.filter((page) => page.status === "live").map((page) => ({ id: page.id, kind: page.kind })),
     canReplace,
   });
+  const settledActions: Array<"skip" | "replace" | "add"> = [];
   for (let i = 0; i < batch.length; i += 1) {
     const shot = batch[i];
     const next = settled[i];
     if (!shot || !next) continue;
+    settledActions[i] = next.action;
     const plan = shot.group.plans.find((item) => item.index === shot.index);
     if (plan) {
       plan.action = next.action;
@@ -467,6 +506,9 @@ async function commitBook(input: {
       shot.group.plans.push({ index: shot.index, action: next.action, pageId: next.pageId });
     }
   }
+  const summary = input.improve
+    ? improveSummary(batch.map((shot, index) => ({ kind: shot.kind, action: settledActions[index] ?? shot.plan.action })))
+    : null;
   const replacing = groups.some((group) => group.plans.some((plan) => plan.action === "replace"));
   const adding = groups.some((group) =>
     group.stored.some((page) => !group.plans.some((plan) => plan.index === page.index && plan.action === "skip")),
@@ -638,6 +680,7 @@ async function commitBook(input: {
           images_in_call: meta?.imagesInCall ?? 0,
           call_id: meta?.callId ?? null,
           faces_blurred: page.facesBlurred,
+          photo_hash: page.photoHash,
           ...(group.aiError ? { error: group.aiError } : {}),
         },
       };
@@ -759,6 +802,7 @@ async function ingestSeed(
   }
 
   const cutSources = flat.map((item) => ({ index: item.image.index, bytes: item.image.original }));
+  const originalHashes = new Map(flat.map((item) => [item.image.index, photoHash(item.image.original)]));
   const logo = read?.read.logo;
   if (read?.read.rich && logo?.box && logo.index !== read.read.hero) {
     const target = flat.find((item) => item.image.index === logo.index);
@@ -806,6 +850,7 @@ async function ingestSeed(
         height: dimension(jpeg.height),
         facesBlurred: (faceBoxes.get(item.image.index) ?? []).length,
         bytes: jpeg.bytes,
+        photoHash: originalHashes.get(item.image.index) ?? photoHash(item.image.original),
       });
       storedByKind.set(item.kind, list);
     }
@@ -882,7 +927,7 @@ async function ingestSeed(
       return { ...part, read: carriedRead(read, false), aiError };
     });
   }
-  return commitBook({ service, shop, userId, livePages, groups: parts, uploaded, summary: null, fresh });
+  return commitBook({ service, shop, userId, livePages, groups: parts, uploaded, fresh });
 }
 
 async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextResponse> {
@@ -894,7 +939,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
   if (listed.error) return json({ error: "upload_failed" }, 502);
   const rows = Array.isArray(listed.data) ? listed.data : [];
   const prepared: PreparedImage[] = [];
-  const targets: { id: string; index: number }[] = [];
+  const targets: { id: string; index: number; photoHash: string }[] = [];
   let index = 1;
   for (const item of rows) {
     const row = asRecord(item);
@@ -910,7 +955,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
       const bytes = Buffer.from(await downloaded.data.arrayBuffer());
       const meta = await metaJpeg(bytes);
       prepared.push({ index, original: bytes, dataUrl: jpegDataUrl(meta) });
-      targets.push({ id, index });
+      targets.push({ id, index, photoHash: photoHash(bytes) });
       index += 1;
     } catch {
       continue;
@@ -938,6 +983,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
           images_in_call: meta?.imagesInCall ?? 0,
           call_id: meta?.callId ?? null,
           faces_blurred: 0,
+          photo_hash: target.photoHash,
           ...(aiError ? { error: aiError } : {}),
         },
       })
@@ -985,6 +1031,7 @@ async function handleGroups(
       group.prepared,
       improve ? { existing } : null,
       menuSession,
+      ranked.map((page) => ({ id: page.id, hash: page.hash })),
     );
     if (!result.ok) {
       await removePaths(service, kept);
@@ -993,10 +1040,7 @@ async function handleGroups(
     ingested.push(...sessionMenuParts(result.ingested, menuSession));
     kept.push(...result.ingested.stored.map((page) => page.path));
   }
-  const summary = improve
-    ? improveSummary(ingested.flatMap((group) => group.plans.map((plan) => ({ kind: group.kind, action: plan.action }))))
-    : null;
-  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept, summary, fresh });
+  return commitBook({ service, shop, userId, livePages, groups: ingested, uploaded: kept, improve, fresh });
 }
 
 async function openShop(
@@ -1018,7 +1062,7 @@ async function openShop(
 
   const pageResult = await service
     .from("shop_book_pages")
-    .select("id, kind, status, extracted")
+    .select("id, kind, status, extracted, ai_meta")
     .eq("shop_id", shop.id)
     .eq("status", "live");
   if (pageResult.error) return { ok: false, response: json({ error: "upload_failed" }, 502) };

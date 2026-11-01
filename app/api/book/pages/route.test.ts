@@ -608,12 +608,22 @@ describe("POST /api/book/pages", () => {
     state.ownerIds = ["99999999-9999-4999-8999-999999999999"];
     mode = "improve-replace";
     const blocked = await postSession([{ kind: "menu" }], SHOP, "improve");
-    expect(blocked.status).toBe(403);
-    expect(await blocked.json()).toEqual({ error: "not_owner" });
+    expect(blocked.status).toBe(200);
+    expect(await blocked.json()).toMatchObject({ summary: "1 skipped as duplicate" });
+    expect(state.pages.filter((page) => page.kind === "menu" && page.status !== "removed")).toHaveLength(1);
     state.ownerIds = [USER];
 
     mode = "improve-add";
-    const added = await postSession([{ kind: "menu" }], SHOP, "improve");
+    const fresh = await sharp({
+      create: { width: 40, height: 24, channels: 3, background: { r: 20, g: 80, b: 40 } },
+    })
+      .jpeg()
+      .toBuffer();
+    const added = await postSession(
+      [{ kind: "menu", file: new File([Uint8Array.from(fresh)], "new-menu.jpg", { type: "image/jpeg" }) }],
+      SHOP,
+      "improve",
+    );
     expect(added.status).toBe(200);
     const addedBody = (await added.json()) as { summary?: string };
     expect(addedBody.summary).toContain("Added 1 menu item");
