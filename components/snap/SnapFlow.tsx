@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { DemoBanner } from "@/components/ui/DemoBanner";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, nearestDemoShop } from "@/lib/demo/zone";
 import { readTour } from "@/lib/judge/script";
+import { getFix } from "@/lib/geo/fix-cache";
 import { locate, type LocateResult } from "@/lib/geo/locate";
 import { createClient } from "@/lib/supabase/client";
 import { resizeToJpeg } from "@/lib/image/resize";
@@ -522,11 +524,11 @@ export function SnapFlow({
         setDemo(true);
         setDemoShopName(demoPoint.name);
       } else {
-        const located = await locate();
+        const fixed = pointRef.current ?? (await getFix({ userAction: true }));
         if (run !== runRef.current) return;
-        here = located.status === "ok" ? located.point : null;
+        here = fixed ? { lat: fixed.lat, lng: fixed.lng } : null;
         rememberPoint(here);
-        setLocStatus(located.status);
+        setLocStatus(here ? "ok" : "unavailable");
         setDemo(!here);
         setDemoShopName("");
       }
@@ -666,8 +668,8 @@ export function SnapFlow({
       setAdded(false);
       setPostError("");
       void (async () => {
-        const located = await locate();
-        if (located.status === "ok") rememberPoint(located.point);
+        const fixed = pointRef.current ?? (await getFix({ userAction: true }));
+        if (fixed) rememberPoint({ lat: fixed.lat, lng: fixed.lng });
         writePostDraft(shop);
         setPhase("offer");
       })();
@@ -1219,9 +1221,9 @@ export function SnapFlow({
               {t("en", "auth.signIn")}
             </a>
           ) : null}
-          <a className={secondary} href={bookBuildHref(chosen.id)}>
+          <Link className={secondary} href={bookBuildHref(chosen.id)}>
             {t("en", "book.build")}
-          </a>
+          </Link>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}
           </button>
@@ -1239,15 +1241,15 @@ export function SnapFlow({
               {t("en", "face.save")}
             </button>
           ) : null}
-          <a className={secondary} href={"/map?post=" + encodeURIComponent(posted.id)}>
+          <Link className={secondary} href={"/map?post=" + encodeURIComponent(posted.id)}>
             {t("en", "post.see")}
-          </a>
+          </Link>
           <a className={primary} href={snapShopHref(chosen.id, chosen.name)}>
             {t("en", "snap.keepSeeding", { name: chosen.name })}
           </a>
-          <a className={secondary} href={bookBuildHref(chosen.id)}>
+          <Link className={secondary} href={bookBuildHref(chosen.id)}>
             {t("en", "book.build")}
-          </a>
+          </Link>
           <button type="button" className={secondary} onClick={reset}>
             {t("en", "success.again")}
           </button>

@@ -10,7 +10,7 @@ import { DemoBanner } from "@/components/ui/DemoBanner";
 import { t } from "@/lib/copy";
 import type { FixtureShop } from "@/lib/fixtures/shops";
 import type { LatLng } from "@/lib/geo";
-import { locate } from "@/lib/geo/locate";
+import { getFix } from "@/lib/geo/fix-cache";
 import type { LivePost } from "@/lib/posts/source";
 
 const NO_LIVE_POSTS: LivePost[] = [];
@@ -39,17 +39,17 @@ export function MapChrome({
     if (!followGps || fixtures) return;
     let cancelled = false;
     void (async () => {
-      const result = await locate();
+      const point = await getFix({ userAction: false });
       if (cancelled) return;
-      if (result.status !== "ok") {
+      if (!point) {
         setShown(shops);
         return;
       }
-      setWalkOrigin(result.point);
-      setFocus(result.point);
+      setWalkOrigin(point);
+      setFocus(point);
       try {
         const response = await fetch(
-          "/api/shops/near?lat=" + encodeURIComponent(String(result.point.lat)) + "&lng=" + encodeURIComponent(String(result.point.lng)),
+          "/api/shops/near?lat=" + encodeURIComponent(String(point.lat)) + "&lng=" + encodeURIComponent(String(point.lng)),
         );
         const body = (await response.json().catch(() => null)) as { shops?: FixtureShop[] } | null;
         if (!cancelled && response.ok && Array.isArray(body?.shops)) setShown(body.shops);

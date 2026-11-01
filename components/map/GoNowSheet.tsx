@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Card = {
   shopId: string;
@@ -163,9 +164,9 @@ export function GoNowSheet({
             {place.reason ? <p className="text-label text-fg">{place.reason}</p> : null}
             <p className="text-label text-fg-muted">{place.walkMinutes} min walk</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <a className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 font-semibold text-accent-ink no-underline" href={"/book/" + place.slug}>
+              <Link className="inline-flex min-h-11 items-center rounded-md bg-accent px-3 font-semibold text-accent-ink no-underline" href={"/book/" + place.slug}>
                 Open book
-              </a>
+              </Link>
               <button
                 type="button"
                 className="inline-flex min-h-11 items-center rounded-md bg-surface-2 px-3 font-semibold text-fg"

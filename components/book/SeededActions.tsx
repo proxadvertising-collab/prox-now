@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ClaimShop } from "@/components/owner/ClaimShop";
 import { t } from "@/lib/copy";
 import { bookBuildHref, nextShopNearby } from "@/lib/book/builder";
@@ -56,13 +57,13 @@ export function SeededActions({
         <ClaimShop shopId={shopId} mode={claimMode} seed={{ lat, lng, photoUrl }} />
       ) : null}
       {nextHref ? (
-        <a className={primary} href={nextHref}>
+        <Link className={primary} href={nextHref}>
           {t("en", "book.next")}
-        </a>
+        </Link>
       ) : null}
-      <a className={nextHref ? secondary : primary} href={"/book/" + encodeURIComponent(slug)}>
+      <Link className={nextHref ? secondary : primary} href={"/book/" + encodeURIComponent(slug)}>
         {t("en", "book.finish")}
-      </a>
+      </Link>
     </div>
   );
 }

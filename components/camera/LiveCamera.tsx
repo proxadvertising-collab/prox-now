@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SnapFlow } from "@/components/snap/SnapFlow";
 import {
   adoptFacing,
@@ -18,7 +20,9 @@ import { SeedCoach } from "./SeedCoach";
 import { ShopPicker } from "./ShopPicker";
 import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
+import { cameraStart } from "@/lib/camera/camera-gate";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
+import { getFix } from "@/lib/geo/fix-cache";
 import { uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { afterPin, chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
@@ -71,22 +75,7 @@ async function lookupDemoPoint(): Promise<{ lat: number; lng: number } | null> {
 }
 
 function locate(): Promise<{ lat: number; lng: number; accuracy: number | null } | null> {
-  return new Promise((resolve) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      resolve(null);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-        }),
-      () => resolve(null),
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 8_000 },
-    );
-  });
+  return getFix({ userAction: true });
 }
 
 function here(): Promise<CaptureFix | null> {
@@ -120,6 +109,8 @@ export function LiveCamera({
   preselected?: { id: string; name: string } | null;
   startSeeding?: boolean;
 }) {
+  const router = useRouter();
+  const openCameraRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const facingRef = useRef<Facing>(facingForSession());
@@ -220,44 +211,66 @@ export function LiveCamera({
     let stopped = false;
     const video = videoRef.current;
     const opening = facingRef.current;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraClosed(true);
-      return;
-    }
-    void navigator.mediaDevices
-      .getUserMedia(cameraConstraints(opening))
-      .then(async (stream) => {
-        if (stopped || !alive.current) {
-          for (const track of stream.getTracks()) track.stop();
-          return;
-        }
-        let active = stream;
-        if (facingRef.current !== opening) {
-          const adopted = await adoptFacing(facingRef.current, opening, stream, (constraints) =>
-            navigator.mediaDevices.getUserMedia(constraints),
-          );
+    function openCamera() {
+      if (streamRef.current || stopped) return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraClosed(true);
+        return;
+      }
+      void navigator.mediaDevices
+        .getUserMedia(cameraConstraints(opening))
+        .then(async (stream) => {
           if (stopped || !alive.current) {
-            for (const track of adopted.stream.getTracks()) track.stop();
+            for (const track of stream.getTracks()) track.stop();
             return;
           }
-          active = adopted.stream;
-        }
-        streamRef.current = active;
-        if (video) {
-          video.srcObject = active;
-          void video.play().then(() => {
-            if (!stopped) setCameraReady(true);
-          }).catch(() => setCameraClosed(true));
-        }
-        void navigator.mediaDevices.enumerateDevices().then((devices) => {
-          if (stopped) return;
-          setCameraCount(devices.filter((device) => device.kind === "videoinput").length);
-        }).catch(() => undefined);
-      })
-      .catch(() => setCameraClosed(true));
+          let active = stream;
+          if (facingRef.current !== opening) {
+            const adopted = await adoptFacing(facingRef.current, opening, stream, (constraints) =>
+              navigator.mediaDevices.getUserMedia(constraints),
+            );
+            if (stopped || !alive.current) {
+              for (const track of adopted.stream.getTracks()) track.stop();
+              return;
+            }
+            active = adopted.stream;
+          }
+          streamRef.current = active;
+          if (video) {
+            video.srcObject = active;
+            void video.play().then(() => {
+              if (!stopped) setCameraReady(true);
+            }).catch(() => setCameraClosed(true));
+          }
+          void navigator.mediaDevices.enumerateDevices().then((devices) => {
+            if (stopped) return;
+            setCameraCount(devices.filter((device) => device.kind === "videoinput").length);
+          }).catch(() => undefined);
+        })
+        .catch(() => setCameraClosed(true));
+    }
+    openCameraRef.current = openCamera;
+    void (async () => {
+      let perm: "granted" | "prompt" | "denied" | null = null;
+      try {
+        const status = await navigator.permissions?.query({ name: "camera" as PermissionName });
+        const state = status?.state;
+        perm = state === "granted" || state === "prompt" || state === "denied" ? state : null;
+      } catch {
+        perm = null;
+      }
+      if (stopped) return;
+      const gate = cameraStart(perm);
+      if (gate === "closed") {
+        setCameraClosed(true);
+        return;
+      }
+      if (gate === "auto") openCamera();
+    })();
     return () => {
       stopped = true;
       alive.current = false;
+      openCameraRef.current = null;
       for (const track of streamRef.current?.getTracks() ?? []) track.stop();
     };
   }, []);
@@ -266,7 +279,7 @@ export function LiveCamera({
     if (phase !== "seed" || facedSeed.current) return;
     facedSeed.current = true;
     const stream = streamRef.current;
-    if (!stream || facingRef.current === "environment") {
+    if (!stream || facingRef.current === "environment" || stream.getVideoTracks()[0]?.getSettings().facingMode === "environment") {
       facingRef.current = "environment";
       rememberFacing("environment");
       setFacing("environment");
@@ -707,7 +720,7 @@ export function LiveCamera({
         });
         const late = slug ? seedBookPath(saveFor.id, saveFor.slug, slug) : null;
         if (late) {
-          window.location.assign(late + "?seeded=1");
+          router.push(late + "?seeded=1");
           return;
         }
         setNote("The book did not save.");
@@ -739,7 +752,7 @@ export function LiveCamera({
         params.set("lat", String(place.lat));
         params.set("lng", String(place.lng));
       }
-      window.location.assign(next + "?" + params.toString());
+      router.push(next + "?" + params.toString());
     } catch {
       setNote("The book did not save.");
       setPhase("seed");
@@ -810,9 +823,9 @@ export function LiveCamera({
           <SkeletonCards />
         </div>
       ) : null}
-      <a className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back">
+      <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back">
         ←
-      </a>
+      </Link>
       {phase === "camera" ? (
         <button type="button" className="seed-open" onClick={() => void openPicker()}>
           {t(lang, "seed.shop")}
@@ -895,7 +908,18 @@ export function LiveCamera({
               : "absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3"
           }
         >
-          {cameraClosed ? null : <RadarButton label="Take a photo" onClick={() => void shoot()} />}
+          {cameraClosed ? null : (
+            <RadarButton
+              label="Take a photo"
+              onClick={() => {
+                if (!streamRef.current) {
+                  openCameraRef.current?.();
+                  return;
+                }
+                void shoot();
+              }}
+            />
+          )}
           <button
             type="button"
             className="inline-flex min-h-12 items-center justify-center rounded-md border border-accent bg-transparent px-4 text-sm font-semibold text-accent"

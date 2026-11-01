@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { AttributionControl, Map, Marker, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
-import { t, type CopyKey } from "@/lib/copy";
+import { t } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
 import { pickLanguage } from "@/lib/i18n/viewer";
 import { GoNowSheet } from "./GoNowSheet";
@@ -14,7 +15,8 @@ import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
 import { DEMO_CENTER, FIXTURE_SHOPS, shopBySlug, type FixtureShop } from "@/lib/fixtures/shops";
 import { phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, type LatLng } from "@/lib/geo";
-import { locate, needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
+import { getFix } from "@/lib/geo/fix-cache";
+import { needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
 import { applyDarkOverrides, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import { newestLivePost, pinSheetContent, showOpenBook } from "@/lib/map/pin-sheet";
 import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
@@ -497,38 +499,30 @@ export function ProxMap({
     };
   }, [userPoint, webgl]);
 
-  function failureKey(status: LocateResult["status"]): CopyKey {
-    if (status === "denied") return "loc.denied";
-    if (status === "timeout") return "loc.timeout";
-    if (status === "insecure") return "loc.insecure";
-    if (status === "no_api") return "loc.noApi";
-    return "loc.unavailable";
-  }
-
   async function useMyLocation() {
     setLocBusy(true);
     setLocProblem(false);
     setLocMessage(t("en", "loc.finding"));
     try {
-      const result = await locate();
-      setLocStatus(result.status);
-      if (result.status !== "ok") {
+      const point = await getFix({ userAction: true });
+      setLocStatus(point ? "ok" : "unavailable");
+      if (!point) {
         setLocProblem(true);
-        setLocMessage(t("en", failureKey(result.status)));
+        setLocMessage(t("en", "loc.unavailable"));
         return;
       }
-      if (nearestShopMeters(result.point, shops) > FAR_METERS) {
-        setUserPoint(result.point);
-        setWalkOrigin(result.point);
+      if (nearestShopMeters(point, shops) > FAR_METERS) {
+        setUserPoint(point);
+        setWalkOrigin(point);
         setLocProblem(false);
         setLocMessage(t("en", "loc.far"));
         return;
       }
-      setUserPoint(result.point);
-      setWalkOrigin(result.point);
+      setUserPoint(point);
+      setWalkOrigin(point);
       setLocProblem(false);
       setLocMessage(t("en", "loc.deals"));
-      mapRef.current?.flyTo({ center: [result.point.lng, result.point.lat], essential: true });
+      mapRef.current?.flyTo({ center: [point.lng, point.lat], essential: true });
     } catch {
       setLocStatus("unavailable");
       setLocProblem(true);
@@ -721,14 +715,14 @@ export function ProxMap({
             {t("en", "post.go")}
           </a>
           {showOpenBook(bookPages) ? (
-            <a className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
+            <Link className={"mt-2 " + secondaryLink} href={sheet.bookHref}>
               {t(sheetLang, "sheet.openBook")}
-            </a>
+            </Link>
           ) : null}
           {sheet.showBuild ? (
-            <a className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
+            <Link className={"mt-2 " + secondaryLink} href={sheet.buildHref}>
               {t("en", "book.build")}
-            </a>
+            </Link>
           ) : null}
           {bookPages === 0 ? (
             <p className="mt-2 text-label text-fg-muted">{t(sheetLang, "book.noneYet")}</p>

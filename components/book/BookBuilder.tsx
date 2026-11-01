@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, hasDemoSessionCookie } from "@/lib/demo/zone";
-import { locate } from "@/lib/geo/locate";
+import { getFix } from "@/lib/geo/fix-cache";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/client";
 import { PinDrop } from "@/components/camera/PinDrop";
@@ -67,6 +68,7 @@ export function BookBuilder({
   lat: number | null;
   lng: number | null;
 }) {
+  const router = useRouter();
   const pointRef = useRef<{ lat: number; lng: number } | null>(null);
   const [gate, setGate] = useState<Gate>("checking");
   const [attempt, setAttempt] = useState(0);
@@ -106,9 +108,8 @@ export function BookBuilder({
         setGate(atThisShop(stand, shop, true));
         return;
       }
-      const located = await locate();
+      const here = await getFix({ userAction: false });
       if (cancel) return;
-      const here = located.status === "ok" ? located.point : null;
       pointRef.current = here;
       setGate(atThisShop(here, shop));
     })();
@@ -129,10 +130,10 @@ export function BookBuilder({
     else if (step === "hours") setStep("review");
   }
 
-  async function addUploads(list: FileList | null) {
-    if (!list || step === "review") return;
+  async function addUploads(list: readonly File[]) {
+    if (list.length === 0 || step === "review") return;
     const files: File[] = [];
-    for (const file of Array.from(list)) {
+    for (const file of list) {
       try {
         const jpeg = await resizeToJpeg(file);
         files.push(new File([jpeg], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }));
@@ -175,7 +176,7 @@ export function BookBuilder({
           params.set("lat", String(here.lat));
           params.set("lng", String(here.lng));
         }
-        window.location.assign("/book/" + encodeURIComponent(slug) + "?" + params.toString());
+        router.push("/book/" + encodeURIComponent(slug) + "?" + params.toString());
         return;
       }
       setNote(t("en", bookErrorKey(result.error) as CopyKey));
@@ -213,6 +214,20 @@ export function BookBuilder({
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{name}</h1>
         <p className="text-body text-fg">{t("en", "snap.where")}</p>
+        <button
+          type="button"
+          className={primary}
+          onClick={() => {
+            void (async () => {
+              const here = await getFix({ userAction: true });
+              if (!here) return;
+              pointRef.current = here;
+              setGate(atThisShop(here, shopPoint));
+            })();
+          }}
+        >
+          {t("en", "loc.ask")}
+        </button>
         {shopPoint ? (
           <button
             type="button"
@@ -275,7 +290,7 @@ export function BookBuilder({
               multiple
               className="sr-only"
               onChange={(event) => {
-                const files = event.target.files;
+                const files = Array.from(event.target.files ?? []);
                 event.target.value = "";
                 void addUploads(files);
               }}
