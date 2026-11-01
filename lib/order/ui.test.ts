@@ -82,6 +82,7 @@ describe("clear order arming", () => {
     expect(nextClearState("idle", "tap")).toEqual({ state: "armed", action: "arm" });
     expect(nextClearState("armed", "tap")).toEqual({ state: "idle", action: "clear" });
     expect(nextClearState("armed", "timeout")).toEqual({ state: "idle", action: "idle" });
+    expect(nextClearState("armed", "close")).toEqual({ state: "idle", action: "idle" });
   });
 });
 

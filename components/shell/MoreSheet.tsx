@@ -4,13 +4,18 @@ import { useState, type ReactNode } from "react";
 
 export function MoreSheet({
   label,
+  onClose,
   children,
 }: {
   label: string;
+  onClose?: () => void;
   children: ReactNode | ((close: () => void) => ReactNode);
 }) {
   const [open, setOpen] = useState(false);
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    onClose?.();
+  };
   const body = typeof children === "function" ? children(close) : children;
   return (
     <>
@@ -22,7 +27,7 @@ export function MoreSheet({
         {label}
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/50" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end bg-black/50" onClick={close}>
           <div
             className="flex w-full flex-col gap-3 rounded-t-3xl bg-[#FFF6EE] p-5 text-[#1A120B]"
             onClick={(event) => event.stopPropagation()}

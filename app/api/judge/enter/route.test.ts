@@ -39,4 +39,20 @@ describe("POST /api/judge/enter", () => {
     expect(await response.json()).toEqual({ error: "demo_not_ready" });
     expect(signInWithPassword).not.toHaveBeenCalled();
   });
+
+  it("expires the judge and demo cookies after a real sign-in", async () => {
+    signInWithPassword.mockResolvedValue({ error: null });
+    const response = await POST(
+      new Request("http://localhost/api/judge/enter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "owner@example.com", password: "secret" }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, next: "/map" });
+    const expired = response.headers.getSetCookie().map((row) => row.toLowerCase());
+    expect(expired.some((row) => row.startsWith("prox-judge=") && row.includes("max-age=0"))).toBe(true);
+    expect(expired.some((row) => row.startsWith("prox-demo=") && row.includes("max-age=0"))).toBe(true);
+  });
 });

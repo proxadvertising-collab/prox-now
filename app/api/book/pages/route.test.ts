@@ -654,6 +654,20 @@ describe("POST /api/book/pages", () => {
     expect(await response.json()).toMatchObject({ summary: "Added 1 menu item, 1 skipped as duplicate" });
   });
 
+  it("saves one page when the first batch repeats the same photo", async () => {
+    const file = await jpegFile("seed-dup.jpg");
+    const response = await postSession([
+      { kind: "menu", file },
+      { kind: "menu", file },
+    ]);
+    expect(response.status).toBe(200);
+    expect(state.pages.filter((page) => page.status !== "removed")).toHaveLength(1);
+    const reads = contentCalls(vi.mocked(fetch));
+    expect(reads).toHaveLength(1);
+    const sent = JSON.parse(String(reads[0]?.[1]?.body));
+    expect(sent.input[0].content.filter((part: { type: string }) => part.type === "input_image")).toHaveLength(1);
+  });
+
   it("a judge and a normal user add a page instead of replacing one they do not own", async () => {
     const pageId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
     const liveBook = { status: "live", hours: {}, theme: {}, tagline: null, source_language: null, built_by_model: null };

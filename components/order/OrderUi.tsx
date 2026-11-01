@@ -90,9 +90,9 @@ export type ClearPhase = "idle" | "armed";
 /** First tap arms the clear. Second tap clears. A timeout drops back to idle. */
 export function nextClearState(
   state: ClearPhase,
-  event: "tap" | "timeout",
+  event: "tap" | "timeout" | "close",
 ): { state: ClearPhase; action: "arm" | "clear" | "idle" } {
-  if (event === "timeout") return { state: "idle", action: "idle" };
+  if (event === "timeout" || event === "close") return { state: "idle", action: "idle" };
   if (state === "idle") return { state: "armed", action: "arm" };
   return { state: "idle", action: "clear" };
 }
@@ -243,7 +243,7 @@ export function OrderSheet({
       <button type="button" className="h-14 rounded-2xl bg-accent text-lg font-bold text-accent-ink active:scale-95" onClick={onStaff}>
         {t(lang, "order.staff")}
       </button>
-      <MoreSheet label="More">
+      <MoreSheet label="More" onClose={() => setClearPhase(nextClearState(clearPhase, "close").state)}>
         {(close) => (
           <>
             <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>

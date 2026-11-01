@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import Link from "next/link";
 import { t } from "@/lib/copy";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
@@ -45,9 +46,9 @@ export function ShopList({
         <ul className="mt-3 flex flex-col gap-3">
           {shops.map((shop) => (
             <li key={shop.id} className="rounded-lg bg-surface-1 p-4 shadow-card">
-              <a className="text-heading font-bold text-fg no-underline" href={bookHref(shop.slug)}>
+              <Link className="text-heading font-bold text-fg no-underline" href={bookHref(shop.slug)}>
                 {shop.name}
-              </a>
+              </Link>
               {shop.nameLocal ? <p className="text-label text-fg-muted">{shop.nameLocal}</p> : null}
               {walkLine(origin, shop)}
               <a
@@ -79,9 +80,9 @@ export function ShopList({
               : t("en", "timer.left", { t: formatRemaining(remainingMs(post.expires_at, nowMs)) });
           return (
             <li key={post.id} className="rounded-lg bg-surface-1 p-4 shadow-card">
-              <a className="text-heading font-bold text-fg no-underline" href={bookHref(shop.slug)}>
+              <Link className="text-heading font-bold text-fg no-underline" href={bookHref(shop.slug)}>
                 {shop.name}
-              </a>
+              </Link>
               {shop.nameLocal ? <p className="text-label text-fg-muted">{shop.nameLocal}</p> : null}
               <p className="mt-1 min-h-6 text-label tabular-nums text-fg">{timeLabel}</p>
               {walkLine(origin, shop)}

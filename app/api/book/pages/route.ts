@@ -336,6 +336,25 @@ function emptyBookPass(): BookPass {
   };
 }
 
+/** Later copies of one photo, and copies already in the live book, are skips. */
+function shotDupes(
+  images: readonly { index: number; original: Buffer }[],
+  liveHashes: readonly { id: string; hash: string | null }[],
+): Map<number, { action: "skip"; pageId: string | null }> {
+  const hashes = images.map((image) => photoHash(image.original));
+  const repeated = batchDupes(hashes);
+  const dupeByIndex = new Map<number, { action: "skip"; pageId: string | null }>();
+  images.forEach((image, position) => {
+    if (repeated.has(position)) {
+      dupeByIndex.set(image.index, { action: "skip", pageId: null });
+      return;
+    }
+    const dupe = dupePlan(hashes[position] ?? "", liveHashes);
+    if (dupe) dupeByIndex.set(image.index, dupe);
+  });
+  return dupeByIndex;
+}
+
 async function runPrepared(
   service: SupabaseClient,
   shop: ShopRow,
@@ -400,17 +419,7 @@ async function runPrepared(
     return { ok: false, response: json({ error: "upload_failed" }, 502) };
   }
 
-  const hashes = prepared.map((image) => photoHash(image.original));
-  const repeated = batchDupes(hashes);
-  const dupeByIndex = new Map<number, { action: "skip"; pageId: string | null }>();
-  prepared.forEach((image, position) => {
-    if (repeated.has(position)) {
-      dupeByIndex.set(image.index, { action: "skip", pageId: null });
-      return;
-    }
-    const dupe = dupePlan(hashes[position] ?? "", liveHashes);
-    if (dupe) dupeByIndex.set(image.index, dupe);
-  });
+  const dupeByIndex = shotDupes(prepared, liveHashes);
   const forModel = prepared.filter((image) => !dupeByIndex.has(image.index));
 
   let read: BookPass | null = null;
@@ -802,10 +811,17 @@ async function ingestSeed(
     }
   }
 
+  const dupeByIndex = shotDupes(
+    flat.map((item) => item.image),
+    livePages.map((page) => ({ id: page.id, hash: page.hash })),
+  );
+  const forModel = flat.filter((item) => !dupeByIndex.has(item.image.index));
+
   let read: BookPass | null = null;
   let aiError: string | null = null;
   try {
-    if (flat.length > 0) read = await readSeedBatch(flat.map((item) => item.image));
+    if (forModel.length > 0) read = await readSeedBatch(forModel.map((item) => item.image));
+    else if (dupeByIndex.size > 0) read = emptyBookPass();
   } catch (error) {
     aiError = readFailure(error);
     read = null;
@@ -922,7 +938,10 @@ async function ingestSeed(
       pageByIndex,
       faceCalls: 0,
       brand: group.kind === "logo" ? brand : null,
-      plans: [],
+      plans: (storedByKind.get(group.kind) ?? []).flatMap((page) => {
+        const dupe = dupeByIndex.get(page.index);
+        return dupe ? [{ index: page.index, ...dupe }] : [];
+      }),
       aiError,
     });
   }

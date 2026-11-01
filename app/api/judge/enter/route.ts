@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { DEMO_SESSION_COOKIE } from "../../../../lib/demo/zone";
 import { signInDemoRole } from "../../../../lib/judge/demo";
 import { JUDGE_COOKIE } from "../../../../lib/judge/session";
 import { allowJudge, clientIp } from "../../../../lib/rate/window";
@@ -13,7 +14,10 @@ async function signIn(email: string, password: string) {
   }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return NextResponse.json({ error: "sign_in_failed" }, { status: 401 });
-  return NextResponse.json({ ok: true, next: "/map" });
+  const response = NextResponse.json({ ok: true, next: "/map" });
+  response.cookies.set(JUDGE_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax", httpOnly: false });
+  response.cookies.set(DEMO_SESSION_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax", httpOnly: false });
+  return response;
 }
 
 export async function POST(request: Request) {
