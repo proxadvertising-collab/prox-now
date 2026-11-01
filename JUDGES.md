@@ -24,7 +24,7 @@ A bar at the top shows **Step N of 9**, with **Swap roles** and **End demo**, an
 | 1 Seed | Tap **I'm Judge 1 (shopper)**. You land on `/snap?tour=1&samples=1` and the sample photos load automatically | 3 real photos of a café in the seed tray | Seeding works without a camera; the seed coach (Meta AI) reads each photo |
 | 2 Book | Tap **Done (3)** | "Building your book…", then the shop's book with pages by category | `muse-spark-1.3` reads several photos in one call and builds the pages |
 | 3 Ask | Open **Map**, tap **Ask**, type e.g. "coffee and brunch" | An answer that picks open shops | Live recommendations from Meta AI over open shops |
-| 4 Translate | In the book, tap **Add** on a few items, open **View order**, type a request, tap **Translate** | The note in the shop's language | Meta AI translates item names and the note |
+| 4 Translate | In the book, tap **Add** on a few items, open **View order**, type a request in the note box, then tap outside it; it translates by itself | The note in the shop's language | Meta AI translates item names and the note |
 | 5 Order | Tap **Show to staff** | The counter screen with quantities and the translated note | A tourist can order without speaking Thai |
 | 6 Post (optional) | Snap or upload a photo and post it to the map | A live pin, with faces blurred | Face boxes from Meta AI, blurred on the server |
 

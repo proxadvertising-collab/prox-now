@@ -25,6 +25,14 @@ import {
   type OrderState,
 } from "../../lib/order/store";
 
+/** Leave the staff screen. Drops staff=1 and keeps any other query. */
+export function staffCloseHref(href: string): string {
+  const url = new URL(href, "http://localhost");
+  url.searchParams.delete("staff");
+  const search = url.searchParams.toString();
+  return url.pathname + (search ? "?" + search : "");
+}
+
 export type OrderSheetLine = {
   id: string;
   name: string;
@@ -144,7 +152,8 @@ export function OrderSheet({
   }, [clearPhase]);
   if (staff) {
     return (
-      <div className="fixed inset-0 z-50 overflow-auto bg-bg p-6 text-fg">
+      <div className="fixed inset-0 z-50 flex flex-col bg-bg text-fg">
+        <div className="min-h-0 flex-1 overflow-auto p-6">
         <h1 className="text-4xl font-bold leading-tight">{shopName}</h1>
         <div className="mt-8 flex flex-col gap-6">
           {lines.map((line) => {
@@ -169,9 +178,12 @@ export function OrderSheet({
         ) : failed ? (
           <p className="mt-8 rounded-3xl bg-surface-1 p-5 text-3xl font-bold text-fg shadow-sheet">{note}</p>
         ) : null}
-        <button type="button" className="btn-primary mt-10 h-16" onClick={onDone}>
-          {t(lang, "order.done")}
-        </button>
+        </div>
+        <div className="shrink-0 px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <button type="button" className="btn-primary min-h-11 w-full" onClick={onDone}>
+            Done · เสร็จ
+          </button>
+        </div>
       </div>
     );
   }
@@ -386,7 +398,15 @@ export function OrderClient({
       onQty={(id, qty) => commit(setLineQty(state, id, qty))}
       onClear={() => commit(clearOrder())}
       onStaff={openStaff}
-      onDone={() => setStaff(false)}
+      onDone={() => {
+        setStaff(false);
+        if (typeof window === "undefined") return;
+        const next = staffCloseHref(window.location.href);
+        if (next !== window.location.pathname + window.location.search) {
+          window.history.replaceState(window.history.state, "", next);
+          window.dispatchEvent(new Event("prox-step"));
+        }
+      }}
     />
   );
 }

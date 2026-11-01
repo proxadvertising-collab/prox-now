@@ -112,6 +112,17 @@ export function rememberSeen(seen: readonly string[], step: StepId): string[] {
   return [...seen, step];
 }
 
+/** Ask returned an answer. Leave Step 3 once the judge was on it. */
+export function noteMapAsk(): void {
+  if (typeof window === "undefined") return;
+  const tour = readTour();
+  if (!tour || tour.step !== "ask") return;
+  const step = advanceStep(tour.step, "translate");
+  if (step === tour.step) return;
+  startJudgeTour({ ...tour, step });
+  window.dispatchEvent(new Event("prox-step"));
+}
+
 /** Judge 2 reached a book-thanks card. Move the tour forward once. */
 export function noteBookThanks(): void {
   if (typeof window === "undefined") return;

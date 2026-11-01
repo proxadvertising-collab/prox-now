@@ -10,6 +10,7 @@ import { RadarButton } from "@/components/ui/RadarButton";
 import { t } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
 import { pickLanguage } from "@/lib/i18n/viewer";
+import { mapAskPoint } from "./ask-point";
 import { GoNowSheet } from "./GoNowSheet";
 import { LiveFacts } from "./LiveFacts";
 import { makeDemoPosts } from "@/lib/fixtures/demo-posts";
@@ -594,12 +595,13 @@ export function ProxMap({
         : []
       : posts.filter((post) => post.shopId === selectedShop.id)
     : [];
+  const askAt = mapAskPoint({ fixtures, demoSession, userPoint, origin });
   const sheet = selectedShop
     ? pinSheetContent({
         shop: selectedShop,
         posts: sheetPosts,
         now: tick,
-        origin: fixtures || demoSession ? DEMO_CENTER : userPoint ?? origin,
+        origin: askAt,
         missing: bookMissing,
       })
     : null;
@@ -676,8 +678,8 @@ export function ProxMap({
       </div>
       {askOpen ? (
         <GoNowSheet
-          lat={(userPoint ?? origin)?.lat ?? null}
-          lng={(userPoint ?? origin)?.lng ?? null}
+          lat={askAt?.lat ?? null}
+          lng={askAt?.lng ?? null}
           onClose={() => setAskOpen(false)}
           onShowMap={(place) => {
             setAskOpen(false);

@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { t } from "@/lib/copy";
 import { createClient } from "@/lib/supabase/client";
-import { activeCouponCount, couponPhase, type WalletCoupon } from "@/lib/wallet/coupons";
+import { activeCouponCount, byNewestCoupon, couponPhase, type WalletCoupon } from "@/lib/wallet/coupons";
 
 type ShownCoupon = WalletCoupon & { offer?: string | null };
 
@@ -145,8 +145,9 @@ export function WalletList() {
         if (Object.keys(arrived).length > 0) setFresh(arrived);
       }
       primed.current = true;
-      for (const coupon of next) couponsSeen.current.add(coupon.id);
-      setCoupons(next);
+      const ordered = byNewestCoupon(next);
+      for (const coupon of ordered) couponsSeen.current.add(coupon.id);
+      setCoupons(ordered);
     }
 
     void load();

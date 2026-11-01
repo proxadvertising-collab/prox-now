@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { noteMapAsk } from "@/lib/judge/script";
 
 type Card = {
   shopId: string;
@@ -27,6 +28,37 @@ type SpeechRecognitionLike = {
   onresult: ((event: SpeechResult) => void) | null;
   start: () => void;
 };
+
+export type AskOutcome =
+  | { ok: true; answer: Answer }
+  | { ok: false; note: string };
+
+/** Ask from a known point. A demo session uses the pilot center, so this does not wait for GPS. */
+export async function completeAsk(
+  lat: number | null,
+  lng: number | null,
+  q: string,
+  fetcher: typeof fetch = fetch,
+): Promise<AskOutcome> {
+  if (lat === null || lng === null) return { ok: false, note: "Turn on location, then ask again." };
+  let response: Response;
+  try {
+    response = await fetcher("/api/go-now", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q, lat, lng }),
+    });
+  } catch {
+    return { ok: false, note: "The map could not answer just now." };
+  }
+  const body = (await response.json().catch(() => null)) as (Answer & { error?: string }) | null;
+  if (response.status === 429) return { ok: false, note: "Too many asks this hour." };
+  if (!body || (body.mode !== "picks" && body.mode !== "nearby" && body.mode !== "empty")) {
+    return { ok: false, note: "The map could not answer just now." };
+  }
+  noteMapAsk();
+  return { ok: true, answer: body };
+}
 
 function speechCtor(): (new () => SpeechRecognitionLike) | null {
   if (typeof window === "undefined") return null;
@@ -57,37 +89,17 @@ export function GoNowSheet({
 
   async function ask(text: string) {
     const q = text.trim();
-    if (lat === null || lng === null) {
-      setNote("Turn on location, then ask again.");
-      return;
-    }
     setQuestion(q);
     setBusy(true);
     setNote(null);
-    try {
-      const response = await fetch("/api/go-now", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q, lat, lng }),
-      });
-      const body = (await response.json().catch(() => null)) as (Answer & { error?: string }) | null;
-      if (response.status === 429) {
-        setAnswer(null);
-        setNote("Too many asks this hour.");
-        return;
-      }
-      if (!body || (body.mode !== "picks" && body.mode !== "nearby" && body.mode !== "empty")) {
-        setAnswer(null);
-        setNote("The map could not answer just now.");
-        return;
-      }
-      setAnswer(body);
-    } catch {
+    const result = await completeAsk(lat, lng, q);
+    if (!result.ok) {
       setAnswer(null);
-      setNote("The map could not answer just now.");
-    } finally {
-      setBusy(false);
+      setNote(result.note);
+    } else {
+      setAnswer(result.answer);
     }
+    setBusy(false);
   }
 
   function listen() {

@@ -102,7 +102,7 @@ export function TourChrome() {
   }
 
   return (
-    <div className="px-4 pt-3">
+    <div className="relative z-[60] px-4 pt-3">
       {tour ? (
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-label font-semibold text-fg">Step {card.n} of {EXPLAINERS.length}</p>

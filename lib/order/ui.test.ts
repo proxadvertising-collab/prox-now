@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, nextClearState } from "../../components/order/OrderUi";
+import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, nextClearState, staffCloseHref } from "../../components/order/OrderUi";
 
 const line = {
   id: "tea",
@@ -59,7 +60,14 @@ describe("order page", () => {
     expect(html).toContain("฿80");
     expect(html).toContain("ไม่ใส่มะเขือเทศ");
     expect(html).toContain("bg-surface-1");
-    expect(html).toContain("Done");
+    expect(html).toContain("Done · เสร็จ");
+    expect(html).toContain("min-h-11");
+    expect(html).toContain('type="button"');
+    const chrome = readFileSync(new URL("../../components/judge/TourChrome.tsx", import.meta.url), "utf8");
+    expect(chrome).toContain("relative z-[60]");
+    expect(html).toContain("z-50");
+    expect(staffCloseHref("http://localhost/book/mala/order?staff=1")).toBe("/book/mala/order");
+    expect(staffCloseHref("/book/mala/order?tour=1&staff=1")).toBe("/book/mala/order?tour=1");
   });
 
   it("leaves the address off when the shop has none", () => {
