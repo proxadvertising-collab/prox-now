@@ -101,6 +101,38 @@
   --font-sans: var(--font-latin), var(--font-thai), ui-sans-serif, system-ui, sans-serif;
 }
 
+.maplibregl-marker.prox-pin[data-phase="place"] {
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  height: auto;
+  max-width: 7.5rem;
+  overflow: visible;
+}
+
+.prox-pin[data-phase="place"] .prox-pin__dot {
+  width: 16px;
+  height: 16px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-fg);
+}
+
+.prox-pin__name {
+  display: block;
+  max-width: 7.5rem;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--color-fg);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+  pointer-events: none;
+}
+
 :root {
   color-scheme: dark;
   --duration-fast: 150ms;

@@ -35,14 +35,17 @@ export function createPlacePin(name: string): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "prox-pin";
-  button.dataset.phase = "aging";
+  button.dataset.phase = "place";
   button.setAttribute("aria-label", name);
   const body = document.createElement("span");
   body.className = "prox-pin__body";
   const dot = document.createElement("span");
   dot.className = "prox-pin__dot";
   body.append(dot);
-  button.append(body);
+  const label = document.createElement("span");
+  label.className = "prox-pin__name";
+  label.textContent = name;
+  button.append(body, label);
   return button;
 }
 
