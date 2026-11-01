@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DemoBanner } from "@/components/ui/DemoBanner";
+import { RadarButton } from "@/components/ui/RadarButton";
 import { LocationHelp } from "@/components/ui/LocationHelp";
 import { t, type CopyKey } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, nearestDemoShop } from "@/lib/demo/zone";
@@ -1244,9 +1245,10 @@ export function SnapFlow({
           <Link className={secondary} href={"/map?post=" + encodeURIComponent(posted.id)}>
             {t("en", "post.see")}
           </Link>
-          <a className={primary} href={snapShopHref(chosen.id, chosen.name)}>
-            {t("en", "snap.keepSeeding", { name: chosen.name })}
-          </a>
+          <RadarButton
+            href={snapShopHref(chosen.id, chosen.name)}
+            caption={t("en", "snap.keepSeeding", { name: chosen.name })}
+          />
           <Link className={secondary} href={bookBuildHref(chosen.id)}>
             {t("en", "book.build")}
           </Link>

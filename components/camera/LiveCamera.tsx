@@ -34,7 +34,7 @@ import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { BuildProgress } from "@/components/book/BuildProgress";
 import { DEMO_CAFES, demoShopTarget, judgeSampleSave, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
-import { listenNavShutter, navShutterAction } from "@/lib/snap/navShutter";
+
 import {
   COACH_TIMEOUT_MS,
   canAddShot,
@@ -146,17 +146,6 @@ export function LiveCamera({
   const pendingPick = useRef(false);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
-  const navLive = useRef(false);
-  const navShoot = useRef<() => void>(() => undefined);
-  const navPick = useRef<() => void>(() => undefined);
-
-  useEffect(() => {
-    return listenNavShutter(() => {
-      const action = navShutterAction("/snap", navLive.current);
-      if (action === "shoot") navShoot.current();
-      else if (action === "pick") navPick.current();
-    });
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -458,14 +447,6 @@ export function LiveCamera({
     commitShots([...shotsRef.current, shot]);
     askCoach(shot, previous);
   }
-
-  navLive.current = !cameraClosed && cameraReady && liveFile == null && (phase === "camera" || phase === "seed");
-  navShoot.current = () => {
-    void shoot();
-  };
-  navPick.current = () => {
-    void openPicker();
-  };
 
   async function loadSamples(): Promise<boolean> {
     const fix = (await placeForShot()) ?? fixRef.current;
@@ -811,6 +792,22 @@ export function LiveCamera({
           }
           onRetake={() => setLiveFile(null)}
         />
+        {cameraClosed ? null : (
+          <div className="pointer-events-none fixed bottom-8 left-1/2 z-30 flex -translate-x-1/2">
+            <div className="pointer-events-auto">
+              <RadarButton
+                label="Take a photo"
+                onClick={() => {
+                  if (!streamRef.current) {
+                    openCameraRef.current?.();
+                    return;
+                  }
+                  void shoot();
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

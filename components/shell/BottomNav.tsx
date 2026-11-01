@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { RadarButton } from "@/components/ui/RadarButton";
 import { t, type CopyKey } from "@/lib/copy";
-import { navSnapMode, pressNavShutter } from "@/lib/snap/navShutter";
+import { navRadar } from "@/lib/snap/navShutter";
 import { OrderBar, useOrderSnap } from "../order/OrderUi";
 
 type SlotIcon = "map" | "wallet" | "snap" | "shop" | "you";
@@ -73,36 +74,6 @@ function Glyph({ name }: { name: SlotIcon }) {
   );
 }
 
-function SnapCapture({
-  current,
-  raised,
-  shutter,
-}: {
-  current: boolean;
-  raised?: boolean;
-  shutter: boolean;
-}) {
-  const className = "nav-cam" + (raised ? " nav-cam-raised" : "");
-  if (shutter) {
-    return (
-      <button
-        type="button"
-        aria-label="Take a photo"
-        aria-current={current ? "page" : undefined}
-        className={className}
-        onClick={() => pressNavShutter()}
-      >
-        <Glyph name="snap" />
-      </button>
-    );
-  }
-  return (
-    <Link href="/snap" aria-label="Take a photo" aria-current={current ? "page" : undefined} className={className}>
-      <Glyph name="snap" />
-    </Link>
-  );
-}
-
 function ItemLink({
   href,
   label,
@@ -130,20 +101,21 @@ function ItemLink({
 
 export function BottomNav() {
   const pathname = usePathname() ?? "";
-  const shutter = navSnapMode(pathname) === "shutter";
   const onBook = pathname.startsWith("/book");
   const order = useOrderSnap(pathname);
+  const radar = navRadar(pathname, onBook, order?.count ?? 0);
   const rowLink =
     "flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-md px-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
   return (
     <>
-      <nav className="hidden min-h-11 items-center gap-2 border-b border-surface-2 bg-transparent px-4 md:flex" aria-label="Primary">
+      <nav className="relative hidden min-h-11 items-center gap-2 border-b border-surface-2 bg-transparent px-4 md:flex" aria-label="Primary">
         {SLOTS.map((slot) => {
           const current = isCurrent(pathname, slot.href);
           if (slot.icon === "snap") {
+            if (!radar) return null;
             return (
-              <SnapCapture key={slot.href} current={current} shutter={shutter} />
+              <RadarButton key={slot.href} href="/snap" size={40} className="nav-radar" label="Take a photo" current={current} />
             );
           }
           return (
@@ -179,9 +151,9 @@ export function BottomNav() {
               />
             );
           })}
-          {onBook || (order && order.count > 0) ? null : (
-            <SnapCapture raised current={isCurrent(pathname, "/snap")} shutter={shutter} />
-          )}
+          {radar ? (
+            <RadarButton href="/snap" size={64} className="nav-radar" label="Take a photo" current={isCurrent(pathname, "/snap")} />
+          ) : null}
         </div>
       </nav>
       {order && order.count > 0 ? (

@@ -85,11 +85,7 @@ export default async function BookPage({
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{t("en", "sheet.openBook")}</h1>
         <p className="text-body text-fg">{t("en", "book.empty")}</p>
-        <BookAddPhotos
-          shopId={key}
-          shop={null}
-          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
-        />
+        <BookAddPhotos shopId={key} name={key} shop={null} />
         {actions(key, key)}
       </div>
     );
@@ -131,11 +127,7 @@ export default async function BookPage({
         <div className="flex flex-col gap-3">
           <h1 className="text-title font-bold text-fg">{name}</h1>
           <p className="text-body text-fg">{t("en", "book.empty")}</p>
-          <BookAddPhotos
-            shopId={shop?.id ?? key}
-            shop={point}
-            className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
-          />
+          <BookAddPhotos shopId={shop?.id ?? key} name={name} shop={point} />
           {actions(shop?.id ?? key, view?.slug ?? shop?.slug ?? key)}
         </div>
       );
@@ -267,11 +259,7 @@ export default async function BookPage({
           })}
         </BookSwiper>
         </div>
-        <BookAddPhotos
-          shopId={shop?.id ?? key}
-          shop={point}
-          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
-        />
+        <BookAddPhotos shopId={shop?.id ?? key} name={name} shop={point} />
         {actions(shop?.id ?? key, view.slug, surface.heroUrl ?? view.pages.find((page) => page.imageUrl)?.imageUrl ?? null, claimMode)}
       </div>
     );
@@ -280,11 +268,7 @@ export default async function BookPage({
     return (
       <div className="flex flex-col gap-3">
         <p className="text-body text-fg">{t("en", "book.empty")}</p>
-        <BookAddPhotos
-          shopId={key}
-          shop={null}
-          className="inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink"
-        />
+        <BookAddPhotos shopId={key} name={key} shop={null} />
         {actions(key, key)}
       </div>
     );

@@ -1,38 +1,32 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listenNavShutter, navShutterAction, pressNavShutter } from "./navShutter";
+import { navRadar } from "./navShutter";
 
-describe("nav shutter", () => {
-  it("links away from /snap, shoots when the camera is open, and picks when it is closed", () => {
-    expect(navShutterAction("/map", true)).toBe("link");
-    expect(navShutterAction("/book/cafe", false)).toBe("link");
-    expect(navShutterAction("/snap", true)).toBe("shoot");
-    expect(navShutterAction("/snap", false)).toBe("pick");
-    expect(navShutterAction("/snap?seed=1", false)).toBe("pick");
+describe("nav radar", () => {
+  it("hides on the camera, the book, and while an order is open", () => {
+    expect(navRadar("/map", false, 0)).toBe(true);
+    expect(navRadar("/wallet", false, 0)).toBe(true);
+    expect(navRadar("/snap", false, 0)).toBe(false);
+    expect(navRadar("/snap/extra", false, 0)).toBe(false);
+    expect(navRadar("/snap?seed=1", false, 0)).toBe(false);
+    expect(navRadar("/book/cafe", false, 0)).toBe(false);
+    expect(navRadar("/map", true, 0)).toBe(false);
+    expect(navRadar("/me", false, 2)).toBe(false);
   });
 
-  it("fires the live camera listener and ignores a press when none is open", () => {
-    const seen: string[] = [];
-    expect(pressNavShutter()).toBe(false);
-    const stop = listenNavShutter(() => {
-      seen.push(navShutterAction("/snap", seen.length === 0));
-    });
-    expect(pressNavShutter()).toBe(true);
-    expect(pressNavShutter()).toBe(true);
-    expect(seen).toEqual(["shoot", "pick"]);
-    stop();
-    expect(pressNavShutter()).toBe(false);
-  });
-
-  it("wires the nav button to the camera listener", () => {
+  it("links the nav radar and leaves the camera shutter on the camera screen", () => {
     const nav = readFileSync(resolve(process.cwd(), "components/shell/BottomNav.tsx"), "utf8");
     const camera = readFileSync(resolve(process.cwd(), "components/camera/LiveCamera.tsx"), "utf8");
-    expect(nav).toContain("navSnapMode");
-    expect(nav).toContain("pressNavShutter()");
-    expect(camera).toContain("listenNavShutter");
-    expect(camera).toContain("navShutterAction");
+    expect(nav).toContain("navRadar");
+    expect(nav).toContain('href="/snap"');
+    expect(nav).toContain("size={64}");
+    expect(nav).toContain("size={40}");
+    expect(nav).not.toContain("pressNavShutter");
+    expect(nav).not.toContain("SnapCapture");
+    expect(camera).not.toContain("listenNavShutter");
+    expect(camera).not.toContain("navShutterAction");
+    expect(camera).toContain("RadarButton");
     expect(camera).toContain("void shoot()");
-    expect(camera).toContain("void openPicker()");
   });
 });

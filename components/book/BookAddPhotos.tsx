@@ -1,18 +1,22 @@
 "use client";
 
+import { RadarButton } from "@/components/ui/RadarButton";
 import { t } from "@/lib/copy";
+import { snapSeedHref } from "@/lib/snap/target";
 
 export function BookAddPhotos({
   shopId,
-  className,
+  name = "",
 }: {
   shopId: string;
+  name?: string;
   shop: { lat: number; lng: number } | null;
-  className: string;
 }) {
+  const href = snapSeedHref(shopId, name);
   return (
-    <a className={className} href={"/snap?seed=1&shop=" + encodeURIComponent(shopId)}>
-      {t("en", "book.build")}
-    </a>
+    <RadarButton
+      href={href.startsWith("/snap?seed=1") ? href : "/snap?seed=1"}
+      caption={t("en", "book.build")}
+    />
   );
 }

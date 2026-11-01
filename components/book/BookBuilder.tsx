@@ -8,6 +8,7 @@ import { getFix } from "@/lib/geo/fix-cache";
 import { hasShopEnv } from "@/lib/shops/source";
 import { createClient } from "@/lib/supabase/client";
 import { PinDrop } from "@/components/camera/PinDrop";
+import { RadarButton } from "@/components/ui/RadarButton";
 import {
   BOOK_CAPTURE_STEPS,
   addBookShots,
@@ -22,6 +23,7 @@ import {
   type BookTile,
 } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
+import { snapSeedHref } from "@/lib/snap/target";
 import { frameSaveKey } from "@/lib/snap/where";
 
 type Gate = "checking" | "ok" | "need_location" | "too_far" | "unknown_shop";
@@ -279,9 +281,14 @@ export function BookBuilder({
       ) : null}
       {capture ? (
         <>
-          <a className={primary} href={"/snap?seed=1&shop=" + encodeURIComponent(slug)}>
-            {capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
-          </a>
+          <RadarButton
+            href={
+              snapSeedHref(shopId, name).startsWith("/snap?seed=1")
+                ? snapSeedHref(shopId, name)
+                : "/snap?seed=1"
+            }
+            caption={capture === "menu" && menuCount > 0 ? t("en", "book.another") : t("en", "snap.take")}
+          />
           <label className={upload}>
             {t("en", "snap.upload")}
             <input

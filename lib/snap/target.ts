@@ -4,6 +4,10 @@ export function snapShopHref(id: string, name: string): string {
   return "/snap?shop=" + encodeURIComponent(id) + "&name=" + encodeURIComponent(name);
 }
 
+export function snapSeedHref(id: string, name: string): string {
+  return "/snap?seed=1&shop=" + encodeURIComponent(id) + "&name=" + encodeURIComponent(name);
+}
+
 export function readSnapShop(query: {
   shop?: string | string[] | null;
   name?: string | string[] | null;

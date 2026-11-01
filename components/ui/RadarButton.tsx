@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState, type CSSProperties, type PointerEvent } from "react";
 
 const SWEEP = "M0 0L0-78A78 78 0 0 0-55.2-55.2Z";
@@ -14,6 +15,7 @@ export function RadarButton({
   style,
   size = 68,
   current = false,
+  caption,
 }: {
   label?: string;
   onClick?: () => void;
@@ -22,6 +24,7 @@ export function RadarButton({
   style?: CSSProperties;
   size?: number;
   current?: boolean;
+  caption?: string;
 }) {
   const filterId = "radar-glow-" + useId().replace(/:/g, "");
   const [fast, setFast] = useState(false);
@@ -66,10 +69,11 @@ export function RadarButton({
       </svg>
     </span>
   );
-  const box = "inline-flex items-center justify-center bg-transparent p-0 " + className;
+  const box = "inline-flex flex-col items-center justify-center gap-2 bg-transparent p-0 " + className;
+  const words = caption ? <span className="text-label font-semibold text-fg">{caption}</span> : null;
   if (href) {
     return (
-      <a
+      <Link
         href={href}
         aria-label={label}
         aria-current={current ? "page" : undefined}
@@ -78,12 +82,14 @@ export function RadarButton({
         onPointerDown={pressed}
       >
         {mark}
-      </a>
+        {words}
+      </Link>
     );
   }
   return (
     <button type="button" aria-label={label} className={box} style={style} onClick={onClick} onPointerDown={pressed}>
       {mark}
+      {words}
     </button>
   );
 }

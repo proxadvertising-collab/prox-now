@@ -722,27 +722,13 @@
 .nav-item { color: #8A7A6D; }
 .nav-item[aria-current="page"] { color: var(--color-accent); }
 .nav-label { font-size: 11px; font-weight: 600; line-height: 1; }
-.nav-cam {
-  display: inline-flex;
-  width: 64px;
-  height: 64px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--color-accent);
-  color: #1A120B;
-  text-decoration: none;
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.45), 0 8px 10px -6px rgb(0 0 0 / 0.45);
-}
-.nav-cam:active { transform: scale(0.9); }
-.nav-cam-raised {
+.nav-radar {
   position: absolute;
   left: 50%;
   z-index: 10;
   bottom: calc(100% - 32px);
   transform: translateX(-50%);
 }
-.nav-cam-raised:active { transform: translateX(-50%) scale(0.9); }
 .map-ask {
   display: inline-flex;
   align-items: center;

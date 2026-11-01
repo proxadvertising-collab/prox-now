@@ -6,6 +6,7 @@ import { AttributionControl, Map, Marker, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./pins.css";
 import { LocationHelp } from "@/components/ui/LocationHelp";
+import { RadarButton } from "@/components/ui/RadarButton";
 import { t } from "@/lib/copy";
 import { DEMO_ZONE_FALLBACK, demoSessionCookie, showExploreChip } from "@/lib/demo/zone";
 import { pickLanguage } from "@/lib/i18n/viewer";
@@ -727,16 +728,12 @@ export function ProxMap({
           {bookPages === 0 ? (
             <p className="mt-2 text-label text-fg-muted">{t(sheetLang, "book.noneYet")}</p>
           ) : null}
-          <a
-            className={
-              sheet.prompt === "first"
-                ? "mt-3 " + linkClass
-                : "mt-2 inline-flex min-h-11 items-center text-label font-semibold text-fg"
-            }
+          <RadarButton
+            className="mt-3"
             href={sheet.cameraHref}
-          >
-            {sheet.prompt === "first" ? t("en", "sheet.first", { name: sheet.name }) : t("en", "sheet.addYours")}
-          </a>
+            size={56}
+            caption={sheet.prompt === "first" ? t("en", "sheet.first", { name: sheet.name }) : t("en", "sheet.addYours")}
+          />
           {!fixtures ? (
             <button
               type="button"
