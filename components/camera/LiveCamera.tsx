@@ -843,7 +843,7 @@ export function LiveCamera({
 
   return (
     <>
-    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))]" + (liveFile ? " pointer-events-none" : "")}>
+    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-0" + (liveFile ? " pointer-events-none" : "")}>
       <video
         ref={videoRef}
         className={(liveFile ? "pointer-events-none opacity-0 " : "") + previewClass(facing)}

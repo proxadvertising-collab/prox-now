@@ -4,7 +4,7 @@ import sharp from "sharp";
 export const SURFACE = "#181513";
 
 /** Prox accent from app/globals.css. Used when the photo has no strong colour. */
-export const PROX_ACCENT = "#FF8A3D";
+export const PROX_ACCENT = "#FF7A35";
 
 export const INK_LIGHT = "#F7F0E8";
 
@@ -142,7 +142,7 @@ export async function paletteFromImage(bytes: Buffer): Promise<BookTheme> {
 }
 
 /** Every book card sits on the same dark surface; the brand colour is only kept for text when it reads on it. */
-export const BOOK_CARD_BG = "#1E1611";
+export const BOOK_CARD_BG = "#12121C";
 export const BOOK_CARD_TEXT = "#FFF4E8";
 
 export function bookCardColors(accent: string | null | undefined, ink?: string | null): { ink: string; accent: string } {

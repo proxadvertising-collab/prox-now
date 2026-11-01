@@ -613,6 +613,8 @@
   flex-direction: column;
   gap: 0.5rem;
   overflow: auto;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
 }
 .seed-name {
   position: absolute;

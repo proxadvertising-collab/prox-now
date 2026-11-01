@@ -521,7 +521,7 @@ describe("POST /api/book/pages", () => {
     const response = await postSession([{ kind: "logo" }, { kind: "menu" }, { kind: "hours" }]);
     expect(response.status).toBe(200);
     expect(state.pages.map((page) => page.kind)).toEqual(["logo", "menu", "hours"]);
-    expect(state.book?.theme).toMatchObject({ mood: "bold", accent: "#FF8A3D" });
+    expect(state.book?.theme).toMatchObject({ mood: "bold", accent: "#FF7A35" });
   });
 
   it("a book upload with a shop id never calls the matcher or creates a shop", async () => {

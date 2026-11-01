@@ -245,10 +245,15 @@
 
 .prox-map .maplibregl-ctrl-attrib {
   font-size: 10px;
-  background: rgb(0 0 0 / 0.4);
+  background: rgb(11 11 18 / .7);
+  color: var(--color-fg-muted);
   border-radius: 9999px;
   padding: 0 0.5rem;
   opacity: 1;
+}
+.prox-map .maplibregl-ctrl-attrib a,
+.prox-map .maplibregl-ctrl-attrib button {
+  color: var(--color-fg-muted);
 }
 .prox-map .maplibregl-ctrl-bottom-left {
   bottom: 10.5rem;

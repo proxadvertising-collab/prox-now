@@ -17,7 +17,7 @@ export type PaintOverride = {
   value: string;
 };
 
-const LABEL = { fill: "#9E948A", halo: "#0E0C0B" };
+const LABEL = { fill: "#B9B3C7", halo: "#0B0B12" };
 
 function labelPaint(id: string): PaintOverride[] {
   return [
@@ -28,18 +28,18 @@ function labelPaint(id: string): PaintOverride[] {
 
 /** Warm-up table from the design doc. Missing layer ids are skipped at runtime. */
 export const DARK_OVERRIDES: PaintOverride[] = [
-  { id: "background", property: "background-color", value: "#0E0C0B" },
+  { id: "background", property: "background-color", value: "#0B0B12" },
   { id: "water", property: "fill-color", value: "#12171B" },
   { id: "waterway", property: "line-color", value: "#12171B" },
   { id: "landuse_park", property: "fill-color", value: "#14170F" },
   { id: "landcover_wood", property: "fill-color", value: "#14170F" },
-  { id: "landuse_residential", property: "fill-color", value: "#14100D" },
-  { id: "building", property: "fill-color", value: "#171311" },
-  { id: "building", property: "fill-outline-color", value: "#211D1A" },
-  { id: "highway_path", property: "line-color", value: "#2B2623" },
-  { id: "highway_minor", property: "line-color", value: "#2B2623" },
-  { id: "highway_major_inner", property: "line-color", value: "#3A332E" },
-  { id: "highway_major_subtle", property: "line-color", value: "#3A332E" },
+  { id: "landuse_residential", property: "fill-color", value: "#12121C" },
+  { id: "building", property: "fill-color", value: "#181824" },
+  { id: "building", property: "fill-outline-color", value: "#262636" },
+  { id: "highway_path", property: "line-color", value: "#262636" },
+  { id: "highway_minor", property: "line-color", value: "#262636" },
+  { id: "highway_major_inner", property: "line-color", value: "#3A3A52" },
+  { id: "highway_major_subtle", property: "line-color", value: "#3A3A52" },
   ...labelPaint("highway_name_other"),
   ...labelPaint("highway_name_motorway"),
   ...labelPaint("place_other"),

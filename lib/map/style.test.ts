@@ -30,7 +30,7 @@ describe("map style", () => {
       (row) => row.id + ":" + row.property + ":" + row.value,
     );
     expect(calls).toEqual(expected);
-    expect(calls).toContain("background:background-color:#0E0C0B");
+    expect(calls).toContain("background:background-color:#0B0B12");
     expect(calls.some((call) => call.startsWith("waterway:"))).toBe(false);
     expect(calls.some((call) => call.startsWith("place_city:"))).toBe(false);
   });
