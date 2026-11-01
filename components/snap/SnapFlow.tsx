@@ -1050,9 +1050,7 @@ export function SnapFlow({
           <p role="status" className="text-body text-fg">
             {t("en", "post.unusable")}
           </p>
-          <button type="button" className={primary} onClick={() => onRetake?.()}>
-            {t("en", "snap.take")}
-          </button>
+          <RadarButton onClick={() => onRetake?.()} size={56} caption={t("en", "snap.take")} />
         </div>
       ) : null}
 
