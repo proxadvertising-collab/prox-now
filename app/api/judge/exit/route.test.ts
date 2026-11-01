@@ -89,14 +89,14 @@ describe("POST /api/judge/exit", () => {
     rpc.mockResolvedValue({ data: null, error: { message: "not_demo" } });
     const refused = await exit("prox-demo=1");
     expect(refused.status).toBe(200);
-    expect(await refused.json()).toEqual({ ok: true, next: "/judge", reset: false });
+    expect(await refused.json()).toEqual({ ok: true, next: "/judge?notReset=1", reset: false });
     expect(signOut).toHaveBeenCalledOnce();
 
     signOut.mockClear();
     rpc.mockRejectedValue(new Error("storage down"));
     const failed = await exit("prox-judge=owner");
     expect(failed.status).toBe(200);
-    expect(await failed.json()).toEqual({ ok: true, next: "/judge", reset: false });
+    expect(await failed.json()).toEqual({ ok: true, next: "/judge?notReset=1", reset: false });
     expect(signOut).toHaveBeenCalledOnce();
 
     signOut.mockClear();
@@ -104,7 +104,7 @@ describe("POST /api/judge/exit", () => {
     allowReset.mockResolvedValue(false);
     const limited = await exit("prox-judge=explorer");
     expect(limited.status).toBe(200);
-    expect(await limited.json()).toEqual({ ok: true, next: "/judge", reset: false });
+    expect(await limited.json()).toEqual({ ok: true, next: "/judge?notReset=1", reset: false });
     expect(rpc).not.toHaveBeenCalled();
     expect(signOut).toHaveBeenCalledOnce();
     const rows = expired(limited);

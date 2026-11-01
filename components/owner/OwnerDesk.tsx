@@ -5,7 +5,13 @@ import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { t } from "@/lib/copy";
 import { noteBookThanks } from "@/lib/judge/script";
+import { hasJudgeCookie } from "@/lib/judge/session";
 import { readOwnerShops, type OwnerShop } from "@/lib/owner/shops";
+
+/** Judge tours explain an empty desk. A normal owner keeps the waiting line. */
+export function ownerEmptyKey(judge: boolean): "loop.nothing" | "loop.nothingJudge" {
+  return judge ? "loop.nothingJudge" : "loop.nothing";
+}
 
 /** Verified owners see the coupon desk before their shops. */
 export function ownerDeskOrder(verified: boolean): readonly ("coupons" | "redeem" | "shops" | "hint")[] {
@@ -37,6 +43,7 @@ const danger =
 
 export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] }) {
   const [shops, setShops] = useState<OwnerShop[]>(initialShops);
+  const [judgeDesk, setJudgeDesk] = useState(false);
   const [cards, setCards] = useState<Card[]>([]);
   const [bookThanks, setBookThanks] = useState<BookCard[]>([]);
   const [liveNow, setLiveNow] = useState<Card[]>([]);
@@ -104,6 +111,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
   }
 
   useEffect(() => {
+    setJudgeDesk(hasJudgeCookie(document.cookie));
     void load();
   }, []);
 
@@ -392,7 +400,14 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
         );
       })}
       {!card && bookThanks.length === 0 ? (
-        <EmptyState message={t("en", "loop.nothing")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
+        <EmptyState
+          message={
+            ownerEmptyKey(judgeDesk) === "loop.nothing"
+              ? t("en", "loop.nothing")
+              : t("en", "loop.nothingJudge")
+          }
+          action={{ href: "/map", label: t("en", "empty.openMap") }}
+        />
       ) : card ? (
         <article
           className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"

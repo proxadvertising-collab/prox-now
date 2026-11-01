@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { t } from "../../lib/copy";
-import { OwnerDesk, ownerDeskOrder } from "./OwnerDesk";
+import { OwnerDesk, ownerDeskOrder, ownerEmptyKey } from "./OwnerDesk";
 
 describe("owner desk order", () => {
   it("shows coupons, then redeem, then the shop book when verified", () => {
@@ -42,5 +42,14 @@ describe("owner desk order", () => {
     const link = html.slice(book, html.indexOf("</a>", book));
     expect(link).not.toContain(t("en", "claim.cancel"));
     expect(html).toContain(t("en", "claim.cancel"));
+  });
+
+  it("uses the judge empty line only while the judge cookie is set", () => {
+    expect(ownerEmptyKey(false)).toBe("loop.nothing");
+    expect(t("en", ownerEmptyKey(false))).toBe(t("en", "loop.nothing"));
+    expect(ownerEmptyKey(true)).toBe("loop.nothingJudge");
+    expect(t("en", ownerEmptyKey(true))).toBe(
+      "Nothing yet. Judge 1 builds the book first: tap Swap roles, or Start fresh demo on /judge.",
+    );
   });
 });

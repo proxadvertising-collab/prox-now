@@ -18,6 +18,19 @@ describe("copy", () => {
     }
   });
 
+  it("names the reveal, the missed reset, and the empty judge desk", () => {
+    expect(t("en", "loop.reveal")).toBe("Reveal code");
+    expect(t("th", "loop.reveal")).toBe("เปิดรหัส");
+    expect(t("en", "judge.notReset")).toBe("The demo was not reset. Tap Start fresh demo.");
+    expect(t("th", "judge.notReset")).toBe("เดโมยังไม่ถูกรีเซ็ต แตะเริ่มเดโมใหม่");
+    expect(t("en", "loop.nothingJudge")).toBe(
+      "Nothing yet. Judge 1 builds the book first: tap Swap roles, or Start fresh demo on /judge.",
+    );
+    expect(t("th", "loop.nothingJudge")).toBe(
+      "ยังไม่มีอะไร กรรมการ 1 ทำหนังสือก่อน: แตะสลับบทบาท หรือเริ่มเดโมใหม่ที่ /judge",
+    );
+  });
+
   it("replaces {t} and {name} placeholders", () => {
     expect(t("en", "timer.left", { t: "12m" })).toBe("12m left");
     expect(t("th", "timer.left", { t: "12m" })).toBe("เหลือ 12m");

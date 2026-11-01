@@ -79,9 +79,10 @@ export function TourChrome() {
   }
 
   async function endDemo() {
-    await fetch("/api/judge/exit", { method: "POST" }).catch(() => null);
+    const response = await fetch("/api/judge/exit", { method: "POST" }).catch(() => null);
+    const payload = (await response?.json().catch(() => null)) as { next?: string } | null;
     clearJudgeTour();
-    window.location.assign("/judge");
+    window.location.assign(payload?.next === "/judge?notReset=1" ? "/judge?notReset=1" : "/judge");
   }
 
   async function swap() {

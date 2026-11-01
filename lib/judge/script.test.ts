@@ -12,6 +12,9 @@ describe("judge script", () => {
     expect(EXPLAINERS.find((step) => step.id === "thanks")?.body).toBe(
       "Judge 1 built your book, so you can thank them with a coupon.",
     );
+    expect(EXPLAINERS.find((step) => step.id === "claim")?.body).toBe(
+      "You already own the demo cafés. A real shop claims with a code photo that Meta AI checks.",
+    );
     expect(BOOK_PROGRESS).toContain("about a minute");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");
     expect(DEMO_CAFES.a.name).toBe("Farm to Go (demo)");

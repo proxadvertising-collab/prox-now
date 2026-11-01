@@ -87,19 +87,28 @@ function ScratchCard({
           <p className="text-title font-bold tracking-widest text-fg">{code}</p>
         </div>
       ) : (
-        <canvas
-          ref={foil}
-          className="absolute inset-0 h-full w-full touch-none"
-          aria-label={t("en", "loop.scratch")}
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            scratch(event.clientX, event.clientY);
-          }}
-          onPointerMove={(event) => {
-            if (event.buttons === 0 && event.pointerType === "mouse") return;
-            scratch(event.clientX, event.clientY);
-          }}
-        />
+        <>
+          <canvas
+            ref={foil}
+            className="absolute inset-0 h-full w-full touch-none"
+            aria-label={t("en", "loop.scratch")}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              scratch(event.clientX, event.clientY);
+            }}
+            onPointerMove={(event) => {
+              if (event.buttons === 0 && event.pointerType === "mouse") return;
+              scratch(event.clientX, event.clientY);
+            }}
+          />
+          <button
+            type="button"
+            className="absolute inset-x-3 bottom-3 z-10 min-h-11 text-label font-semibold text-accent"
+            onClick={() => onReveal()}
+          >
+            {t("en", "loop.reveal")}
+          </button>
+        </>
       )}
     </div>
   );

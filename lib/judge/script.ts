@@ -31,7 +31,7 @@ export const EXPLAINERS: readonly Explainer[] = [
   { id: "translate", n: 4, title: "Translate", body: "The order is translated for the counter. Staff see the note in the shop's language, not the shopper's." },
   { id: "order", n: 5, title: "Order", body: "Items are on one order. Show to staff is the screen the counter reads, with quantities and the translated note." },
   { id: "post", n: 6, title: "Post", body: "A snap puts the shop on the live map. On a demo shop the owner can Keep it now, without waiting out the two-hour life." },
-  { id: "claim", n: 7, title: "Claim", body: "The owner claims the demo café without a paper code. A real shop still needs the code and a matching photo." },
+  { id: "claim", n: 7, title: "Claim", body: "You already own the demo cafés. A real shop claims with a code photo that Meta AI checks." },
   { id: "thanks", n: 8, title: "Thank them", body: "Judge 1 built your book, so you can thank them with a coupon." },
   { id: "coupon", n: 9, title: "Coupon", body: "Keep sends a coupon to the shopper who posted. They scratch it in the wallet, and the owner can redeem it at the till." },
 ];

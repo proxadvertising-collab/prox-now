@@ -1,5 +1,13 @@
 import { connection } from "next/server";
+import { clientIp, take } from "../../../lib/rate/window";
 import { createClient } from "../../../lib/supabase/server";
+
+const PING_IP_LIMIT = 10;
+const pingHits = new Map<string, { start: number; count: number }>();
+
+export function resetMetaPingHits(): void {
+  pingHits.clear();
+}
 
 const META_URL = "https://api.meta.ai/v1/responses";
 const META_MODEL = "muse-spark-1.3";
@@ -56,7 +64,7 @@ async function demoOwnerSession(): Promise<boolean> {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request = new Request("http://localhost/api/meta-ping")) {
   await connection();
   if (process.env.NODE_ENV !== "development" && !(await demoOwnerSession())) {
     return new Response(null, { status: 404 });
@@ -67,6 +75,9 @@ export async function GET() {
       { ok: false, error: "META_API_KEY not set" },
       { status: 503 },
     );
+  }
+  if (!take(pingHits, [{ key: "ip:" + clientIp(request), limit: PING_IP_LIMIT }], Date.now())) {
+    return Response.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const started = Date.now();

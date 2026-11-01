@@ -16,7 +16,7 @@ vi.mock("../../../lib/supabase/server", () => ({
   }),
 }));
 
-import { GET as metaPing } from "./route";
+import { GET as metaPing, resetMetaPingHits } from "./route";
 
 function metaOk() {
   return {
@@ -30,6 +30,7 @@ function metaOk() {
 
 describe("GET /api/meta-ping lock", () => {
   beforeEach(() => {
+    resetMetaPingHits();
     getUser.mockReset();
     demoLimit.mockReset();
     vi.stubEnv("META_API_KEY", "test-meta-key");
@@ -62,5 +63,22 @@ describe("GET /api/meta-ping lock", () => {
     const dev = await metaPing();
     expect(dev.status).toBe(200);
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops the Meta call after 10 pings from one address in an hour", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const ping = () =>
+      metaPing(new Request("http://localhost/api/meta-ping", { headers: { "x-forwarded-for": "203.0.113.50" } }));
+    for (let i = 0; i < 10; i += 1) {
+      expect((await ping()).status).toBe(200);
+    }
+    const limited = await ping();
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({ error: "rate_limited" });
+    expect(fetch).toHaveBeenCalledTimes(10);
+    const other = await metaPing(
+      new Request("http://localhost/api/meta-ping", { headers: { "x-forwarded-for": "203.0.113.51" } }),
+    );
+    expect(other.status).toBe(200);
   });
 });
