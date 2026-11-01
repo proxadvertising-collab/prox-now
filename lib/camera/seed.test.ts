@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   addSeedShot,
   bookKind,
   bubbleCount,
   captureFix,
+  withDeadline,
   emptyTray,
   menuButton,
   parkMenu,
@@ -108,5 +109,26 @@ describe("camera seed", () => {
       locate: async () => null,
     });
     expect(none).toBeNull();
+    const hung = captureFix({
+      now: () => fix.at,
+      lookupDemo: async () => ({ lat: 1, lng: 2 }),
+      locate: () => new Promise(() => {}),
+    });
+    await expect(hung).resolves.toEqual({ lat: 1, lng: 2, accuracy: null, at: fix.at, source: "demo" });
+  });
+
+  it("uses the deadline when locate never settles", async () => {
+    vi.useFakeTimers();
+    const pending = new Promise<string>(() => {});
+    const result = withDeadline(pending, 8000, "fallback");
+    await vi.advanceTimersByTimeAsync(8000);
+    await expect(result).resolves.toBe("fallback");
+    const fixResult = captureFix({
+      lookupDemo: async () => null,
+      locate: () => new Promise(() => {}),
+    });
+    await vi.advanceTimersByTimeAsync(8000);
+    await expect(fixResult).resolves.toBeNull();
+    vi.useRealTimers();
   });
 });

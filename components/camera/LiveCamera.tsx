@@ -516,17 +516,24 @@ export function LiveCamera({
   }
 
   async function acceptUploads(list: FileList | readonly File[] | null) {
-    if (!list || list.length === 0 || busy) return;
+    if (!list || list.length === 0) return;
+    if (busy) {
+      setNote(t(lang, "snap.busy"));
+      return;
+    }
     const files = Array.from(list);
-    setNote("");
     setRetryShot(false);
     if (phase === "pick") {
       pendingUploads.current = files;
+      setNote(t(lang, "snap.pickFirst"));
       return;
     }
+    setNote(t(lang, "snap.locating"));
     const fix = await placeForShot();
     if (!fix) {
       pendingUploads.current = files;
+      setAskWhere(true);
+      setNote(t(lang, "snap.where"));
       return;
     }
     pendingUploads.current = null;

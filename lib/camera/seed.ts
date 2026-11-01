@@ -91,6 +91,23 @@ export function bookKind(slot: SeedSlot): "logo" | "menu" | "hours" {
   return slot;
 }
 
+/** Resolves the fallback when `p` is still pending after `ms`. A later result is ignored. */
+export function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function captureFix(input: {
   now?: () => string;
   lookupDemo: () => Promise<{ lat: number; lng: number } | null>;
@@ -99,7 +116,7 @@ export async function captureFix(input: {
   const at = (input.now ?? (() => new Date().toISOString()))();
   const demo = await input.lookupDemo();
   if (demo) return { lat: demo.lat, lng: demo.lng, accuracy: null, at, source: "demo" };
-  const here = await input.locate();
+  const here = await withDeadline(input.locate(), 8000, null);
   if (!here) return null;
   return { lat: here.lat, lng: here.lng, accuracy: here.accuracy, at, source: "gps" };
 }
