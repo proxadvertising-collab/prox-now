@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ownerClient, ownerFailure, unsigned } from "../../../../lib/owner/http";
-import { photoPublicUrl } from "../../../../lib/posts/source";
 import { daysLeft } from "../../../../lib/owner/window";
+import { signedPhotoUrl } from "../../../../lib/photos/sign";
+import { photoPublicUrl } from "../../../../lib/posts/source";
 
 export async function GET() {
   const { supabase, user } = await ownerClient();
@@ -11,6 +12,7 @@ export async function GET() {
   const payload = (result.data ?? {}) as {
     cards?: Array<Record<string, unknown>>;
     liveNow?: Array<Record<string, unknown>>;
+    bookThanks?: Array<Record<string, unknown>>;
     keptToday?: number;
     passedToday?: number;
   };
@@ -31,8 +33,21 @@ export async function GET() {
       daysLeft: expiresAt ? daysLeft(expiresAt, now) : 0,
     };
   };
+  const bookThanks = (payload.bookThanks ?? []).map((card) => {
+    const path = typeof card.photoPath === "string" ? card.photoPath : null;
+    const pages = typeof card.pageCount === "number" ? card.pageCount : Number(card.pageCount);
+    return {
+      shopId: card.shopId,
+      contributorId: card.contributorId,
+      shopName: card.shopName,
+      authorName: typeof card.authorName === "string" ? card.authorName : "",
+      pageCount: Number.isFinite(pages) ? pages : 0,
+      photoUrl: signedPhotoUrl(path, "shop-book"),
+    };
+  });
   return NextResponse.json({
     cards: (payload.cards ?? []).map(mapCard),
+    bookThanks,
     liveNow: (payload.liveNow ?? []).map(mapCard),
     keptToday: payload.keptToday ?? 0,
     passedToday: payload.passedToday ?? 0,

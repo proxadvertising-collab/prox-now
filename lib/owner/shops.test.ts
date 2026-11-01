@@ -28,7 +28,8 @@ describe("owner shops", () => {
     expect(inbox).toContain('t("en", "empty.inbox")');
     expect(inbox).toContain('href: "/map"');
     expect(desk).toContain('t("en", "empty.owner")');
-    expect(desk).toContain('t("en", "loop.caught")');
+    expect(desk).toContain('t("en", "loop.nothing")');
+    expect(desk).toContain('t("en", "loop.shoppers")');
     expect(desk).toContain('href: "/map"');
     expect(desk).toContain("shop.name");
   });

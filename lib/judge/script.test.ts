@@ -2,13 +2,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { seedBookPath } from "../book/seedName";
-import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, TOUR_KEY, writeSeen } from "./script";
+import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, TOUR_KEY, writeSeen } from "./script";
 
 describe("judge script", () => {
-  it("has eight steps and a card for each named beat", () => {
-    expect(EXPLAINERS).toHaveLength(8);
-    expect(EXPLAINERS.map((step) => step.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    expect(EXPLAINERS.map((step) => step.id)).toEqual(["seed", "book", "ask", "translate", "order", "post", "claim", "coupon"]);
+  it("has a step for each named beat, including a book thanks", () => {
+    expect(EXPLAINERS).toHaveLength(9);
+    expect(EXPLAINERS.map((step) => step.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(EXPLAINERS.map((step) => step.id)).toEqual(["seed", "book", "ask", "translate", "order", "post", "claim", "thanks", "coupon"]);
+    expect(EXPLAINERS.find((step) => step.id === "thanks")?.body).toBe(
+      "Judge 1 built your book, so you can thank them with a coupon.",
+    );
     expect(BOOK_PROGRESS).toContain("about a minute");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");
     expect(DEMO_CAFES.a.name).toBe("Farm to Go (demo)");
@@ -111,7 +114,22 @@ describe("judge script", () => {
       return step;
     });
     expect(seen).toEqual(["seed", "book", "ask", "translate", "order", "post", "claim", "coupon"]);
+    expect(pathStep("/owner?thanks=1")).toBe("thanks");
+    expect(advanceStep("claim", "thanks")).toBe("thanks");
     expect(advanceStep("post", "order")).toBe("post");
     expect(advanceStep("coupon", "seed")).toBe("coupon");
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+      dispatchEvent: () => true,
+    });
+    startJudgeTour({ cafe: "a", role: "owner", step: "claim" });
+    noteBookThanks();
+    expect(JSON.parse(store.get(TOUR_KEY) ?? "{}").step).toBe("thanks");
+    vi.unstubAllGlobals();
   });
 });

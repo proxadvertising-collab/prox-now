@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   advanceStep,
   clearJudgeTour,
+  EXPLAINERS,
   explainer,
   pathStep,
   readSeen,
@@ -98,7 +99,7 @@ export function TourChrome() {
     <div className="px-4 pt-3">
       {tour ? (
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-label font-semibold text-fg">Step {card.n} of 8</p>
+          <p className="text-label font-semibold text-fg">Step {card.n} of {EXPLAINERS.length}</p>
           <div className="flex items-center gap-3">
             <button type="button" className="min-h-11 text-label font-semibold text-accent" onClick={() => void swap()}>
               Swap roles

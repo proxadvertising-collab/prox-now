@@ -600,6 +600,48 @@ describe("security migrations 0018 through 0021", () => {
     expect(sql).not.toContain("eyJ");
   });
 
+  it("thanks a book builder once and lets reset bring that card back", () => {
+    const sql = readFileSync(resolve(root, "supabase/migrations/0023_book_thanks.sql"), "utf8");
+    const check = readFileSync(resolve(root, "supabase/tests/0023_book_thanks.sql"), "utf8");
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("create table if not exists public.book_thanks");
+    expect(sql).toContain("alter table public.book_thanks enable row level security");
+    expect(sql).toContain("revoke all on table public.book_thanks from public, anon, authenticated");
+    expect(sql).toContain("primary key (shop_id, contributor_id)");
+    expect(sql).toContain("check (decision in ('coupon', 'dismissed'))");
+    expect(sql).toContain("create or replace function public.thank_book(");
+    expect(sql).toContain("create or replace function public.dismiss_book_thanks(");
+    expect(sql).toContain("security definer");
+    expect(sql).toContain("set search_path = public");
+    expect(sql).toContain("raise exception 'not a verified owner'");
+    expect(sql).toContain("owners.status = 'verified'");
+    expect(sql).toContain("pages.status = 'live'");
+    expect(sql).toContain("group by pages.shop_id, pages.contributed_by");
+    expect(sql).toContain("'bookThanks'");
+    expect(sql).toContain("coalesce(p.ready_at, p.expires_at)");
+    expect(sql).toContain("demo_repeat");
+    expect(sql).toContain("on conflict (holder_id, shop_id, day) where demo_repeat = false do nothing");
+    expect(sql).toContain("delete from public.book_thanks");
+    expect(sql).toContain("create or replace function public.reset_demo()");
+    expect(sql).toContain("'mala-mafia', 'Farm to Go (demo)'");
+    expect(sql).toContain("revoke all on function public.thank_book(uuid, uuid, text, integer) from public, anon");
+    expect(sql).toContain("grant execute on function public.thank_book(uuid, uuid, text, integer) to authenticated");
+    expect(sql).toContain("grant execute on function public.dismiss_book_thanks(uuid, uuid) to authenticated");
+    expect(sql).not.toContain("grant execute on function public.thank_book(uuid, uuid, text, integer) to anon");
+    expect(sql).not.toContain("delete from public.shops");
+    expect(sql).not.toContain("eyJ");
+    expect(check).toContain("expected one card per contributor");
+    expect(check).toContain("owner pages became a card");
+    expect(check).toContain("give coupon created no coupon");
+    expect(check).toContain("second thanks created another coupon");
+    expect(check).toContain("dismiss left a card");
+    expect(check).toContain("non-owner saw cards");
+    expect(check).toContain("reset left a demo book-thanks decision");
+    expect(check).toContain("reset cleared a real shopper decision");
+    expect(check).toContain("reset did not bring the demo card back");
+    expect(check).toContain("rollback");
+  });
+
   it("makes both photo buckets private", () => {
     expect(photos).toContain("Apply it only after the captain writes apply");
     expect(photos).toContain("set public = false");

@@ -4,7 +4,7 @@ export const BOOK_PROGRESS = "Building your book, about a minute";
 
 export type CafeId = "a" | "b";
 export type TourRole = "shopper" | "owner";
-export type StepId = "seed" | "book" | "ask" | "translate" | "order" | "post" | "claim" | "coupon";
+export type StepId = "seed" | "book" | "ask" | "translate" | "order" | "post" | "claim" | "thanks" | "coupon";
 
 export type Tour = { cafe: CafeId; role: TourRole; step: StepId };
 
@@ -32,7 +32,8 @@ export const EXPLAINERS: readonly Explainer[] = [
   { id: "order", n: 5, title: "Order", body: "Items are on one order. Show to staff is the screen the counter reads, with quantities and the translated note." },
   { id: "post", n: 6, title: "Post", body: "A snap puts the shop on the live map. On a demo shop the owner can Keep it now, without waiting out the two-hour life." },
   { id: "claim", n: 7, title: "Claim", body: "The owner claims the demo café without a paper code. A real shop still needs the code and a matching photo." },
-  { id: "coupon", n: 8, title: "Coupon", body: "Keep sends a coupon to the shopper who posted. They scratch it in the wallet, and the owner can redeem it at the till." },
+  { id: "thanks", n: 8, title: "Thank them", body: "Judge 1 built your book, so you can thank them with a coupon." },
+  { id: "coupon", n: 9, title: "Coupon", body: "Keep sends a coupon to the shopper who posted. They scratch it in the wallet, and the owner can redeem it at the till." },
 ];
 
 const STEP_IDS = new Set<string>(EXPLAINERS.map((step) => step.id));
@@ -85,7 +86,7 @@ export function pathStep(pathname: string): StepId | null {
   const [path, query = ""] = pathname.split("?");
   const params = new URLSearchParams(query);
   if (path.startsWith("/wallet")) return "coupon";
-  if (path.startsWith("/owner")) return "claim";
+  if (path.startsWith("/owner")) return params.has("thanks") ? "thanks" : "claim";
   if (params.has("post")) return "post";
   if (path.includes("/order")) return params.get("staff") === "1" ? "order" : "translate";
   if (path.startsWith("/map")) return "ask";
@@ -102,6 +103,17 @@ export function showExplainer(input: { judge: boolean; step: StepId; seen: reado
 export function rememberSeen(seen: readonly string[], step: StepId): string[] {
   if (seen.includes(step)) return [...seen];
   return [...seen, step];
+}
+
+/** Judge 2 reached a book-thanks card. Move the tour forward once. */
+export function noteBookThanks(): void {
+  if (typeof window === "undefined") return;
+  const tour = readTour();
+  if (!tour) return;
+  const step = advanceStep(tour.step, "thanks");
+  if (step === tour.step) return;
+  startJudgeTour({ ...tour, step });
+  window.dispatchEvent(new Event("prox-step"));
 }
 
 export function readTour(): Tour | null {

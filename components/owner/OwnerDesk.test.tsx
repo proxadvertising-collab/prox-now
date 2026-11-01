@@ -12,11 +12,16 @@ describe("owner desk order", () => {
         initialShops: [{ shopId: "shop-1", name: "Mala Mafia", status: "verified", slug: "mala-mafia" }],
       }),
     );
-    const caught = html.indexOf(t("en", "loop.caught"));
+    const caught = html.indexOf(t("en", "loop.nothing"));
+    const heading = html.indexOf(t("en", "loop.shoppers"));
     const redeem = html.indexOf('href="/owner/redeem"');
     const book = html.indexOf('href="/book/mala-mafia"');
+    expect(heading).toBeGreaterThanOrEqual(0);
+    expect(html).toContain(t("en", "loop.shoppersNote"));
+    expect(heading).toBeLessThan(caught);
     expect(caught).toBeGreaterThanOrEqual(0);
     expect(caught).toBeLessThan(redeem);
+    expect(html).not.toContain(t("en", "loop.caught"));
     expect(redeem).toBeLessThan(book);
     expect(html).toContain("min-h-11");
     expect(html).toContain("active:bg-surface-2");

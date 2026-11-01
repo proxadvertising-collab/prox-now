@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ownerToolsOpen } from "../../../lib/owner/claim";
 import { POST as claim } from "./claim/route";
+import { POST as dismiss } from "./dismiss/route";
 import { POST as keep } from "./keep/route";
 import { POST as pass } from "./pass/route";
+import { POST as thank } from "./thank/route";
 import { POST as redeem } from "./redeem/route";
 
 const { getUser, rpc, remove, spark, shopRow, demoRows, serviceRpc } = vi.hoisted(() => ({
@@ -81,6 +83,48 @@ describe("owner routes", () => {
   it("returns 403 when the caller is not the owner", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "not a verified owner" } });
     const response = await call("/api/owner/keep", { id: POST_ID }, keep);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "not_owner" });
+  });
+
+  it("thanks one book builder and dismisses another", async () => {
+    const shopId = "11111111-1111-4111-8111-111111111111";
+    const contributorId = "22222222-2222-4222-8222-222222222222";
+    rpc.mockResolvedValue({ data: "coupon-1", error: null });
+    const thanked = await call(
+      "/api/owner/thank",
+      { shopId, contributorId, offer: "Free coffee", days: 7 },
+      thank,
+    );
+    expect(thanked.status).toBe(200);
+    expect(await thanked.json()).toEqual({ ok: true, couponId: "coupon-1" });
+    expect(rpc).toHaveBeenCalledWith("thank_book", {
+      p_shop_id: shopId,
+      p_contributor_id: contributorId,
+      p_offer: "Free coffee",
+      p_days: 7,
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
+    const hidden = await call("/api/owner/dismiss", { shopId, contributorId }, dismiss);
+    expect(hidden.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("dismiss_book_thanks", {
+      p_shop_id: shopId,
+      p_contributor_id: contributorId,
+    });
+  });
+
+  it("refuses a book thanks from someone who is not the owner", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "not a verified owner" } });
+    const response = await call(
+      "/api/owner/thank",
+      {
+        shopId: "11111111-1111-4111-8111-111111111111",
+        contributorId: "22222222-2222-4222-8222-222222222222",
+        offer: "Nope",
+        days: 7,
+      },
+      thank,
+    );
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "not_owner" });
   });

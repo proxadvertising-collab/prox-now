@@ -18,6 +18,7 @@ export function ownerError(message: string): { error: string; status: number } {
   if (text.includes("not_found") || text.includes("post not found") || text.includes("shop_not_found")) {
     return { error: "not_found", status: 404 };
   }
+  if (text.includes("already_decided")) return { error: "already_decided", status: 409 };
   if (text.includes("already_used")) return { error: "already_used", status: 409 };
   if (text.includes("already_owned")) return { error: "already_owned", status: 409 };
   if (text.includes("rate_limited")) return { error: "rate_limited", status: 429 };

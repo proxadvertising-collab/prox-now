@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { t } from "@/lib/copy";
+import { noteBookThanks } from "@/lib/judge/script";
 import { readOwnerShops, type OwnerShop } from "@/lib/owner/shops";
 
 /** Verified owners see the coupon desk before their shops. */
@@ -20,6 +21,15 @@ type Card = {
   facts?: { items?: { name?: string; price?: number | null; currency?: string | null }[]; crowd?: string | null } | null;
 };
 
+type BookCard = {
+  shopId: string;
+  contributorId: string;
+  shopName?: string;
+  authorName?: string;
+  pageCount?: number;
+  photoUrl?: string | null;
+};
+
 const primary =
   "inline-flex min-h-16 w-full items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink disabled:opacity-60";
 const danger =
@@ -28,6 +38,7 @@ const danger =
 export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] }) {
   const [shops, setShops] = useState<OwnerShop[]>(initialShops);
   const [cards, setCards] = useState<Card[]>([]);
+  const [bookThanks, setBookThanks] = useState<BookCard[]>([]);
   const [liveNow, setLiveNow] = useState<Card[]>([]);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -76,13 +87,17 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       const homeBody = (await home.json().catch(() => null)) as unknown;
       const inboxBody = (await inbox.json().catch(() => null)) as {
         cards?: Card[];
+        bookThanks?: BookCard[];
         liveNow?: Card[];
         keptToday?: number;
         passedToday?: number;
       } | null;
+      const thanks = inboxBody?.bookThanks ?? [];
       setShops(readOwnerShops(homeBody));
       setCards(inboxBody?.cards ?? []);
+      setBookThanks(thanks);
       setLiveNow(inboxBody?.liveNow ?? []);
+      if (thanks.length > 0) noteBookThanks();
     } catch {
       setError(t("en", "loop.fail"));
     }
@@ -146,6 +161,69 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       setOfferText("10% off your next visit");
     } finally {
       setSuggesting(false);
+    }
+  }
+
+  function openBook(item: BookCard) {
+    if (busy) return;
+    setOfferFor("book:" + item.shopId + ":" + item.contributorId);
+    setDays(7);
+    setOfferText("10% off your next visit");
+    setSuggesting(false);
+    setError("");
+  }
+
+  async function thank(item: BookCard) {
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const response = await fetch("/api/owner/thank", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          shopId: item.shopId,
+          contributorId: item.contributorId,
+          offer: offerText.trim() || null,
+          days,
+        }),
+      });
+      if (!response.ok) {
+        setError(t("en", "loop.fail"));
+        return;
+      }
+      buzz();
+      setNote(t("en", "loop.sent", { name: item.authorName || "" }));
+      setOfferFor(null);
+      await load();
+    } catch {
+      setError(t("en", "loop.fail"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dismissThanks(item: BookCard) {
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const response = await fetch("/api/owner/dismiss", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ shopId: item.shopId, contributorId: item.contributorId }),
+      });
+      if (!response.ok) {
+        setError(t("en", "loop.fail"));
+        return;
+      }
+      buzz();
+      setOfferFor(null);
+      await load();
+    } catch {
+      setError(t("en", "loop.fail"));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -247,6 +325,10 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       )}
       {couponsFirst ? (
       <>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-heading font-bold text-fg">{t("en", "loop.shoppers")}</h2>
+        <p className="text-body text-fg">{t("en", "loop.shoppersNote")}</p>
+      </section>
       {liveNow.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-heading font-bold text-fg">{t("en", "loop.liveNow")}</h2>
@@ -260,9 +342,58 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
           ))}
         </section>
       ) : null}
-      {!card ? (
-        <EmptyState message={t("en", "loop.caught")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
-      ) : (
+      {bookThanks.map((item) => {
+        const bookKey = "book:" + item.shopId + ":" + item.contributorId;
+        return (
+          <article key={bookKey} className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
+            {item.photoUrl ? (
+              <img src={item.photoUrl} alt={item.shopName ?? ""} className="aspect-[4/3] w-full rounded-md object-cover" />
+            ) : null}
+            <p className="text-heading font-bold text-fg">{item.shopName}</p>
+            <p className="text-body text-fg">{t("en", "loop.bookBy", { name: item.authorName || "" })}</p>
+            <p className="text-label text-fg-muted">{t("en", "loop.pages", { n: String(item.pageCount ?? 0) })}</p>
+            {offerFor === bookKey ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  className="min-h-11 w-full rounded-md bg-surface-2 px-3 text-body text-fg"
+                  maxLength={120}
+                  value={offerText}
+                  onChange={(event) => setOfferText(event.target.value)}
+                />
+                <p className="text-label text-fg-muted">{t("en", "loop.validFor")}</p>
+                <div className="flex gap-2">
+                  {([1, 7, 30] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={
+                        "inline-flex min-h-11 items-center justify-center rounded-md px-3 text-sm font-semibold " +
+                        (days === value ? "bg-accent text-accent-ink" : "bg-surface-2 text-fg")
+                      }
+                      onClick={() => setDays(value)}
+                    >
+                      {t("en", value === 1 ? "loop.day1" : value === 7 ? "loop.day7" : "loop.day30")}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className={primary} disabled={busy} onClick={() => void thank(item)}>
+                  {t("en", "loop.give")}
+                </button>
+              </div>
+            ) : (
+              <button type="button" className={primary} disabled={busy} onClick={() => openBook(item)}>
+                {t("en", "loop.give")}
+              </button>
+            )}
+            <button type="button" className={danger} disabled={busy} onClick={() => void dismissThanks(item)}>
+              {t("en", "loop.noThanks")}
+            </button>
+          </article>
+        );
+      })}
+      {!card && bookThanks.length === 0 ? (
+        <EmptyState message={t("en", "loop.nothing")} action={{ href: "/map", label: t("en", "empty.openMap") }} />
+      ) : card ? (
         <article
           className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
           onPointerDown={(event) => {
@@ -348,7 +479,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
             {arm === card.id ? t("en", "loop.passAgain") : t("en", "loop.pass")}
           </button>
         </article>
-      )}
+      ) : null}
       <a className="inline-flex min-h-11 items-center text-body font-semibold text-fg" href="/owner/redeem">
         {t("en", "loop.redeem")}
       </a>
