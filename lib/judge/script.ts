@@ -94,10 +94,9 @@ export function pathStep(pathname: string): StepId | null {
   return null;
 }
 
-/** Judges always see the card. Everyone else sees each step once. */
+/** Explainers are judge mode only. A normal visit never gets a card. */
 export function showExplainer(input: { judge: boolean; step: StepId; seen: readonly string[] }): boolean {
-  if (input.judge) return true;
-  return !input.seen.includes(input.step);
+  return input.judge;
 }
 
 export function rememberSeen(seen: readonly string[], step: StepId): string[] {
@@ -139,4 +138,11 @@ export function readSeen(): string[] {
 export function writeSeen(seen: readonly string[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+}
+
+/** Drop the tour and the seen cards. A real account must not inherit them. */
+export function clearJudgeTour(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOUR_KEY);
+  window.localStorage.removeItem(SEEN_KEY);
 }

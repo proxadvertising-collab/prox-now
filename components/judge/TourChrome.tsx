@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   advanceStep,
+  clearJudgeTour,
   explainer,
   pathStep,
   readSeen,
@@ -17,6 +18,7 @@ import {
   type StepId,
   type Tour,
 } from "@/lib/judge/script";
+import { hasJudgeCookie } from "@/lib/judge/session";
 
 export function TourChrome() {
   const pathname = usePathname() ?? "";
@@ -27,8 +29,16 @@ export function TourChrome() {
 
   useEffect(() => {
     function sync() {
+      if (!hasJudgeCookie(document.cookie)) {
+        clearJudgeTour();
+        setTour(null);
+        setSeen([]);
+        setHidden(true);
+        return;
+      }
       const here = window.location.pathname + window.location.search;
       setLocated(here);
+      setHidden(false);
       const stored = readTour();
       const fromPath = pathStep(here);
       if (stored && fromPath) {
@@ -44,7 +54,6 @@ export function TourChrome() {
         setTour(stored);
       }
       setSeen(readSeen());
-      setHidden(false);
     }
     sync();
     window.addEventListener("popstate", sync);
@@ -67,6 +76,12 @@ export function TourChrome() {
     setHidden(true);
   }
 
+  async function endDemo() {
+    await fetch("/api/judge/exit", { method: "POST" }).catch(() => null);
+    clearJudgeTour();
+    window.location.assign("/judge");
+  }
+
   async function swap() {
     if (!tour) return;
     const next = swapTour(tour);
@@ -84,9 +99,14 @@ export function TourChrome() {
       {tour ? (
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-label font-semibold text-fg">Step {card.n} of 8</p>
-          <button type="button" className="min-h-11 text-label font-semibold text-accent" onClick={() => void swap()}>
-            Swap roles
-          </button>
+          <div className="flex items-center gap-3">
+            <button type="button" className="min-h-11 text-label font-semibold text-accent" onClick={() => void swap()}>
+              Swap roles
+            </button>
+            <button type="button" className="min-h-11 text-label font-semibold text-accent" onClick={() => void endDemo()}>
+              End demo
+            </button>
+          </div>
         </div>
       ) : null}
       <article className="rounded-lg border border-border bg-surface-1 p-3">

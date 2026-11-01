@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { safeNext } from "@/lib/auth/safe-next";
+import { DEMO_SESSION_COOKIE } from "@/lib/demo/zone";
+import { JUDGE_COOKIE } from "@/lib/judge/session";
 import { createClient } from "@/lib/supabase/server";
 
 function redirectBase(request: Request, origin: string): string {
@@ -27,5 +29,8 @@ export async function GET(request: Request) {
     return failure;
   }
 
-  return NextResponse.redirect(new URL(next, base));
+  const response = NextResponse.redirect(new URL(next, base));
+  response.cookies.set(JUDGE_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax", httpOnly: false });
+  response.cookies.set(DEMO_SESSION_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax", httpOnly: false });
+  return response;
 }

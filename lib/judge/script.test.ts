@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { seedBookPath } from "../book/seedName";
-import { advanceStep, BOOK_PROGRESS, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, showExplainer, swapTour } from "./script";
+import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapTour, TOUR_KEY, writeSeen } from "./script";
 
 describe("judge script", () => {
   it("has eight steps and a card for each named beat", () => {
@@ -58,12 +58,26 @@ describe("judge script", () => {
     expect(camera).toContain("top-[7.5rem] inset-x-0 z-20 mx-auto");
   });
 
-  it("shows every card to a judge and once to everyone else", () => {
+  it("shows a card only in judge mode and clears both stored keys", () => {
     expect(showExplainer({ judge: true, step: "seed", seen: ["seed"] })).toBe(true);
-    expect(showExplainer({ judge: false, step: "seed", seen: [] })).toBe(true);
+    expect(showExplainer({ judge: false, step: "seed", seen: [] })).toBe(false);
     expect(showExplainer({ judge: false, step: "seed", seen: ["seed"] })).toBe(false);
     expect(rememberSeen(["book"], "seed")).toEqual(["book", "seed"]);
     expect(rememberSeen(["seed"], "seed")).toEqual(["seed"]);
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    });
+    startJudgeTour({ cafe: "a", role: "shopper", step: "seed" });
+    writeSeen(["seed"]);
+    clearJudgeTour();
+    expect(store.has(TOUR_KEY)).toBe(false);
+    expect(store.has(SEEN_KEY)).toBe(false);
+    vi.unstubAllGlobals();
   });
 
   it("swaps onto café B with the roles reversed", () => {

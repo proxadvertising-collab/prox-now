@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { signInDemoRole } from "../../../../lib/judge/demo";
+import { JUDGE_COOKIE } from "../../../../lib/judge/session";
 import { allowJudge, clientIp } from "../../../../lib/rate/window";
 import { createClient } from "../../../../lib/supabase/server";
 
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
       const status = signed.error === "demo_not_ready" ? 503 : 401;
       return NextResponse.json({ error: signed.error }, { status });
     }
-    return NextResponse.json({ ok: true, next: "/map" });
+    const response = NextResponse.json({ ok: true, next: "/map" });
+    response.cookies.set(JUDGE_COOKIE, role, { path: "/", sameSite: "lax", httpOnly: false });
+    return response;
   }
 
   let payload: unknown;

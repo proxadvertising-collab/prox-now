@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { signInDemoRole } from "../../../../lib/judge/demo";
 import { FRESH_DEMO_NEXT } from "../../../../lib/judge/reset";
+import { JUDGE_COOKIE } from "../../../../lib/judge/session";
 import { ownerFailure } from "../../../../lib/owner/http";
 import { allowReset, clientIp } from "../../../../lib/rate/window";
 import { createServiceClient } from "../../../../lib/supabase/admin";
@@ -44,5 +45,7 @@ export async function POST(request: Request) {
     if (removed.error) return NextResponse.json({ error: "photo_cleanup_failed" }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true, next: FRESH_DEMO_NEXT });
+  const response = NextResponse.json({ ok: true, next: FRESH_DEMO_NEXT });
+  response.cookies.set(JUDGE_COOKIE, "explorer", { path: "/", sameSite: "lax", httpOnly: false });
+  return response;
 }

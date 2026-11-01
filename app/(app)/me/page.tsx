@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LanguageSwitch } from "@/components/me/LanguageSwitch";
 import { BehindSwitch } from "@/components/me/BehindSwitch";
 import { MoreSheet } from "@/components/shell/MoreSheet";
 import { t } from "@/lib/copy";
+import { DEMO_SESSION_COOKIE } from "@/lib/demo/zone";
+import { JUDGE_COOKIE } from "@/lib/judge/session";
 import { createClient } from "@/lib/supabase/server";
 
 async function signOut(): Promise<void> {
@@ -16,6 +19,9 @@ async function signOut(): Promise<void> {
     const supabase = await createClient();
     await supabase.auth.signOut();
   }
+  const jar = await cookies();
+  jar.set(JUDGE_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax" });
+  jar.set(DEMO_SESSION_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax" });
   redirect("/login");
 }
 

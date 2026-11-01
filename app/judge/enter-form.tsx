@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { FRESH_DEMO_NEXT } from "@/lib/judge/reset";
 import { startJudgeTour, tourHref } from "@/lib/judge/script";
 import { t } from "@/lib/copy";
+import { createClient } from "@/lib/supabase/client";
 
 const primary = "btn-primary";
 const outline =
@@ -22,6 +23,35 @@ export function JudgeEnter() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [warned, setWarned] = useState(false);
+
+  async function realAccount(): Promise<boolean> {
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return false;
+      const found = await supabase.from("demo_accounts").select("role").eq("user_id", data.user.id);
+      const rows = Array.isArray(found.data) ? found.data : [];
+      return rows.length === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async function enterDemo(url: string) {
+    if (busy) return;
+    if (!warned) {
+      setBusy(true);
+      const real = await realAccount();
+      setBusy(false);
+      if (real) {
+        setWarned(true);
+        setMessage("Entering the demo signs you out of your account.");
+        return;
+      }
+    }
+    void post(url);
+  }
 
   async function post(url: string, body?: { email: string; password: string }) {
     setBusy(true);
@@ -70,13 +100,18 @@ export function JudgeEnter() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body text-fg">{t("en", "judge.freshOffer")}</p>
-      <button type="button" className={outline} disabled={busy} onClick={() => void post("/api/judge/reset")}>
+      <button
+        type="button"
+        className={outline}
+        disabled={busy}
+        onClick={() => void (warned ? post("/api/judge/reset") : enterDemo("/api/judge/reset"))}
+      >
         {t("en", "judge.freshStart")}
       </button>
-      <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=explorer")}>
+      <button type="button" className={primary + " min-h-16 text-lg"} disabled={busy} onClick={() => void enterDemo("/api/judge/enter?role=explorer")}>
         {t("en", "judge.shopper")}
       </button>
-      <button type="button" className={outline + " min-h-16 text-lg"} disabled={busy} onClick={() => void post("/api/judge/enter?role=owner")}>
+      <button type="button" className={outline + " min-h-16 text-lg"} disabled={busy} onClick={() => void enterDemo("/api/judge/enter?role=owner")}>
         {t("en", "judge.owner")}
       </button>
       <p role={message ? "alert" : "status"} className="min-h-6 text-label text-fg">
