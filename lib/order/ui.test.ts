@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { OrderBar, OrderClient, OrderSheet, bookBarPadClass } from "../../components/order/OrderUi";
+import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, nextClearState } from "../../components/order/OrderUi";
 
 const line = {
   id: "tea",
@@ -74,6 +74,14 @@ describe("order page", () => {
     );
     expect(html).toContain("Mala Mafia");
     expect(html).not.toContain("near");
+  });
+});
+
+describe("clear order arming", () => {
+  it("arms, clears, and drops back to idle", () => {
+    expect(nextClearState("idle", "tap")).toEqual({ state: "armed", action: "arm" });
+    expect(nextClearState("armed", "tap")).toEqual({ state: "idle", action: "clear" });
+    expect(nextClearState("armed", "timeout")).toEqual({ state: "idle", action: "idle" });
   });
 });
 

@@ -2,8 +2,16 @@
 
 import { useState, type ReactNode } from "react";
 
-export function MoreSheet({ label, children }: { label: string; children: ReactNode }) {
+export function MoreSheet({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode | ((close: () => void) => ReactNode);
+}) {
   const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const body = typeof children === "function" ? children(close) : children;
   return (
     <>
       <button
@@ -20,8 +28,8 @@ export function MoreSheet({ label, children }: { label: string; children: ReactN
             onClick={(event) => event.stopPropagation()}
           >
             <p className="text-lg font-bold">More</p>
-            {children}
-            <button type="button" className="min-h-12 rounded-full bg-[#1A120B] font-bold text-white" onClick={() => setOpen(false)}>
+            {body}
+            <button type="button" className="min-h-12 rounded-full bg-[#1A120B] font-bold text-white" onClick={close}>
               Close
             </button>
           </div>

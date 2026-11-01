@@ -85,6 +85,18 @@ export function useOrderSnap(pathname: string): { slug: string; count: number; l
   return snap;
 }
 
+export type ClearPhase = "idle" | "armed";
+
+/** First tap arms the clear. Second tap clears. A timeout drops back to idle. */
+export function nextClearState(
+  state: ClearPhase,
+  event: "tap" | "timeout",
+): { state: ClearPhase; action: "arm" | "clear" | "idle" } {
+  if (event === "timeout") return { state: "idle", action: "idle" };
+  if (state === "idle") return { state: "armed", action: "arm" };
+  return { state: "idle", action: "clear" };
+}
+
 export function OrderSheet({
   shopName,
   logoUrl,
@@ -124,6 +136,12 @@ export function OrderSheet({
   busy?: boolean;
   failed?: boolean;
 }) {
+  const [clearPhase, setClearPhase] = useState<ClearPhase>("idle");
+  useEffect(() => {
+    if (clearPhase !== "armed" || typeof window === "undefined") return;
+    const timer = window.setTimeout(() => setClearPhase(nextClearState("armed", "timeout").state), 4000);
+    return () => window.clearTimeout(timer);
+  }, [clearPhase]);
   if (staff) {
     return (
       <div className="fixed inset-0 z-50 overflow-auto bg-[#1A120B] p-6 text-[#FFF8F1]">
@@ -226,17 +244,30 @@ export function OrderSheet({
         {t(lang, "order.staff")}
       </button>
       <MoreSheet label="More">
-        <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
-          {t(lang, "order.translate")}
-        </button>
-        <button
-          type="button"
-          className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={onClear}
-        >
-          {t(lang, "order.clear")}
-        </button>
+        {(close) => (
+          <>
+            <button type="button" className="h-12 rounded-2xl border border-accent bg-transparent font-bold text-accent active:scale-95" onClick={onTranslate}>
+              {t(lang, "order.translate")}
+            </button>
+            <button
+              type="button"
+              className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const next = nextClearState(clearPhase, "tap");
+                if (next.action === "clear") {
+                  onClear?.();
+                  setClearPhase("idle");
+                  close();
+                  return;
+                }
+                setClearPhase(next.state);
+              }}
+            >
+              {clearPhase === "armed" ? "Tap again to clear" : t(lang, "order.clear")}
+            </button>
+          </>
+        )}
       </MoreSheet>
     </div>
   );
@@ -353,10 +384,7 @@ export function OrderClient({
       onNote={(value) => commit(setOrderNote(state, value))}
       onTranslate={() => void translate(state.note)}
       onQty={(id, qty) => commit(setLineQty(state, id, qty))}
-      onClear={() => {
-        if (typeof window !== "undefined" && !window.confirm(t(lang, "order.clearAsk"))) return;
-        commit(clearOrder());
-      }}
+      onClear={() => commit(clearOrder())}
       onStaff={openStaff}
       onDone={() => setStaff(false)}
     />
