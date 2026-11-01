@@ -50,7 +50,7 @@ export async function loadGoNowRows(
   if (ids.length === 0) return { shops: [], posts: [] };
 
   const [zones, books, pages, posts] = await Promise.all([
-    supabase.from("shops").select("id, timezone").in("id", ids),
+    supabase.from("shops").select("id, timezone, is_demo").in("id", ids),
     supabase.from("shop_books").select("shop_id, hours").eq("status", "live").in("shop_id", ids),
     supabase.from("shop_book_pages").select("shop_id, extracted").eq("status", "live").eq("kind", "menu").in("shop_id", ids),
     supabase
@@ -62,11 +62,13 @@ export async function loadGoNowRows(
   ]);
 
   const timezone = new Map<string, string>();
+  const demo = new Map<string, boolean>();
   if (!zones.error && Array.isArray(zones.data)) {
-    for (const row of zones.data as { id?: unknown; timezone?: unknown }[]) {
+    for (const row of zones.data as { id?: unknown; timezone?: unknown; is_demo?: unknown }[]) {
       const id = text(row.id);
       const zone = text(row.timezone);
       if (id && zone) timezone.set(id, zone);
+      if (id && row.is_demo === true) demo.set(id, true);
     }
   }
 
@@ -112,6 +114,7 @@ export async function loadGoNowRows(
       hours: hours.get(id) ?? null,
       items: menus.get(id) ?? [],
       book,
+      demo: demo.get(id) === true,
     });
   }
 

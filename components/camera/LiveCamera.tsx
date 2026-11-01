@@ -469,13 +469,13 @@ export function LiveCamera({
     }
     if (files.length === 0) return false;
     setPhase("seed");
-    await keepUploads(files, fix, true);
+    await keepUploads(files, fix, true, false);
     return true;
   }
 
   loadSamplesRef.current = loadSamples;
 
-  async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed") {
+  async function keepUploads(files: readonly File[], fix: CaptureFix, seed = phase === "seed", coach = true) {
     fixRef.current = fix;
     try {
       if (seed) {
@@ -493,7 +493,7 @@ export function LiveCamera({
             contains: [],
             fix,
           };
-          askCoach(shot, next.map((item) => ({ index: item.index, contains: item.contains })));
+          if (coach) askCoach(shot, next.map((item) => ({ index: item.index, contains: item.contains })));
           next = [...next, shot];
         }
         commitShots(next);
@@ -841,9 +841,10 @@ export function LiveCamera({
     );
   }
 
+  const onTour = Boolean(readTour());
   return (
     <>
-    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-0" + (liveFile ? " pointer-events-none" : "")}>
+    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-0" + (onTour ? " snap-tour" : "") + (liveFile ? " pointer-events-none" : "")}>
       <video
         ref={videoRef}
         className={(liveFile ? "pointer-events-none opacity-0 " : "") + previewClass(facing)}
@@ -858,11 +859,11 @@ export function LiveCamera({
           <SkeletonCards />
         </div>
       ) : null}
-      <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back">
+      <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back" style={onTour ? { top: "calc(1rem + var(--tour-bar, 0px))" } : undefined}>
         ←
       </Link>
-      {readTour() ? (
-        <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white">
+      {onTour ? (
+        <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white" style={{ top: "calc(4rem + var(--tour-bar, 0px))" }}>
           {explainer("seed").body}
         </p>
       ) : null}
@@ -908,10 +909,11 @@ export function LiveCamera({
           </button>
         </div>
       ) : null}
-      {phase === "seed" && readTour()?.role === "shopper" ? (
+      {phase === "seed" && onTour && readTour()?.role === "shopper" ? (
         <button
           type="button"
           className="absolute top-[7.5rem] inset-x-0 z-20 mx-auto inline-flex min-h-11 w-fit items-center rounded-full bg-accent-soft px-4 text-sm font-semibold text-accent"
+          style={{ top: "calc(7.5rem + var(--tour-bar, 0px))" }}
           onClick={() => void loadSamples()}
         >
           Use pre-seeded photos

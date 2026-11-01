@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
@@ -55,6 +56,17 @@ describe("seed check", () => {
     expect(await response.json()).toEqual({ error: "not_signed_in" });
     expect(allowSnap).not.toHaveBeenCalled();
     expect(callSparkImages).not.toHaveBeenCalled();
+  });
+
+  it("skips the coach and the rate limit for bundled samples", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+    const response = await POST(new Request("http://localhost/api/seed/check?samples=1", { method: "POST" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
+    expect(allowSnap).not.toHaveBeenCalled();
+    expect(callSparkImages).not.toHaveBeenCalled();
+    const camera = readFileSync(new URL("../../../../components/camera/LiveCamera.tsx", import.meta.url), "utf8");
+    expect(camera).toContain("keepUploads(files, fix, true, false)");
   });
 
   it("reuses the snap rate limit", async () => {

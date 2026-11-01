@@ -142,6 +142,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --nav-h: 84px;
+  --tour-bar: 0px;
 }
 
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
@@ -589,6 +590,13 @@
   z-index: 20;
 }
 .seed-done:disabled { opacity: 0.4; }
+.snap-tour .seed-done,
+.snap-tour .seed-open {
+  top: calc(1rem + var(--tour-bar, 0px));
+}
+.snap-tour .seed-chips {
+  top: calc(4.5rem + var(--tour-bar, 0px));
+}
 .seed-film {
   position: absolute;
   left: 0;

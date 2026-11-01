@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   advanceStep,
@@ -28,6 +28,31 @@ export function TourChrome() {
   const [seen, setSeen] = useState<string[]>([]);
   const [hidden, setHidden] = useState(false);
   const [located, setLocated] = useState(pathname);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const node = barRef.current;
+    const root = document.documentElement;
+    if (!node) {
+      root.style.removeProperty("--tour-bar");
+      return;
+    }
+    const apply = () => {
+      const bottom = Math.max(0, Math.ceil(node.getBoundingClientRect().bottom));
+      root.style.setProperty("--tour-bar", bottom + "px");
+    };
+    apply();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(apply);
+    observer?.observe(node);
+    window.addEventListener("resize", apply);
+    window.addEventListener("scroll", apply, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("scroll", apply, true);
+      root.style.removeProperty("--tour-bar");
+    };
+  }, [tour, hidden, located, seen]);
 
   useEffect(() => {
     function sync() {
@@ -102,7 +127,7 @@ export function TourChrome() {
   }
 
   return (
-    <div className="relative z-[60] px-4 pt-3">
+    <div ref={barRef} className="relative z-[60] px-4 pt-3">
       {tour ? (
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-label font-semibold text-fg">Step {card.n} of {EXPLAINERS.length}</p>

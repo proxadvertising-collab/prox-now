@@ -4,8 +4,11 @@ import {
   BOOK_USER_LIMIT,
   HOUR_MS,
   SNAP_IP_LIMIT,
+  DEMO_SNAP_USER_LIMIT,
+  RESET_IP_LIMIT,
   SNAP_USER_LIMIT,
   allowBook,
+  allowReset,
   allowJudge,
   allowSnap,
   databaseRateAnswer,
@@ -75,6 +78,30 @@ describe("rate window", () => {
     expect(await allowBook("203.0.113.41", null, 5_000)).toBe(false);
     expect(await allowBook("203.0.113.41", null, 5_000 + HOUR_MS)).toBe(true);
     expect(await allowSnap("203.0.113.41", null, 5_000)).toBe(true);
+  });
+
+  it("allows 200 snaps for one demo account and still stops a normal account at 20", async () => {
+    resetRateWindows();
+    for (let i = 0; i < SNAP_USER_LIMIT; i += 1) {
+      expect(await allowSnap("203.0.113.50", "normal-user", 8_000, async () => null, false)).toBe(true);
+    }
+    expect(await allowSnap("203.0.113.50", "normal-user", 8_000, async () => null, false)).toBe(false);
+    const deny = async () => false;
+    for (let i = 0; i < DEMO_SNAP_USER_LIMIT; i += 1) {
+      expect(await allowSnap("203.0.113." + String(80 + (i % 20)), "demo-user", 8_000, deny, true)).toBe(true);
+    }
+    expect(await allowSnap("203.0.113.200", "demo-user", 8_000, deny, true)).toBe(false);
+    expect(await allowSnap("203.0.113.201", "demo-other", 8_000, deny, true)).toBe(true);
+  });
+
+  it("allows 30 end-demo resets from one address", async () => {
+    resetRateWindows();
+    for (let i = 0; i < RESET_IP_LIMIT; i += 1) {
+      expect(await allowReset("203.0.113.77", 9_000)).toBe(true);
+    }
+    expect(await allowReset("203.0.113.77", 9_000)).toBe(false);
+    expect(RESET_IP_LIMIT).toBe(30);
+    expect(await allowReset("203.0.113.78", 9_000)).toBe(true);
   });
 
   it("treats an unknown book bucket as a local count, not a denial", () => {

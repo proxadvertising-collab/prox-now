@@ -2,6 +2,7 @@ type Hit = { start: number; count: number };
 
 export const HOUR_MS = 3_600_000;
 export const SNAP_USER_LIMIT = 20;
+export const DEMO_SNAP_USER_LIMIT = 200;
 export const SNAP_IP_LIMIT = 60;
 export const BOOK_USER_LIMIT = 60;
 export const BOOK_IP_LIMIT = 120;
@@ -31,7 +32,7 @@ export const snapHits = new Map<string, Hit>();
 export const judgeHits = new Map<string, Hit>();
 export const bookHits = new Map<string, Hit>();
 export const resetHits = new Map<string, Hit>();
-export const RESET_IP_LIMIT = 10;
+export const RESET_IP_LIMIT = 30;
 
 export type RateBucket = "snap" | "judge" | "book";
 
@@ -62,12 +63,30 @@ function storeFor(bucket: RateBucket): Map<string, Hit> {
   return snapHits;
 }
 
-function limitsFor(bucket: RateBucket, subjects: readonly string[]): { key: string; limit: number }[] {
+function limitsFor(
+  bucket: RateBucket,
+  subjects: readonly string[],
+  userLimit = SNAP_USER_LIMIT,
+): { key: string; limit: number }[] {
   return subjects.map((key) => {
     const user = key.startsWith("user:");
     if (bucket === "book") return { key, limit: user ? BOOK_USER_LIMIT : BOOK_IP_LIMIT };
-    return { key, limit: user ? SNAP_USER_LIMIT : SNAP_IP_LIMIT };
+    return { key, limit: user ? userLimit : SNAP_IP_LIMIT };
   });
+}
+
+async function isDemoAccount(userId: string): Promise<boolean> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return false;
+  try {
+    const { createClient } = await import("../supabase/server");
+    const supabase = await createClient();
+    const found = await supabase.from("demo_accounts").select("role").eq("user_id", userId).limit(1);
+    if (found.error || !Array.isArray(found.data)) return false;
+    return found.data.length > 0;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error) throw error;
+    return false;
+  }
 }
 
 function missingRateFunction(message: string): boolean {
@@ -122,10 +141,15 @@ export async function allowSnap(
   userId: string | null,
   now = Date.now(),
   read: RateRead = takeFromDatabase,
+  demo?: boolean,
 ): Promise<boolean> {
   const subjects: string[] = [];
   if (userId) subjects.push("user:" + userId);
   subjects.push("ip:" + ip);
+  const demoAccount = demo ?? (userId ? await isDemoAccount(userId) : false);
+  if (demoAccount && userId) {
+    return take(snapHits, limitsFor("snap", subjects, DEMO_SNAP_USER_LIMIT), now);
+  }
   return consumeRate("snap", subjects, now, read);
 }
 

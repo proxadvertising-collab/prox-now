@@ -16,6 +16,7 @@ export type ContextShop = {
   hours: unknown;
   items: { name: string; price: string | null }[];
   book: boolean;
+  demo?: boolean;
 };
 
 export type ContextPost = {
@@ -40,6 +41,7 @@ export type PlaceContext = {
   hoursText: string | null;
   items: { name: string; price: string | null }[];
   posts: { caption: string; ageMinutes: number }[];
+  demo: boolean;
 };
 
 function itemsOf(items: ContextShop["items"]): PlaceContext["items"] {
@@ -64,6 +66,7 @@ export function buildContext(input: {
   now: Date;
   shops: readonly ContextShop[];
   posts: readonly ContextPost[];
+  keepDemo?: boolean;
 }): PlaceContext[] {
   const nowMs = input.now.getTime();
   const live = input.posts.filter((post) => {
@@ -87,7 +90,7 @@ export function buildContext(input: {
     const shopPosts = (postsByShop.get(shop.id) ?? [])
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .slice(0, 3);
-    if (!shop.book && shopPosts.length === 0) continue;
+    if (!shop.book && shopPosts.length === 0 && !(input.keepDemo && shop.demo)) continue;
     const hours = parseHours(shop.hours);
     const open = openState(hours, shop.timezone || "Asia/Bangkok", input.now);
     places.push({
@@ -102,6 +105,7 @@ export function buildContext(input: {
       open: open.state,
       hoursText: hours?.raw ?? null,
       items: itemsOf(shop.items),
+      demo: shop.demo === true,
       posts: shopPosts.map((post) => ({
         caption: (post.caption ?? "").trim().slice(0, 80),
         ageMinutes: ageMinutes(post.createdAt, nowMs),

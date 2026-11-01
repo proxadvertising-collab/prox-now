@@ -44,15 +44,19 @@ export async function POST(request: Request) {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
 
-  if (!(await allowSnap(clientIp(request), data.user.id))) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
-  }
+  const samples = new URL(request.url).searchParams.get("samples") === "1";
+  if (samples) return NextResponse.json(null);
 
   let form: FormData;
   try {
     form = await request.formData();
   } catch {
     return NextResponse.json(null);
+  }
+  if (form.get("samples") === "1") return NextResponse.json(null);
+
+  if (!(await allowSnap(clientIp(request), data.user.id))) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const image = form.get("image");

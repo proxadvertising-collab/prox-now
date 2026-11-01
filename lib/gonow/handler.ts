@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { hasDemoSessionCookie } from "../demo/zone";
 import type { LatLng } from "../geo";
+import { hasJudgeCookie } from "../judge/session";
 import { allowSnap, clientIp } from "../rate/window";
 import { hasShopEnv } from "../shops/source";
 import { createClient } from "../supabase/server";
@@ -25,6 +27,7 @@ export type GoNowDeps = {
   call?: (prompt: string) => Promise<unknown>;
   now?: () => Date;
   userId?: () => Promise<string | null>;
+  demoSession?: () => Promise<boolean>;
 };
 
 function json(body: unknown, status = 200) {
@@ -48,12 +51,38 @@ function card(place: PlaceContext, reason: string): GoNowCard {
   };
 }
 
-function nearbyCards(places: readonly PlaceContext[]): GoNowCard[] {
+function fallbackReason(place: PlaceContext, demoSession: boolean): string | null {
+  if (place.open === "open") return "";
+  if (!demoSession || !place.demo) return null;
+  if (place.open === "closed") return "Closed now";
+  if (place.open === "unknown") return "Hours not listed";
+  return null;
+}
+
+function nearbyCards(places: readonly PlaceContext[], demoSession: boolean): GoNowCard[] {
   return places
-    .filter((place) => place.open === "open")
+    .filter((place) => fallbackReason(place, demoSession) !== null)
     .sort((a, b) => a.distanceM - b.distanceM || a.shopId.localeCompare(b.shopId))
     .slice(0, 5)
-    .map((place) => card(place, ""));
+    .map((place) => card(place, fallbackReason(place, demoSession) ?? ""));
+}
+
+async function sessionIsDemo(request: Request): Promise<boolean> {
+  const cookie = request.headers.get("cookie") ?? "";
+  if (hasJudgeCookie(cookie) || hasDemoSessionCookie(cookie)) return true;
+  if (!hasShopEnv()) return false;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    const id = data.user?.id;
+    if (!id) return false;
+    const found = await supabase.from("demo_accounts").select("role").eq("user_id", id).limit(1);
+    if (found.error || !Array.isArray(found.data)) return false;
+    return found.data.length > 0;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error) throw error;
+    return false;
+  }
 }
 
 async function signedInUserId(): Promise<string | null> {
@@ -85,6 +114,7 @@ export async function handleGoNow(request: Request, deps: GoNowDeps = {}): Promi
   if (!allowed) return json({ error: "rate_limited" }, 429);
 
   const now = (deps.now ?? (() => new Date()))();
+  const demoSession = await (deps.demoSession ?? (() => sessionIsDemo(request)))();
   let rows: { shops: ContextShop[]; posts: ContextPost[] };
   try {
     rows = await (deps.load ?? loadGoNowRows)({ lat, lng }, now);
@@ -92,7 +122,7 @@ export async function handleGoNow(request: Request, deps: GoNowDeps = {}): Promi
     return json({ mode: "empty", picks: [], nearby: [] });
   }
 
-  const places = buildContext({ origin: { lat, lng }, now, shops: rows.shops, posts: rows.posts });
+  const places = buildContext({ origin: { lat, lng }, now, shops: rows.shops, posts: rows.posts, keepDemo: demoSession });
   if (places.length === 0) return json({ mode: "empty", picks: [], nearby: [] });
 
   const byId = new Map(places.map((place) => [place.shopId, place]));
@@ -104,9 +134,9 @@ export async function handleGoNow(request: Request, deps: GoNowDeps = {}): Promi
         return place ? card(place, pick.reason) : null;
       })
       .filter((pick): pick is GoNowCard => pick !== null);
-    if (picks.length === 0) return json({ mode: "nearby", picks: [], nearby: nearbyCards(places) });
+    if (picks.length === 0) return json({ mode: "nearby", picks: [], nearby: nearbyCards(places, demoSession) });
     return json({ mode: "picks", picks, nearby: [] });
   } catch {
-    return json({ mode: "nearby", picks: [], nearby: nearbyCards(places) });
+    return json({ mode: "nearby", picks: [], nearby: nearbyCards(places, demoSession) });
   }
 }
