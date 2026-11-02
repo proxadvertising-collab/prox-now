@@ -23,7 +23,8 @@ import { RadarButton } from "@/components/ui/RadarButton";
 import { cameraAskFailed, cameraStart, shutterAction } from "@/lib/camera/camera-gate";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { getFix } from "@/lib/geo/fix-cache";
-import { bookSavePlan, uploadBookSession, type BookShot } from "@/lib/book/builder";
+import { bookFailNote, duplicateBookHref, pagePhotoHash } from "@/lib/book/cameraSave";
+import { bookSavePlan, prepareBookShots, uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { afterPin, chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
 import { PinDrop } from "@/components/camera/PinDrop";
@@ -89,6 +90,13 @@ function locate(): Promise<{ lat: number; lng: number; accuracy: number | null }
 
 function here(): Promise<CaptureFix | null> {
   return captureFix({ lookupDemo: lookupDemoPoint, locate });
+}
+
+async function liveBookHashes(shopId: string): Promise<(string | null)[]> {
+  const supabase = createClient();
+  const pages = await supabase.from("shop_book_pages").select("ai_meta").eq("shop_id", shopId).eq("status", "live");
+  if (pages.error || !Array.isArray(pages.data)) return [];
+  return pages.data.map((row) => pagePhotoHash((row as { ai_meta?: unknown }).ai_meta));
 }
 
 function asNear(value: unknown): NearShop[] {
@@ -707,13 +715,37 @@ export function LiveCamera({
         file: shot.file,
       }));
       const saveFor = target;
+      const prepared = await prepareBookShots(bookShots);
+      if (!createdHere) {
+        try {
+          const duplicate = duplicateBookHref({
+            shopId: saveFor.id,
+            slug: saveFor.slug,
+            shotHashes: prepared.hashes,
+            liveHashes: await liveBookHashes(saveFor.id),
+          });
+          if (duplicate) {
+            const place = fixRef.current ?? shotsRef.current[0]?.fix;
+            const params = new URLSearchParams({ seeded: "1" });
+            if (place) {
+              params.set("lat", String(place.lat));
+              params.set("lng", String(place.lng));
+            }
+            router.push(duplicate + "?" + params.toString());
+            return;
+          }
+        } catch {
+          // A missed read of the live pages still tries the upload.
+        }
+      }
       const startedAt = new Date().toISOString();
       const result = await uploadBookSession(
         saveFor.id,
-        bookShots,
+        prepared.shots,
         fetch,
         createdHere ? undefined : "improve",
         createdHere,
+        { prepared: true },
       ).catch(() => null);
       const plan = bookSavePlan(result);
       if (plan === "again") {
@@ -772,7 +804,10 @@ export function LiveCamera({
       }
       if (plan === "fail") {
         const error = result.body && typeof result.body === "object" ? (result.body as { error?: unknown }).error : null;
-        setNote(result.status === 403 && error === "not_owner" ? "The owner manages this shop's book." : "The book did not save.");
+        const fail = bookFailNote(result.status, error);
+        if (fail === "owner") setNote("The owner manages this shop's book.");
+        else if (fail === "book.pageLimit" || fail === "book.already") setNote(t(langRef.current, fail));
+        else setNote("The book did not save.");
         setPhase("seed");
         return;
       }

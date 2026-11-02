@@ -19,13 +19,11 @@ export function walkingMinutes(meters: number): number {
   return Math.max(1, Math.ceil(meters / 80));
 }
 
-export function walkingDirectionsUrl(point: LatLng, origin?: LatLng | null): string {
-  let url =
-    "https://www.google.com/maps/dir/?api=1&destination=" +
-    point.lat +
-    "," +
-    point.lng +
-    "&travelmode=walking";
+export function walkingDirectionsUrl(point: LatLng & { name?: string | null }, origin?: LatLng | null): string {
+  const name = typeof point.name === "string" ? point.name.trim() : "";
+  const at = point.lat + "," + point.lng;
+  const destination = name ? encodeURIComponent(name) + "@" + at : at;
+  let url = "https://www.google.com/maps/dir/?api=1&destination=" + destination + "&travelmode=walking";
   if (origin) url += "&origin=" + origin.lat + "," + origin.lng;
   return url;
 }

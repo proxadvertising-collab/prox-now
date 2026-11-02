@@ -158,7 +158,7 @@ describe("matcher", () => {
     );
     expect(far.demo).toBe(true);
     expect(far.candidates.length).toBe(FIXTURE_SHOPS.length);
-    expect(far.candidates.every((shop) => shop.distanceM < 600)).toBe(true);
+    expect(far.candidates.every((shop) => shop.distanceM <= 960)).toBe(true);
 
     const missing = selectCandidates(null, FIXTURE_SHOPS, { max: 3 });
     expect(missing.demo).toBe(true);

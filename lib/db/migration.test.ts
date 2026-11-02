@@ -70,9 +70,9 @@ describe("core schema files", () => {
     }
     expect(seed).not.toContain("mexican-friend-tbd");
     expect(seed).not.toContain("TODO Mexican");
-    expect(seed).toMatch(/'beegee-barber'[^)]*true\) -- TODO_REAL_COORDS/);
+    expect(seed).toMatch(/'beegee-barber'[^)]*true\)\s*$/m);
     expect(seed).not.toMatch(/'beegee-barber'[^)]*true\),/);
-    expect(seed.match(/TODO_REAL_COORDS/g)?.length).toBe(8);
+    expect(seed).not.toContain("TODO_REAL_COORDS");
     for (const file of [migration, seed]) {
       expect(file).not.toContain("service_role");
       expect(file).not.toContain("eyJ");
@@ -649,5 +649,42 @@ describe("security migrations 0018 through 0021", () => {
     expect(photos).toContain("drop policy if exists post_photos_select_anon");
     expect(photos).toContain("drop policy if exists shop_book_select_anon");
     expect(photos).toContain("Rollback:");
+  });
+});
+
+describe("demo shop coordinate migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0024_demo_shop_coords.sql"), "utf8");
+  const rollback = readFileSync(resolve(root, "supabase/rollbacks/0024_demo_shop_coords.sql"), "utf8");
+
+  it("moves only the eight demo shops and can be run twice", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("update public.shops as shops");
+    expect(sql).toContain("and shops.is_demo = true");
+    expect(sql).toContain("shops.lat is distinct from seed.lat or shops.lng is distinct from seed.lng");
+    expect(sql).not.toContain("is_demo = false");
+    expect(sql).not.toContain("delete from");
+    expect(sql).not.toContain("auth.users");
+    expect(sql).not.toContain("reset_demo()");
+    expect(sql).not.toContain("eyJ");
+    expect(sql.toLowerCase()).not.toContain("password");
+    for (const slug of [
+      "mala-mafia",
+      "coconut-shake-stand",
+      "krua-mae-yen",
+      "pak-kapi",
+      "thuk-jai-chieo",
+      "clean-together",
+      "baan-air",
+      "beegee-barber",
+    ]) {
+      expect(sql).toContain("'" + slug + "'");
+      expect(rollback).toContain("'" + slug + "'");
+    }
+    expect(rollback).toContain("and shops.is_demo = true");
+    expect(rollback).toContain("12.56850");
+    expect(rollback).toContain("99.95700");
+    expect(rollback).not.toContain("delete from");
+    expect(rollback).not.toContain("auth.users");
+    expect(sql).toContain("supabase/rollbacks/0024_demo_shop_coords.sql");
   });
 });

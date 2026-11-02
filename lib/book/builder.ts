@@ -1,6 +1,7 @@
 import { haversineMeters, type LatLng } from "../geo";
 import { resizeToJpeg } from "../image/resize";
 import { POST_RADIUS_M } from "../snap/place";
+import { sha256Hex } from "./sha256";
 import { savedMaybe } from "./waitBook";
 import { MAX_IMAGES_PER_CALL, MAX_UPLOAD_IMAGES } from "./limits";
 
@@ -212,6 +213,30 @@ async function shrinkBookShot(shot: BookShot): Promise<BookShot> {
   return { id: shot.id, kind: shot.kind, file };
 }
 
+const preparedShots = new WeakMap<Blob, { file: File; hash: string }>();
+
+/** Resize each photo once. A second Done on the same files reuses those bytes and their hash. */
+export async function prepareBookShots(
+  shots: readonly BookShot[],
+): Promise<{ shots: BookShot[]; hashes: string[] }> {
+  const next: BookShot[] = [];
+  const hashes: string[] = [];
+  for (const shot of shots) {
+    const cached = preparedShots.get(shot.file);
+    if (cached) {
+      next.push({ id: shot.id, kind: shot.kind, file: cached.file });
+      hashes.push(cached.hash);
+      continue;
+    }
+    const resized = await shrinkBookShot(shot);
+    const hash = await sha256Hex(await resized.file.arrayBuffer());
+    preparedShots.set(shot.file, { file: resized.file, hash });
+    next.push(resized);
+    hashes.push(hash);
+  }
+  return { shots: next, hashes };
+}
+
 /** Pack resized pages so each request stays within the byte cap. One file that is still over the cap goes alone. */
 export function packBookShots(shots: readonly BookShot[], limit = BOOK_REQUEST_BYTES): BookShot[][] {
   const batches: BookShot[][] = [];
@@ -313,9 +338,11 @@ export async function uploadBookSession(
   fetchImpl: BookFetch = fetch,
   mode?: "improve",
   fresh = false,
+  options?: { prepared?: boolean },
 ): Promise<BookUploadResult> {
   const resized: BookShot[] = [];
-  for (const shot of shots) resized.push(await shrinkBookShot(shot));
+  if (options?.prepared) resized.push(...shots);
+  else for (const shot of shots) resized.push(await shrinkBookShot(shot));
   const batches = packBookShots(resized);
   const forms =
     batches.length > 0

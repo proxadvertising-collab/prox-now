@@ -13,12 +13,12 @@ describe("geo", () => {
     expect(distance).toBeLessThan(120);
   });
 
-  it("keeps neighbouring demo shops within 200 m", () => {
+  it("keeps neighbouring demo shops from sharing one pin", () => {
     const mala = FIXTURE_SHOPS.find((shop) => shop.slug === "mala-mafia");
     const coconut = FIXTURE_SHOPS.find((shop) => shop.slug === "coconut-shake-stand");
     expect(mala).toBeTruthy();
     expect(coconut).toBeTruthy();
-    expect(haversineMeters(mala!, coconut!)).toBeLessThan(200);
+    expect(haversineMeters(mala!, coconut!)).toBeGreaterThanOrEqual(100);
   });
 
   it("adds a demo origin to walking directions and leaves a real visit unchanged", () => {
@@ -29,6 +29,9 @@ describe("geo", () => {
     const routed = walkingDirectionsUrl(point, DEMO_CENTER);
     expect(routed).toBe(plain + "&origin=" + DEMO_CENTER.lat + "," + DEMO_CENTER.lng);
     expect(walkingDirectionsUrl(point, null)).toBe(plain);
+    const named = walkingDirectionsUrl({ ...point, name: "Dawn Cafe" }, DEMO_CENTER);
+    expect(named).toContain("destination=" + encodeURIComponent("Dawn Cafe") + "@12.57,99.96");
+    expect(named).toContain("&origin=" + DEMO_CENTER.lat + "," + DEMO_CENTER.lng);
     const list = readFileSync(resolve(process.cwd(), "components/map/ShopList.tsx"), "utf8");
     expect(list).toContain("walkingDirectionsUrl(shop, fixtures || demoSession ? DEMO_CENTER : null)");
     const sheet = readFileSync(resolve(process.cwd(), "lib/map/pin-sheet.ts"), "utf8");

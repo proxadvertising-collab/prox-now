@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FIXTURE_SHOPS } from "../../../lib/fixtures/shops";
+import { haversineMeters } from "../../../lib/geo";
+import { PICKER_CAP, POST_RADIUS_M } from "../../../lib/snap/place";
 import { POST } from "./route";
 
 const SECRET = "test-meta-key";
@@ -225,8 +228,18 @@ describe("POST /api/analyze", () => {
     expect(response.status).toBe(200);
     expect(body.decision).toBe("pick-all");
     expect(body.noMatch).toBe("which_shop");
-    expect(body.picker).toHaveLength(5);
-    expect(body.picker.every((shop: { distanceM: number }) => shop.distanceM <= 300)).toBe(true);
+    const here = { lat: 12.5685, lng: 99.9575 };
+    const near = FIXTURE_SHOPS.map((shop) => ({
+      id: shop.id,
+      distanceM: Math.round(haversineMeters(here, shop)),
+    }))
+      .filter((shop) => shop.distanceM <= POST_RADIUS_M)
+      .sort((a, b) => a.distanceM - b.distanceM || a.id.localeCompare(b.id))
+      .slice(0, PICKER_CAP);
+    expect(near.length).toBeGreaterThan(0);
+    expect(body.picker).toHaveLength(near.length);
+    expect(body.picker.map((shop: { id: string }) => shop.id)).toEqual(near.map((shop) => shop.id));
+    expect(body.picker.every((shop: { distanceM: number }) => shop.distanceM <= POST_RADIUS_M)).toBe(true);
     for (let index = 1; index < body.picker.length; index += 1) {
       const previous = body.picker[index - 1] as { id: string; distanceM: number };
       const current = body.picker[index] as { id: string; distanceM: number };
