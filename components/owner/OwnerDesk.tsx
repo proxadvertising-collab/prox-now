@@ -388,12 +388,12 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
                   ))}
                 </div>
                 <button type="button" className={primary} disabled={busy} onClick={() => void thank(item)}>
-                  {t("en", "loop.give")}
+                  {t("en", "loop.keepSend")}
                 </button>
               </div>
             ) : (
               <button type="button" className={primary} disabled={busy} onClick={() => openBook(item)}>
-                {t("en", "loop.give")}
+                {t("en", "loop.keepSend")}
               </button>
             )}
             <button type="button" className={danger} disabled={busy} onClick={() => void dismissThanks(item)}>

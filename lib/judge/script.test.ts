@@ -17,9 +17,9 @@ describe("judge script", () => {
     );
     expect(EXPLAINERS.find((step) => step.id === "ask")?.body).toContain("Closed now");
     expect(EXPLAINERS.find((step) => step.id === "ask")?.body).toContain("Hours not listed");
-    expect(EXPLAINERS.find((step) => step.id === "post")?.body).toContain("Give coupon");
+    expect(EXPLAINERS.find((step) => step.id === "post")?.body).toContain("Keep and send coupon");
     expect(EXPLAINERS.find((step) => step.id === "post")?.body).toContain("Keep is for snap posts");
-    expect(EXPLAINERS.find((step) => step.id === "coupon")?.body).toContain("Give coupon");
+    expect(EXPLAINERS.find((step) => step.id === "coupon")?.body).toContain("Keep and send coupon");
     expect(EXPLAINERS.find((step) => step.id === "coupon")?.body).not.toContain("Keep sends");
     expect(BOOK_PROGRESS).toContain("about 30 seconds");
     expect(DEMO_CAFES.a.slug).toBe("mala-mafia");

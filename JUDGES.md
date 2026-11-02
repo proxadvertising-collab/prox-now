@@ -37,7 +37,7 @@ Judge 2's card only appears after Judge 1 has built the book. **End demo** reset
 | # | Do this | You should see | What it proves |
 |---|---|---|---|
 | 7 Claim | Tap **I'm Judge 2 (shop owner)** (or **Swap roles**) | The owner desk. Demo shops are already on it, so there is no claim code. A real shop claims with `POST /api/owner/claim`, covered by `lib/owner/claim.test.ts` | The owner desk. Demo shops skip the claim code |
-| 8 Thank them | Under **New from shoppers**, find the book card. Tap **Give coupon** (you may need to scroll on a phone), keep the offer or edit it, pick 1, 7 or 30 days, then tap **Give coupon** | The shop name, then "Book by Demo", then the page count, on three lines. Then **Give coupon**. After that, "Coupon sent to …" | Owners reward the people who built their book |
+| 8 Thank them | Under **New from shoppers**, find the book card. Tap **Keep and send coupon** (you may need to scroll on a phone), keep the offer or edit it, pick 1, 7 or 30 days, then tap **Keep and send coupon** | The shop name, then "Book by Demo", then the page count, on three lines. Then **Keep and send coupon**. After that, "Coupon sent to …" | Owners reward the people who built their book |
 | 9 Coupon | **Swap roles** opens the wallet. Scratch the card or tap **Reveal code** | A QR code and a short code. The owner can type the code at **Redeem a coupon** | The loop closes from shopper to owner and back |
 
 Finish with **End demo**. It resets the shared demo data and signs you out of this browser only.

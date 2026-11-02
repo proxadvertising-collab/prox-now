@@ -55,10 +55,14 @@ describe("owner desk order", () => {
   });
 
   it("renames give coupon and drops the book card without a reload", () => {
-    expect(t("en", "loop.give")).toBe("Keep and send coupon");
-    expect(t("th", "loop.give")).toBe("เก็บไว้แล้วส่งคูปอง");
+    expect(t("en", "loop.keepSend")).toBe("Keep and send coupon");
+    expect(t("th", "loop.keepSend")).toBe("เก็บไว้แล้วส่งคูปอง");
+    expect(t("en", "loop.give")).toBe("Give coupon");
+    expect(t("th", "loop.give")).toBe("ให้คูปอง");
     expect(t("en", "loop.noThanks")).toBe("No thanks");
     const desk = readFileSync(new URL("./OwnerDesk.tsx", import.meta.url), "utf8");
+    expect(desk.match(/t\("en", "loop.keepSend"\)/g)?.length).toBe(2);
+    expect(desk.match(/t\("en", "loop.give"\)/g)?.length).toBe(1);
     const thank = desk.slice(desk.indexOf("async function thank"), desk.indexOf("async function dismissThanks"));
     const dismiss = desk.slice(desk.indexOf("async function dismissThanks"), desk.indexOf("async function act"));
     expect(thank).toContain("dropThanks(item)");

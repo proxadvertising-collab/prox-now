@@ -30,10 +30,10 @@ export const EXPLAINERS: readonly Explainer[] = [
   { id: "ask", n: 3, title: "Ask", body: "The shopper asks what is good right now. The map answers from nearby shops, open ones first. Outside hours they show as Closed now or Hours not listed." },
   { id: "translate", n: 4, title: "Translate", body: "The order is translated for the counter. Staff see the note in the shop's language, not the shopper's." },
   { id: "order", n: 5, title: "Order", body: "Items are on one order. Show to staff is the screen the counter reads, with quantities and the translated note." },
-  { id: "post", n: 6, title: "Post", body: "A snap post is for the map. Keep is for snap posts. In the tour, the coupon comes from Give coupon on the shop's book card." },
+  { id: "post", n: 6, title: "Post", body: "A snap post is for the map. Keep is for snap posts. In the tour, the coupon comes from Keep and send coupon on the shop's book card." },
   { id: "claim", n: 7, title: "Claim", body: "A real shop claims with a code photo checked by Meta AI. The demo skips it." },
   { id: "thanks", n: 8, title: "Thank them", body: "Judge 1 built your book, so you can thank them with a coupon." },
-  { id: "coupon", n: 9, title: "Coupon", body: "Give coupon on the shop's book card sends the coupon to the shopper. They scratch it in the wallet, and the owner can redeem it at the till. Keep is for snap posts." },
+  { id: "coupon", n: 9, title: "Coupon", body: "Keep and send coupon on the shop's book card sends the coupon to the shopper. They scratch it in the wallet, and the owner can redeem it at the till. Keep is for snap posts." },
 ];
 
 const STEP_IDS = new Set<string>(EXPLAINERS.map((step) => step.id));
