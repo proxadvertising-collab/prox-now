@@ -139,7 +139,7 @@ describe("muse spark open check", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("sends item text and at most two photos", async () => {
+  it("sends item text and at most four photos", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const sent = { body: {} as { messages?: { content?: { type?: string; text?: string }[] }[] } };
     const fetchImpl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -148,6 +148,8 @@ describe("muse spark open check", () => {
     }) as typeof fetch;
     await checkMenuOpen({
       images: [
+        { dataUrl: photo },
+        { dataUrl: photo },
         { dataUrl: photo },
         { dataUrl: photo },
         { dataUrl: photo },
@@ -310,6 +312,31 @@ describe("muse spark open check", () => {
     expect(pageA?.aiMeta).toEqual({ photo_hash: "a", open_check: true });
     expect(pageB?.aiMeta).toEqual({ photo_hash: "b", open_check: true });
     expect(saved.find((row) => row.id === "page-empty")).toBeUndefined();
+  });
+
+  it("sends all three photos that produced one row's items", async () => {
+    const seen: string[][] = [];
+    await finishOpenCheck({
+      pages: [
+        {
+          id: "menu",
+          extracted: { items: [{ name: "Pad Thai" }, { name: "Soup" }, { name: "Tea" }] },
+          aiMeta: { photo_hash: "menu" },
+          jpegs: [Buffer.from("one"), Buffer.from("two"), Buffer.from("three")],
+        },
+      ],
+      downscale: async (jpeg) => "data:image/jpeg;base64," + jpeg.toString("utf8"),
+      check: async (input) => {
+        seen.push(input.images.map((image) => image.dataUrl));
+        expect(input.items.map((item) => item.name)).toEqual(["Pad Thai", "Soup", "Tea"]);
+        expect(input.timeoutMs).toBe(30_000);
+        return { ran: true, confirmed: ["Pad Thai", "Soup", "Tea"], unconfirmed: [] };
+      },
+      save: async () => undefined,
+    });
+    expect(seen).toEqual([
+      ["data:image/jpeg;base64,one", "data:image/jpeg;base64,two", "data:image/jpeg;base64,three"],
+    ]);
   });
 
   it("logs one line when the after-save check throws", async () => {

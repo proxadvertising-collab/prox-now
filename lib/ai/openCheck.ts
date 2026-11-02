@@ -7,7 +7,7 @@ export const OPEN_CHECK_URL = "https://api.fireworks.ai/inference/v1/chat/comple
 export const OPEN_CHECK_MODEL = "accounts/fireworks/models/muse-spark-open";
 export const OPEN_CHECK_TIMEOUT_MS = 30_000;
 export const OPEN_CHECK_MAX_TOKENS = 1500;
-export const OPEN_CHECK_MAX_PHOTOS = 2;
+export const OPEN_CHECK_MAX_PHOTOS = 4;
 export const OPEN_CHECK_MAX_EDGE = 1024;
 export const OPEN_CHECK_MAX_PAGES = 4;
 
@@ -243,7 +243,10 @@ export type SavedOpenPage = {
   id: string;
   extracted: unknown;
   aiMeta: Record<string, unknown>;
+  /** One photo, when the read only had that page. */
   jpeg?: Buffer;
+  /** Every photo from the book read that produced this page's items. */
+  jpegs?: readonly Buffer[];
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -265,7 +268,13 @@ function storedItems(extracted: unknown): { name: string; price?: string | null 
 
 type OpenSave = (row: { id: string; extracted: unknown; aiMeta: Record<string, unknown> }) => Promise<void>;
 
-/** One page, one photo. A miss leaves that page alone. */
+function readJpegs(page: SavedOpenPage): readonly Buffer[] {
+  const many = page.jpegs?.filter((jpeg) => jpeg.length > 0) ?? [];
+  const buffers = many.length > 0 ? many : page.jpeg ? [page.jpeg] : [];
+  return buffers.slice(0, OPEN_CHECK_MAX_PHOTOS);
+}
+
+/** One page's items, against every photo from that read. A miss leaves that page alone. */
 async function checkSavedPage(
   page: SavedOpenPage,
   check: typeof checkMenuOpen,
@@ -275,9 +284,9 @@ async function checkSavedPage(
   const items = storedItems(page.extracted);
   if (items.length === 0) return;
   const images: { dataUrl: string }[] = [];
-  if (page.jpeg) {
+  for (const jpeg of readJpegs(page)) {
     try {
-      images.push({ dataUrl: await downscale(page.jpeg) });
+      images.push({ dataUrl: await downscale(jpeg) });
     } catch {
       // A bad photo is skipped. The names are still checked.
     }
@@ -307,7 +316,7 @@ async function checkSavedPage(
 /**
  * Writes the verdict into shop_book_pages.extracted (needsCheck on items)
  * and shop_book_pages.ai_meta (open_check). Both columns already exist.
- * Each page is checked against its own photo. A miss leaves that page alone.
+ * Each page is checked against the photos from its book read. A miss leaves that page alone.
  */
 export async function finishOpenCheck(input: {
   pages: readonly SavedOpenPage[];

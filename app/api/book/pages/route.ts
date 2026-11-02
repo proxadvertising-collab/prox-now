@@ -1,4 +1,4 @@
-import { finishOpenCheck, scheduleOpenCheck } from "../../../../lib/ai/openCheck";
+import { OPEN_CHECK_MAX_PHOTOS, finishOpenCheck, scheduleOpenCheck } from "../../../../lib/ai/openCheck";
 import { MetaCallError, MetaKeyMissing, MetaParseError, MetaTruncated } from "../../../../lib/ai/meta";
 import { uploadBlock, capStatus } from "../../../../lib/book/caps";
 import { mergeHours, hoursFromOwner, type BookHours } from "../../../../lib/book/hours";
@@ -471,6 +471,37 @@ async function runPrepared(
   };
 }
 
+/** Photos from one book read, capped, keyed by the saved page id. */
+function readJpegsByPage(groups: readonly Ingested[]): Map<string, Buffer[]> {
+  const readIds = new Map<NonNullable<Ingested["read"]>["perPage"], string>();
+  const buckets = new Map<string, Buffer[]>();
+  const byPage = new Map<string, Buffer[]>();
+  groups.forEach((group, groupIndex) => {
+    let readKey = "group:" + String(groupIndex);
+    const perPage = group.read?.perPage;
+    if (perPage) {
+      const callId = [...perPage.values()].find((meta) => meta.callId)?.callId ?? null;
+      if (callId) readKey = "call:" + callId;
+      else {
+        const existing = readIds.get(perPage);
+        if (existing) readKey = existing;
+        else {
+          readKey = "read:" + String(groupIndex);
+          readIds.set(perPage, readKey);
+        }
+      }
+    }
+    for (const page of group.stored) {
+      if (group.plans.some((plan) => plan.index === page.index && plan.action === "skip")) continue;
+      const list = buckets.get(readKey) ?? [];
+      if (list.length < OPEN_CHECK_MAX_PHOTOS) list.push(page.bytes);
+      buckets.set(readKey, list);
+      byPage.set(page.id, list);
+    }
+  });
+  return byPage;
+}
+
 async function commitBook(input: {
   service: SupabaseClient;
   shop: ShopRow;
@@ -717,17 +748,14 @@ async function commitBook(input: {
   }
 
   if (rows.length > 0) {
-    const jpegById = new Map<string, Buffer>();
-    for (const group of groups) {
-      for (const page of group.stored) jpegById.set(page.id, page.bytes);
-    }
+    const jpegsById = readJpegsByPage(groups);
     scheduleOpenCheck(() =>
       finishOpenCheck({
         pages: rows.map((row) => ({
           id: row.id,
           extracted: row.extracted,
           aiMeta: row.ai_meta as Record<string, unknown>,
-          jpeg: jpegById.get(row.id),
+          jpegs: jpegsById.get(row.id) ?? [],
         })),
         save: async (saved) => {
           await service
@@ -1030,7 +1058,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
     id: string;
     extracted: unknown;
     aiMeta: Record<string, unknown>;
-    jpeg?: Buffer;
+    jpegs: Buffer[];
   }[] = [];
   for (const target of targets) {
     const page = read?.read.pages.find((item) => item.index === target.index) ?? null;
@@ -1057,7 +1085,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
       id: target.id,
       extracted,
       aiMeta: aiMeta as Record<string, unknown>,
-      jpeg: prepared.find((item) => item.index === target.index)?.original,
+      jpegs: prepared.slice(0, OPEN_CHECK_MAX_PHOTOS).map((item) => item.original),
     });
   }
   scheduleOpenCheck(() =>
