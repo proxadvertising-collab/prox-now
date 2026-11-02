@@ -33,7 +33,7 @@ import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { BuildProgress } from "@/components/book/BuildProgress";
 import { BookReadMiss } from "@/components/book/BookReadMiss";
-import { DEMO_CAFES, demoShopTarget, explainer, judgeSampleSave, readTour } from "@/lib/judge/script";
+import { DEMO_CAFES, demoShopTarget, judgeSampleSave, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 
 import {
@@ -919,11 +919,6 @@ export function LiveCamera({
       <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back" style={onTour ? { top: "calc(1rem + var(--tour-bar, 0px))" } : undefined}>
         ←
       </Link>
-      {onTour ? (
-        <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white">
-          {explainer("seed").body}
-        </p>
-      ) : null}
       {phase === "camera" ? (
         <button type="button" className="seed-open" onClick={() => void openPicker()}>
           {t(lang, "seed.shop")}

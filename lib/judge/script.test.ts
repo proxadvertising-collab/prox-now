@@ -68,8 +68,8 @@ describe("judge script", () => {
     expect(demoShopTarget("mala-mafia", { id: "mala-mafia", slug: "mala-mafia" })).toBeNull();
     expect(tourHref("shopper")).toBe("/snap?tour=1&samples=1");
     expect(tourHref("owner")).toBe("/owner?tour=1");
-    expect(camera).toContain('explainer("seed").body');
-    expect(camera).toContain("truncate whitespace-nowrap");
+    expect(camera).not.toContain('explainer("seed").body');
+    expect(camera).not.toContain("truncate whitespace-nowrap");
     expect(camera).toContain("Use pre-seeded photos");
     expect(camera).toContain("Turn on location to use sample photos");
     expect(camera).toContain("top-[7.5rem] inset-x-0 z-20 mx-auto");
