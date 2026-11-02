@@ -1,7 +1,18 @@
 "use client";
 
-import { useLayoutEffect, useState, type FormEvent } from "react";
-import { signUpFailure } from "@/lib/auth/signup";
+import { useEffect, useLayoutEffect, useState, type FormEvent } from "react";
+import {
+  canResend,
+  codeDigits,
+  codeReady,
+  CODE_COOLDOWN_S,
+  codeStepAfterSignUp,
+  resendPlan,
+  signInNeedsCode,
+  signUpFailure,
+  tickCooldown,
+  verifyOutcome,
+} from "@/lib/auth/signup";
 import { t } from "@/lib/copy";
 import {
   KEEP_STORAGE_KEY,
@@ -22,9 +33,19 @@ function isEmail(value: string): boolean {
 export function LoginForm({ dest, createDest, failed }: { dest: string; createDest: string; failed: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"credentials" | "code">("credentials");
   const [keep, setKeep] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(failed ? t("en", "auth.failed") : null);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((current) => tickCooldown(current)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
   useLayoutEffect(() => {
     let persistence = sessionPersistence(true);
@@ -61,6 +82,14 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         password,
       });
       if (signError) {
+        if (signInNeedsCode(signError.message, signError.code)) {
+          setStep("code");
+          setCode("");
+          setError(null);
+          setNotice(t("en", "auth.sent"));
+          await sendCode(address);
+          return;
+        }
         setError(t("en", "auth.failed"));
         return;
       }
@@ -92,12 +121,16 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
       });
       if (signError) {
         const problem = signUpFailure(signError.message);
-        const key = problem === "taken" ? "auth.taken" : problem === "weak" ? "auth.weak" : problem === "confirm" ? "auth.confirm" : "auth.failed";
+        if (problem === "confirm") {
+          openCode(address);
+          return;
+        }
+        const key = problem === "taken" ? "auth.taken" : problem === "weak" ? "auth.weak" : "auth.failed";
         setError(t("en", key));
         return;
       }
-      if (!data.session) {
-        setError(t("en", "auth.confirm"));
+      if (codeStepAfterSignUp(data.session)) {
+        openCode(address);
         return;
       }
       window.location.assign(createDest);
@@ -108,12 +141,81 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
     }
   }
 
+  function openCode(address: string) {
+    setEmail(address);
+    setStep("code");
+    setCode("");
+    setError(null);
+    setNotice(t("en", "auth.sent"));
+    setCooldown(CODE_COOLDOWN_S);
+  }
+
+  async function confirmCode() {
+    const address = email.trim();
+    const token = codeDigits(code);
+    if (!codeReady(token)) {
+      setError(t("en", "auth.mismatch"));
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const supabase = createClient({ keepSignedIn: keep });
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        email: address,
+        token,
+        type: "email",
+      });
+      if (verifyOutcome(otpError == null) === "mismatch") {
+        setError(t("en", "auth.mismatch"));
+        return;
+      }
+      window.location.assign(dest);
+    } catch {
+      setError(t("en", "auth.mismatch"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendCode(address: string) {
+    const plan = resendPlan(cooldown);
+    if (!plan.send) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const supabase = createClient({ keepSignedIn: keep });
+      const { error: resendError } = await supabase.auth.resend({ type: "signup", email: address });
+      if (resendError) {
+        setError(t("en", "auth.failed"));
+        return;
+      }
+      setCooldown(plan.cooldown);
+      setNotice(t("en", "auth.sent"));
+    } catch {
+      setError(t("en", "auth.failed"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function useDifferentEmail() {
+    setStep("credentials");
+    setCode("");
+    setNotice(null);
+    setError(null);
+    setCooldown(0);
+  }
+
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading) return;
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    const mode = submitter instanceof HTMLButtonElement ? submitter.value : "sign-in";
+    const mode = submitter instanceof HTMLButtonElement ? submitter.value : step === "code" ? "confirm" : "sign-in";
     if (mode === "sign-up") void signUp();
+    else if (mode === "confirm") void confirmCode();
+    else if (mode === "resend") void sendCode(email.trim());
+    else if (mode === "switch") useDifferentEmail();
     else void signIn();
   }
 
@@ -124,8 +226,58 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         role={error ? "alert" : "status"}
         className={"min-h-6 text-label " + (error ? "text-danger" : "text-fg-muted")}
       >
-        {error ?? ""}
+        {error ?? notice ?? ""}
       </p>
+      {step === "code" ? (
+        <>
+          <p className="text-body text-fg">{email.trim()}</p>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="code" className="text-label font-semibold text-fg">
+              {t("en", "auth.codeLabel")}
+            </label>
+            <input
+              id="code"
+              name="code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoCapitalize="none"
+              autoCorrect="off"
+              maxLength={6}
+              className={field}
+              value={code}
+              aria-describedby="auth-message"
+              aria-invalid={error ? true : undefined}
+              onChange={(event) => {
+                setCode(codeDigits(event.target.value));
+                setError(null);
+              }}
+            />
+          </div>
+          <button type="submit" name="mode" value="confirm" className={primary} disabled={loading}>
+            {t("en", "auth.verify")}
+          </button>
+          <button
+            type="submit"
+            name="mode"
+            value="resend"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-border px-4 text-base font-semibold text-fg"
+            disabled={loading || !canResend(cooldown)}
+          >
+            {canResend(cooldown) ? t("en", "auth.resend") : t("en", "auth.resendIn", { t: String(cooldown) })}
+          </button>
+          <button
+            type="submit"
+            name="mode"
+            value="switch"
+            className="inline-flex min-h-12 w-full items-center justify-center text-base font-semibold text-fg"
+            disabled={loading}
+          >
+            Use a different email
+          </button>
+        </>
+      ) : (
+      <>
       <div className="flex flex-col gap-2">
         <label htmlFor="email" className="text-label font-semibold text-fg">
           {t("en", "auth.emailLabel")}
@@ -185,6 +337,8 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
           {t("en", "auth.create")}
         </button>
       </div>
+      </>
+      )}
     </form>
   );
 }

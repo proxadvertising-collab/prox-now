@@ -8,6 +8,45 @@ export function accountDest(next: string | null | undefined): string {
   return "/snap";
 }
 
+export const CODE_COOLDOWN_S = 60;
+
+/** No session means the confirmation code is still in the email. */
+export function codeStepAfterSignUp(session: unknown): boolean {
+  return session == null;
+}
+
+/** A password sign-in for an account that has not confirmed yet. */
+export function signInNeedsCode(message: string, code?: string): boolean {
+  if (code === "email_not_confirmed") return true;
+  return signUpFailure(message) === "confirm";
+}
+
+export function codeDigits(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, 6);
+}
+
+export function codeReady(token: string): boolean {
+  return /^\d{6}$/.test(token);
+}
+
+export function verifyOutcome(ok: boolean): "signed-in" | "mismatch" {
+  return ok ? "signed-in" : "mismatch";
+}
+
+export function canResend(cooldown: number): boolean {
+  return cooldown <= 0;
+}
+
+/** A new code is allowed only after the wait. A send starts another full wait. */
+export function resendPlan(cooldown: number): { send: boolean; cooldown: number } {
+  if (!canResend(cooldown)) return { send: false, cooldown };
+  return { send: true, cooldown: CODE_COOLDOWN_S };
+}
+
+export function tickCooldown(seconds: number): number {
+  return seconds > 0 ? seconds - 1 : 0;
+}
+
 /** Maps a Supabase sign-up error onto a short reason. Confirmation is a separate check. */
 export function signUpFailure(message: string): SignUpProblem {
   const text = message.toLowerCase();
