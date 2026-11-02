@@ -10,12 +10,14 @@ Indie track, theme "Build for Your World". Built during the Meta Global AI Devel
 
 The demo café photos are real photos taken by the founder, not AI-generated.
 
+The shop in the demo video is a real all-Thai shop in Hua Hin, built live with Prox Now. The owner asked not to be filmed.
+
 ## Submitted build
 | | |
 |---|---|
 | Live app | https://prox-now.vercel.app |
 | Branch and commit | `feat/judge-mode`, `70d5f87` |
-| Production deployment | `dpl_BcebcUx6JApMs7GUTjo6YtLtdSxT` |
+| Production deployment | `dpl_J7jUhsJs6hHgLjtduQFtPdkrMVoL` |
 | Tests | 542 tests, 119 files |
 | Demo video | TODO |
 
@@ -45,7 +47,7 @@ Every AI call in the app goes to **`muse-spark-1.3`** on the Meta Model API (`ht
 | Impact | Real pilot street, real shop photos in the demo; tourists and shops with no English menu; places people add are exported as public GeoJSON (`app/api/places/export/route.ts`) |
 | Use of Meta AI | 11 features on `muse-spark-1.3`, including multi-image book reading, vision-based face blur, claim-photo checks and translation (table above) |
 | Demo | One-tap `/judge`, a 9-step guided tour with an explainer on every step (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`), pre-seeded real photos so no camera is needed, and End demo resets (`lib/judge/runReset.ts`) |
-| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 536 unit tests in 119 files |
+| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 542 unit tests in 119 files |
 
 ## Architecture
 ```mermaid
@@ -68,7 +70,7 @@ flowchart LR
 npm install
 cp .env.example .env.local   # fill in values on your machine; never commit it
 npm run dev                  # http://localhost:3000
-npm test                     # vitest: 119 files, 536 tests
+npm test                     # vitest: 119 files, 542 tests
 npm run build
 ```
 `.env.example` (names only):
