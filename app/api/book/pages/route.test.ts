@@ -195,6 +195,7 @@ function installFetch() {
       return metaResponse(JSON.stringify({ pages: indexes.map((index) => ({ index, faces })) }));
     }
     if (mode === "rest") return new Response("rate limit", { status: 429 });
+    if (mode === "down") return new Response("bad gateway", { status: 502 });
     if (mode === "named") {
       return metaResponse(
         JSON.stringify({
@@ -840,6 +841,15 @@ describe("POST /api/book/pages", () => {
       items: [{ name: "Pad Thai", price: "50", currency: "THB", note: null }],
     });
     expect(menu[0]?.ai_meta).toMatchObject({ model: "muse-spark-1.3-live", images_in_call: 3 });
+  });
+
+  it("returns 502 and stores nothing when the seed read gets a Meta 502", async () => {
+    mode = "down";
+    const response = await postSession([{ kind: "menu" }, { kind: "menu" }]);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "upstream" });
+    expect(state.pages).toHaveLength(0);
+    expect(state.uploads).toHaveLength(0);
   });
 
   it("keeps seed photos and sets ai_meta.error when the AI call fails", async () => {

@@ -13,8 +13,10 @@ import {
   BOOK_CAPTURE_STEPS,
   addBookShots,
   atThisShop,
+  BOOK_READ_MISS,
   bookBuildHref,
   bookErrorKey,
+  bookSavePlan,
   bookUploadState,
   removeBookShot,
   uploadBookSession,
@@ -77,6 +79,7 @@ export function BookBuilder({
   const [shots, setShots] = useState<Queued[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [readAgain, setReadAgain] = useState(false);
   const shotsRef = useRef<Queued[]>([]);
 
   useEffect(() => {
@@ -159,12 +162,18 @@ export function BookBuilder({
       return;
     }
     setBusy(true);
+    setReadAgain(false);
     setNote(t("en", "book.uploading", { n: String(shots.length) }));
     try {
       const result = await uploadBookSession(
         shopId,
         shots.map(({ id, kind, file }) => ({ id, kind, file })),
       );
+      if (bookSavePlan(result) === "again") {
+        setNote(BOOK_READ_MISS);
+        setReadAgain(true);
+        return;
+      }
       const state = bookUploadState(result.status, result.error);
       if (state === "signin") {
         window.location.assign("/login?next=" + encodeURIComponent(bookBuildHref(slug)));
@@ -321,6 +330,11 @@ export function BookBuilder({
         <p role="status" className="text-body text-fg">
           {note}
         </p>
+      ) : null}
+      {readAgain ? (
+        <button type="button" className={primary} onClick={() => void save()}>
+          Try again
+        </button>
       ) : null}
     </div>
   );

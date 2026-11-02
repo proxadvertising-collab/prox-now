@@ -23,6 +23,8 @@ import {
   bookNeedsBuild,
   bookSessionForm,
   bookTileInput,
+  BOOK_READ_MISS,
+  bookSavePlan,
   bookUploadState,
   museCallSizes,
   nextShopNearby,
@@ -235,16 +237,53 @@ describe("book capture session", () => {
       calls.push(1);
       return new Response("bad gateway", { status: 502 });
     });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(failed.status).toBe(502);
+    expect(failed.readFailed).toBe(true);
     expect(failed.error).toBeUndefined();
+    expect(bookSavePlan(failed)).toBe("again");
     expect(bookUploadState(failed.status, failed.error)).toBe("rejected");
 
+    let namedCalls = 0;
     const named = await uploadBookSession("shop-9", shots, async () => {
+      namedCalls += 1;
       return new Response(JSON.stringify({ error: "upload_failed" }), { status: 502 });
     });
+    expect(namedCalls).toBe(1);
     expect(named.error).toBe("upload_failed");
+    expect(named.readFailed).toBeUndefined();
     expect(bookUploadState(named.status, named.error)).toBe("rejected");
+  });
+
+  it("a mocked 502 then success builds the book, and a 502 twice shows the retry message", async () => {
+    const shots = addBookShots([], "menu", [photo("menu.jpg")]).shots;
+    const shops: string[] = [];
+    const names: string[] = [];
+    const queued = [502, 200];
+    const built = await uploadBookSession("shop-9", shots, async (_url, init) => {
+      shops.push(String(init.body.get("shop")));
+      const file = init.body.get("menu");
+      names.push(file instanceof File ? file.name : "");
+      const status = queued.shift() ?? 200;
+      if (status === 502) return new Response("bad gateway", { status: 502 });
+      return new Response(JSON.stringify({ slug: "mala-mafia", pages: [{ id: "p1" }] }), { status: 200 });
+    });
+    expect(shops).toEqual(["shop-9", "shop-9"]);
+    expect(names).toEqual(["menu.jpg", "menu.jpg"]);
+    expect(built.status).toBe(200);
+    expect(built.readFailed).toBeUndefined();
+    expect(bookSavePlan(built)).toBe("open");
+    expect((built.body as { slug?: string }).slug).toBe("mala-mafia");
+
+    let twice = 0;
+    const missed = await uploadBookSession("shop-9", shots, async () => {
+      twice += 1;
+      return new Response("bad gateway", { status: 502 });
+    });
+    expect(twice).toBe(2);
+    expect(missed.readFailed).toBe(true);
+    expect(bookSavePlan(missed)).toBe("again");
+    expect(BOOK_READ_MISS).toBe("Couldn't read the photos. Try again");
   });
 
   it("keeps one storefront, queues library extras as menu, and caps menu at 8", () => {

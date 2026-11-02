@@ -823,6 +823,10 @@ async function ingestSeed(
     if (forModel.length > 0) read = await readSeedBatch(forModel.map((item) => item.image));
     else if (dupeByIndex.size > 0) read = emptyBookPass();
   } catch (error) {
+    if (error instanceof MetaCallError && (error.code === "timeout" || error.code === "upstream")) {
+      const status = error.code === "timeout" ? 504 : 502;
+      return json({ error: error.code === "timeout" ? "timeout" : "upstream" }, status);
+    }
     aiError = readFailure(error);
     read = null;
   }

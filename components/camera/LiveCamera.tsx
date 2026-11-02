@@ -23,15 +23,16 @@ import { RadarButton } from "@/components/ui/RadarButton";
 import { cameraStart, shutterAction } from "@/lib/camera/camera-gate";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { getFix } from "@/lib/geo/fix-cache";
-import { uploadBookSession, type BookShot } from "@/lib/book/builder";
+import { bookSavePlan, uploadBookSession, type BookShot } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
 import { afterPin, chooseShotPlace, frameSaveKey } from "@/lib/snap/where";
 import { PinDrop } from "@/components/camera/PinDrop";
 import { PLACEHOLDER_SHOP_NAME, seedBookPath } from "@/lib/book/seedName";
-import { savedMaybe, waitForBook } from "@/lib/book/waitBook";
+import { waitForBook } from "@/lib/book/waitBook";
 import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { BuildProgress } from "@/components/book/BuildProgress";
+import { BookReadMiss } from "@/components/book/BookReadMiss";
 import { DEMO_CAFES, demoShopTarget, explainer, judgeSampleSave, readTour } from "@/lib/judge/script";
 import { stageSnapFile } from "@/lib/snap/handoff";
 
@@ -134,6 +135,7 @@ export function LiveCamera({
   const [lang, setLang] = useState<Lang>("en");
   const [liveFile, setLiveFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
+  const [readAgain, setReadAgain] = useState(false);
   const [retryShot, setRetryShot] = useState(false);
   const [cameraClosed, setCameraClosed] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -583,6 +585,7 @@ export function LiveCamera({
     setAskJoin(null);
     setBusy(true);
     setPhase("building");
+    setReadAgain(false);
     setNote("");
     try {
       let target = shop;
@@ -664,7 +667,12 @@ export function LiveCamera({
         createdHere ? undefined : "improve",
         createdHere,
       ).catch(() => null);
-      if (!result || savedMaybe(result.status)) {
+      const plan = bookSavePlan(result);
+      if (plan === "again") {
+        setReadAgain(true);
+        return;
+      }
+      if (plan === "probe") {
         const supabase = createClient();
         const userId = (await supabase.auth.getUser().catch(() => null))?.data.user?.id ?? null;
         const slug = await waitForBook(saveFor.id, async (shopId) => {
@@ -708,12 +716,13 @@ export function LiveCamera({
         setPhase("seed");
         return;
       }
-      if (result.status === 401) {
+      if (!result) return;
+      if (plan === "signin") {
         setNote("Sign in to save.");
         setPhase("seed");
         return;
       }
-      if (result.status >= 400) {
+      if (plan === "fail") {
         const error = result.body && typeof result.body === "object" ? (result.body as { error?: unknown }).error : null;
         setNote(result.status === 403 && error === "not_owner" ? "The owner manages this shop's book." : "The book did not save.");
         setPhase("seed");
@@ -939,7 +948,7 @@ export function LiveCamera({
       ) : null}
       {phase === "building" ? (
         <div className="seed-build">
-          <BuildProgress />
+          {readAgain ? <BookReadMiss onAgain={() => void save(picked)} /> : <BuildProgress />}
         </div>
       ) : null}
       {flipMode === "hide" || cameraClosed || !cameraReady ? null : (

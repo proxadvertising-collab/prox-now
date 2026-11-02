@@ -77,7 +77,7 @@ Without `META_API_KEY`, the AI routes return `ai_not_configured` ("The shop read
 - One pilot street. Prices appear only when the model can read them.
 - The demo uses two shared accounts. Judges running at the same time share one demo state.
 - Demo shops skip the claim code; a real shop needs the code photo.
-- A book takes about a minute to build.
+- A book takes about 30 seconds to build.
 
 ## More
 Design: [docs/design/DESIGN.md](docs/design/DESIGN.md) · Build notes: `docs/build/` · Provenance: [docs/PROVENANCE.md](docs/PROVENANCE.md)

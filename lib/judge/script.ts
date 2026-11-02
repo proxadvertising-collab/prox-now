@@ -1,6 +1,6 @@
 export const TOUR_KEY = "prox-judge-tour";
 export const SEEN_KEY = "prox-explain-seen";
-export const BOOK_PROGRESS = "Building your book, about a minute";
+export const BOOK_PROGRESS = "Building your book, about 30 seconds";
 
 export type CafeId = "a" | "b";
 export type TourRole = "shopper" | "owner";
@@ -27,13 +27,13 @@ export type Explainer = { id: StepId; n: number; title: string; body: string };
 export const EXPLAINERS: readonly Explainer[] = [
   { id: "seed", n: 1, title: "Seed", body: "These photos become the shop's menu. A judge can use the sample set, so the demo does not need a camera." },
   { id: "book", n: 2, title: "Book", body: "Prox Now is reading the photos into a book the shopper can swipe. That book is what the rest of the visit uses." },
-  { id: "ask", n: 3, title: "Ask", body: "The shopper asks what is good right now. The map answers from shops that are open, instead of a static list." },
+  { id: "ask", n: 3, title: "Ask", body: "The shopper asks what is good right now. The map answers from nearby shops, open ones first. Outside hours they show as Closed now or Hours not listed." },
   { id: "translate", n: 4, title: "Translate", body: "The order is translated for the counter. Staff see the note in the shop's language, not the shopper's." },
   { id: "order", n: 5, title: "Order", body: "Items are on one order. Show to staff is the screen the counter reads, with quantities and the translated note." },
-  { id: "post", n: 6, title: "Post", body: "A snap puts the shop on the live map. On a demo shop the owner can Keep it now, without waiting out the two-hour life." },
-  { id: "claim", n: 7, title: "Claim", body: "You already own the demo cafés. A real shop claims with a code photo that Meta AI checks." },
+  { id: "post", n: 6, title: "Post", body: "A snap post is for the map. Keep is for snap posts. In the tour, the coupon comes from Give coupon on the shop's book card." },
+  { id: "claim", n: 7, title: "Claim", body: "A real shop claims with a code photo checked by Meta AI. The demo skips it." },
   { id: "thanks", n: 8, title: "Thank them", body: "Judge 1 built your book, so you can thank them with a coupon." },
-  { id: "coupon", n: 9, title: "Coupon", body: "Keep sends a coupon to the shopper who posted. They scratch it in the wallet, and the owner can redeem it at the till." },
+  { id: "coupon", n: 9, title: "Coupon", body: "Give coupon on the shop's book card sends the coupon to the shopper. They scratch it in the wallet, and the owner can redeem it at the till. Keep is for snap posts." },
 ];
 
 const STEP_IDS = new Set<string>(EXPLAINERS.map((step) => step.id));

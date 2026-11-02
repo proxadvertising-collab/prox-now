@@ -1,6 +1,7 @@
 import { haversineMeters, type LatLng } from "../geo";
 import { resizeToJpeg } from "../image/resize";
 import { POST_RADIUS_M } from "../snap/place";
+import { savedMaybe } from "./waitBook";
 import { MAX_IMAGES_PER_CALL, MAX_UPLOAD_IMAGES } from "./limits";
 
 export const BOOK_PICK_CAP = MAX_UPLOAD_IMAGES;
@@ -257,7 +258,54 @@ export type BookUploadResult = {
   status: number;
   error?: string;
   body: unknown;
+  readFailed?: boolean;
 };
+
+/** Shown when a Meta read fails twice. The same photos stay on the build. */
+export const BOOK_READ_MISS = "Couldn't read the photos. Try again";
+
+const STORED_FAILURES = new Set([
+  "upload_failed",
+  "too_big",
+  "bad_image",
+  "rate_limited",
+  "not_signed_in",
+  "not_a_menu",
+  "page_limit",
+  "book_hidden",
+  "already_there",
+  "not_owner",
+  "bad_kind",
+  "not_found",
+]);
+
+/** One automatic retry for a Meta 5xx or a dropped request. Storage errors stay one try. */
+export function retryBookRead(status: number, error: string | undefined): boolean {
+  if (error && STORED_FAILURES.has(error)) return false;
+  if (status === 0) return true;
+  return status >= 500;
+}
+
+export function bookSavePlan(
+  result: Pick<BookUploadResult, "status" | "readFailed"> | null,
+): "again" | "probe" | "signin" | "fail" | "open" {
+  if (result?.readFailed) return "again";
+  if (!result || savedMaybe(result.status)) return "probe";
+  if (result.status === 401) return "signin";
+  if (result.status >= 400) return "fail";
+  return "open";
+}
+
+async function postBookForm(fetchImpl: BookFetch, form: FormData): Promise<BookUploadResult> {
+  try {
+    const response = await fetchImpl(BOOK_UPLOAD_PATH, { method: "POST", body: form });
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    const error = typeof body?.error === "string" ? body.error : undefined;
+    return { url: BOOK_UPLOAD_PATH, status: response.status, error, body };
+  } catch {
+    return { url: BOOK_UPLOAD_PATH, status: 0, error: "timeout", body: null };
+  }
+}
 
 export async function uploadBookSession(
   shopId: string,
@@ -274,20 +322,14 @@ export async function uploadBookSession(
       ? batches.map((batch) => sessionForm(shopId, batch, mode, fresh))
       : [sessionForm(shopId, [], mode, fresh)];
   let lastOk: BookUploadResult | null = null;
-  let upstream: BookUploadResult | null = null;
   for (const form of forms) {
-    const response = await fetchImpl(BOOK_UPLOAD_PATH, { method: "POST", body: form });
-    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    const error = typeof body?.error === "string" ? body.error : undefined;
-    const result: BookUploadResult = { url: BOOK_UPLOAD_PATH, status: response.status, error, body };
-    if (error === "upstream") {
-      upstream = result;
-      continue;
-    }
-    if (response.status >= 400) return result;
+    let result = await postBookForm(fetchImpl, form);
+    if (retryBookRead(result.status, result.error)) result = await postBookForm(fetchImpl, form);
+    if (retryBookRead(result.status, result.error)) return { ...result, readFailed: true };
+    if (result.status >= 400) return result;
     lastOk = result;
   }
-  return upstream ?? lastOk ?? { url: BOOK_UPLOAD_PATH, status: 204, body: null };
+  return lastOk ?? { url: BOOK_UPLOAD_PATH, status: 204, body: null };
 }
 
 export function nextShopNearby<T extends { id: string; slug?: string }>(
