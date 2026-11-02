@@ -1,17 +1,24 @@
 /** Muse Spark Open on Fireworks. Fail-open: a miss never drops a menu item. */
 
+import { after } from "next/server";
+import sharp from "sharp";
+
 export const OPEN_CHECK_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
 export const OPEN_CHECK_MODEL = "accounts/fireworks/models/muse-spark-open";
-export const OPEN_CHECK_TIMEOUT_MS = 20_000;
+export const OPEN_CHECK_TIMEOUT_MS = 45_000;
 export const OPEN_CHECK_MAX_TOKENS = 4000;
+export const OPEN_CHECK_MAX_PHOTOS = 2;
+export const OPEN_CHECK_MAX_EDGE = 1024;
 
 export type OpenVerdict = { confirmed: string[]; unconfirmed: string[] };
 
 export type OpenCheckResult = { ran: false } | ({ ran: true } & OpenVerdict);
 
+type CheckItem = { name: string; price?: string | null };
+
 type CheckInput = {
   images: readonly { dataUrl: string }[];
-  items: readonly { name: string }[];
+  items: readonly CheckItem[];
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -129,16 +136,32 @@ function objectAt(text: string, start: number): string | null {
   return null;
 }
 
-function promptFor(items: readonly { name: string }[]): string {
+export function openCheckItemText(items: readonly CheckItem[]): string {
+  return items
+    .map((item) => {
+      const price = item.price?.trim();
+      return price ? item.name + " — " + price : item.name;
+    })
+    .join("\n");
+}
+
+function promptFor(items: readonly CheckItem[]): string {
   return [
-    "These photos are a shop menu. Another model extracted the item names below.",
+    "These photos are a shop menu. Another model extracted the items below.",
     "Reason from the photos, then end with one JSON object and nothing after it:",
     '{"confirmed":["exact name"],"unconfirmed":["exact name"]}',
     "confirmed: names you can see in the photos. unconfirmed: names you cannot confirm.",
     "Use the names exactly. Put each name in one list only.",
     "Items:",
-    JSON.stringify(items.map((item) => item.name)),
+    openCheckItemText(items),
   ].join("\n");
+}
+
+function photosFor(images: readonly { dataUrl: string }[]): { type: "image_url"; image_url: { url: string } }[] {
+  return images
+    .filter((image) => image.dataUrl.startsWith("data:"))
+    .slice(0, OPEN_CHECK_MAX_PHOTOS)
+    .map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl } }));
 }
 
 export async function checkMenuOpen(input: CheckInput): Promise<OpenCheckResult> {
@@ -172,9 +195,7 @@ export async function checkMenuOpen(input: CheckInput): Promise<OpenCheckResult>
               role: "user",
               content: [
                 { type: "text", text: promptFor(input.items) },
-                ...input.images
-                  .filter((image) => image.dataUrl.startsWith("data:"))
-                  .map((image) => ({ type: "image_url", image_url: { url: image.dataUrl } })),
+                ...photosFor(input.images),
               ],
             },
           ],
@@ -209,5 +230,104 @@ export async function checkMenuOpen(input: CheckInput): Promise<OpenCheckResult>
     return { ran: false };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+export async function downscaleOpenJpeg(bytes: Buffer, maxEdge = OPEN_CHECK_MAX_EDGE): Promise<string> {
+  const out = await sharp(bytes, { failOn: "none" })
+    .rotate()
+    .resize({ width: maxEdge, height: maxEdge, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return "data:image/jpeg;base64," + out.toString("base64");
+}
+
+export type SavedOpenPage = {
+  id: string;
+  extracted: unknown;
+  aiMeta: Record<string, unknown>;
+  jpeg?: Buffer;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function storedItems(extracted: unknown): { name: string; price?: string | null }[] {
+  const record = asRecord(extracted);
+  if (!record || !Array.isArray(record.items)) return [];
+  const items: { name: string; price?: string | null }[] = [];
+  for (const item of record.items) {
+    const row = asRecord(item);
+    if (!row || typeof row.name !== "string" || !row.name.trim()) continue;
+    items.push({ name: row.name, price: typeof row.price === "string" ? row.price : null });
+  }
+  return items;
+}
+
+/**
+ * Writes the verdict into shop_book_pages.extracted (needsCheck on items)
+ * and shop_book_pages.ai_meta (open_check). Both columns already exist.
+ * A miss leaves the saved rows alone.
+ */
+export async function finishOpenCheck(input: {
+  pages: readonly SavedOpenPage[];
+  check?: typeof checkMenuOpen;
+  downscale?: (jpeg: Buffer) => Promise<string>;
+  save: (row: { id: string; extracted: unknown; aiMeta: Record<string, unknown> }) => Promise<void>;
+}): Promise<void> {
+  const items = input.pages.flatMap((page) => storedItems(page.extracted));
+  if (items.length === 0) return;
+  const check = input.check ?? checkMenuOpen;
+  const downscale = input.downscale ?? downscaleOpenJpeg;
+  const images: { dataUrl: string }[] = [];
+  for (const page of input.pages) {
+    if (!page.jpeg || images.length >= OPEN_CHECK_MAX_PHOTOS) continue;
+    try {
+      images.push({ dataUrl: await downscale(page.jpeg) });
+    } catch {
+      // A bad photo is skipped. The text list is still checked.
+    }
+  }
+  const result = await check({ images, items, timeoutMs: OPEN_CHECK_TIMEOUT_MS });
+  if (!result.ran) return;
+  for (const page of input.pages) {
+    const record = asRecord(page.extracted);
+    if (!record || !Array.isArray(record.items)) continue;
+    const flagged = applyMenuFlags(
+      record.items.filter((item): item is { name: string } => Boolean(asRecord(item) && typeof asRecord(item)?.name === "string")),
+      result,
+    );
+    const byName = new Map(flagged.map((item) => [normItemName(item.name), item.needsCheck === true]));
+    const itemsNext = record.items.map((item) => {
+      const row = asRecord(item);
+      if (!row || typeof row.name !== "string") return item;
+      if (!byName.get(normItemName(row.name))) return item;
+      return { ...row, needsCheck: true };
+    });
+    await input.save({
+      id: page.id,
+      extracted: { ...record, items: itemsNext },
+      aiMeta: { ...page.aiMeta, open_check: true },
+    });
+  }
+}
+
+/** Runs after the response. Outside a request (tests) it does nothing and the saved book stands. */
+export function scheduleOpenCheck(
+  task: () => Promise<void>,
+  afterImpl: (task: () => Promise<void>) => void = after,
+): void {
+  try {
+    afterImpl(async () => {
+      try {
+        await task();
+      } catch {
+        warnSkip("error");
+      }
+    });
+  } catch {
+    // after() throws outside a request. The book is already saved.
   }
 }

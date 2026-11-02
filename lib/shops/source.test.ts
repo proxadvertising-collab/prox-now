@@ -92,6 +92,39 @@ describe("mapShopsFromRows", () => {
       },
     ]);
     expect(shops.map((shop) => shop.id)).toEqual(["near"]);
+    expect(shops[0]?.isDemo).toBe(false);
+  });
+
+  it("keeps demo shops when the session asks for them", () => {
+    const shops = mapShopsFromRows(
+      [
+        {
+          id: "near",
+          slug: "near",
+          name: "Near",
+          name_local: null,
+          category: "other",
+          lat: DEMO_CENTER.lat,
+          lng: DEMO_CENTER.lng,
+          is_demo: false,
+        },
+        {
+          id: "demo",
+          slug: "demo",
+          name: "Demo",
+          name_local: null,
+          category: "other",
+          lat: DEMO_CENTER.lat,
+          lng: DEMO_CENTER.lng,
+          is_demo: true,
+        },
+      ],
+      DEMO_CENTER,
+      { includeDemo: true },
+    );
+    expect(shops.map((shop) => shop.id).sort()).toEqual(["demo", "near"]);
+    expect(shops.find((shop) => shop.id === "demo")?.isDemo).toBe(true);
+    expect(shops.find((shop) => shop.id === "near")?.isDemo).toBe(false);
   });
 
   it("caps the list at 200", () => {

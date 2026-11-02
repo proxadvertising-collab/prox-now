@@ -39,8 +39,8 @@ describe("demo fixtures", () => {
   it("places the eight shops on street-side coordinates", () => {
     const bySlug = new Map(FIXTURE_SHOPS.map((shop) => [shop.slug, shop]));
     const expected: Record<string, [number, number]> = {
-      "mala-mafia": [12.56898, 99.95895],
-      "coconut-shake-stand": [12.56745, 99.96],
+      "mala-mafia": [12.5695, 99.95895],
+      "coconut-shake-stand": [12.5668, 99.9605],
       "krua-mae-yen": [12.57063, 99.95438],
       "pak-kapi": [12.56641, 99.95715],
       "thuk-jai-chieo": [12.5651, 99.9614],
@@ -93,6 +93,7 @@ describe("demo fixtures", () => {
     const seed = readFileSync(resolve(root, "supabase/seeds/soi102_shops.sql"), "utf8");
     const move = readFileSync(resolve(root, "supabase/migrations/0024_demo_shop_coords.sql"), "utf8");
     const street = readFileSync(resolve(root, "supabase/migrations/0025_thuk_jai_street.sql"), "utf8");
+    const gap = readFileSync(resolve(root, "supabase/migrations/0026_demo_pin_gap.sql"), "utf8");
     expect(seed).not.toContain("TODO_REAL_COORDS");
     expect(move).not.toContain("TODO_REAL_COORDS");
     expect(street).toContain("12.56510");
@@ -100,10 +101,16 @@ describe("demo fixtures", () => {
     expect(move).toContain("12.56366");
     expect(move).toContain("99.95917");
     expect(move).not.toContain("12.56510");
+    expect(move).toContain("12.56898");
+    expect(move).toContain("12.56745");
+    expect(gap).toContain("12.56950");
+    expect(gap).toContain("12.56680");
+    expect(gap).toContain("99.96050");
+    const movedLater = new Set(["thuk-jai-chieo", "mala-mafia", "coconut-shake-stand"]);
     for (const shop of FIXTURE_SHOPS) {
       expect(seed).toContain(shop.lat.toFixed(5));
       expect(seed).toContain(shop.lng.toFixed(5));
-      if (shop.slug === "thuk-jai-chieo") continue;
+      if (movedLater.has(shop.slug)) continue;
       expect(move).toContain(shop.lat.toFixed(5));
       expect(move).toContain(shop.lng.toFixed(5));
     }

@@ -15,8 +15,8 @@ insert into public.shops (
   currency,
   is_demo
 ) values
-  ('mala-mafia', 'Mala Mafia', null, 'street_food', 12.56898, 99.95895, 'TH', 'Asia/Bangkok', 'THB', true),
-  ('coconut-shake-stand', 'Coconut shake stand', 'มะพร้าวปั่นนมสด', 'drinks', 12.56745, 99.96000, 'TH', 'Asia/Bangkok', 'THB', true),
+  ('mala-mafia', 'Mala Mafia', null, 'street_food', 12.56950, 99.95895, 'TH', 'Asia/Bangkok', 'THB', true),
+  ('coconut-shake-stand', 'Coconut shake stand', 'มะพร้าวปั่นนมสด', 'drinks', 12.56680, 99.96050, 'TH', 'Asia/Bangkok', 'THB', true),
   ('krua-mae-yen', 'Krua Mae Yen', null, 'restaurant', 12.57063, 99.95438, 'TH', 'Asia/Bangkok', 'THB', true),
   ('pak-kapi', 'Pak Kapi', 'ปากกะปิ', 'fruit', 12.56641, 99.95715, 'TH', 'Asia/Bangkok', 'THB', true),
   ('thuk-jai-chieo', 'Thuk Jai Chieo', null, 'restaurant', 12.56510, 99.96140, 'TH', 'Asia/Bangkok', 'THB', true),

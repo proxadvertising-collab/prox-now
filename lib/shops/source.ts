@@ -117,6 +117,7 @@ export function mapShopsFromRows(
       category: row.category,
       lat: Number(row.lat),
       lng: Number(row.lng),
+      isDemo: row.is_demo === true,
     }))
     .filter((shop) => Number.isFinite(shop.lat) && Number.isFinite(shop.lng))
     .map((shop) => ({ shop, distanceM: haversineMeters(center, shop) }))

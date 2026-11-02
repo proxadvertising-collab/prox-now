@@ -8,5 +8,6 @@ Apply these only after the captain writes apply. None of them are applied by the
 4. `0022_farm_to_go_name.sql` replaces `reset_demo` so slug `mala-mafia` resets to Farm to Go (demo). The id and slug stay. File only until apply.
 5. `0024_demo_shop_coords.sql` moves only the eight `is_demo` shop pins. File only until apply. Rollback: `supabase/rollbacks/0024_demo_shop_coords.sql`. It does not replace `reset_demo`.
 6. `0025_thuk_jai_street.sql` moves only the `is_demo` row for `thuk-jai-chieo` off the San Paolo Hospital footprint. File only until apply. Rollback: `supabase/rollbacks/0025_thuk_jai_street.sql`. Apply it after 0024.
+7. `0026_demo_pin_gap.sql` moves only the `is_demo` rows for `mala-mafia` and `coconut-shake-stand` so their pins do not overlap on the fitted demo map. File only until apply. Rollback: `supabase/rollbacks/0026_demo_pin_gap.sql`. Apply it after 0024.
 
 Files `0001` through `0017` stay in filename order before these.

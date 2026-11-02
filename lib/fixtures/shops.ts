@@ -6,14 +6,15 @@ export type FixtureShop = {
   category: string;
   lat: number;
   lng: number;
+  isDemo?: boolean;
 };
 
 export const DEMO_CENTER = { lat: 12.5684, lng: 99.9577 };
 
 // Street-side points around the demo centre, about 150 to 900 m out.
 export const FIXTURE_SHOPS: FixtureShop[] = [
-  { id: "mala-mafia", slug: "mala-mafia", name: "Farm to Go (demo)", category: "food", lat: 12.56898, lng: 99.95895 },
-  { id: "coconut-shake-stand", slug: "coconut-shake-stand", name: "Coconut shake stand", nameLocal: "มะพร้าวปั่นนมสด", category: "drink", lat: 12.56745, lng: 99.96 },
+  { id: "mala-mafia", slug: "mala-mafia", name: "Farm to Go (demo)", category: "food", lat: 12.5695, lng: 99.95895 },
+  { id: "coconut-shake-stand", slug: "coconut-shake-stand", name: "Coconut shake stand", nameLocal: "มะพร้าวปั่นนมสด", category: "drink", lat: 12.5668, lng: 99.9605 },
   { id: "krua-mae-yen", slug: "krua-mae-yen", name: "Krua Mae Yen", category: "food", lat: 12.57063, lng: 99.95438 },
   { id: "pak-kapi", slug: "pak-kapi", name: "Pak Kapi", nameLocal: "ปากกะปิ", category: "food", lat: 12.56641, lng: 99.95715 },
   { id: "thuk-jai-chieo", slug: "thuk-jai-chieo", name: "Thuk Jai Chieo", category: "food", lat: 12.5651, lng: 99.9614 },

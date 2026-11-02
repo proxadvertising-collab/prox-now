@@ -1,4 +1,3 @@
-import { applyMenuFlags, checkMenuOpen } from "../ai/openCheck";
 import {
   callSparkImages,
   MetaParseError,
@@ -32,8 +31,6 @@ export type BookPass = {
   calls: number;
   chunks: ChunkReport[];
   perPage: Map<number, PageMeta>;
-  /** True only when Muse Spark Open returned a verdict. A miss leaves this unset. */
-  openChecked?: boolean;
 };
 
 export class FaceCheckFailed extends Error {
@@ -160,35 +157,32 @@ export async function readBook(
     languages.find((language): language is string => Boolean(language)) ??
     pages.find((page) => page.language)?.language ??
     null;
-  return withOpenCheck(
-    {
-      read: {
-        pages,
-        shopLanguage,
-        tagline: buildTagline(taglines),
-        shopName: shopNames[0] ?? null,
-        colors: colorSets[0] ?? [],
-        ...(carried.rich
-          ? {
-              nameEn: carried.rich.nameEn ?? null,
-              deals: carried.rich.deals ?? [],
-              style: carried.rich.style ?? null,
-              logo: carried.rich.logo ?? null,
-              hero: carried.rich.hero ?? null,
-              category: carried.rich.category ?? null,
-              maps: carried.rich.maps ?? null,
-              rich: true as const,
-            }
-          : {}),
-      },
-      model: modelOf(perPage),
-      latencyMs: pass.chunks.reduce((sum, chunk) => sum + chunk.latencyMs, 0),
-      calls: pass.calls,
-      chunks: pass.chunks,
-      perPage,
+  return {
+    read: {
+      pages,
+      shopLanguage,
+      tagline: buildTagline(taglines),
+      shopName: shopNames[0] ?? null,
+      colors: colorSets[0] ?? [],
+      ...(carried.rich
+        ? {
+            nameEn: carried.rich.nameEn ?? null,
+            deals: carried.rich.deals ?? [],
+            style: carried.rich.style ?? null,
+            logo: carried.rich.logo ?? null,
+            hero: carried.rich.hero ?? null,
+            category: carried.rich.category ?? null,
+            maps: carried.rich.maps ?? null,
+            rich: true as const,
+          }
+        : {}),
     },
-    images,
-  );
+    model: modelOf(perPage),
+    latencyMs: pass.chunks.reduce((sum, chunk) => sum + chunk.latencyMs, 0),
+    calls: pass.calls,
+    chunks: pass.chunks,
+    perPage,
+  };
 }
 
 /** One Muse call for a seed batch, then one shorter retry. Does not split the batch. */
@@ -222,42 +216,14 @@ export async function readSeedBatch(
     callId: result.callId,
   };
   for (const image of images) perPage.set(image.index, meta);
-  return withOpenCheck(
-    {
-      read: parsed.read,
-      model: result.model,
-      latencyMs: result.ms,
-      calls,
-      chunks: [{ images: images.length, latencyMs: result.ms }],
-      perPage,
-    },
-    images,
-  );
-}
-
-/** Tests skip the network. A missing key, timeout, or bad reply leaves the Spark items as they are. */
-async function withOpenCheck(pass: BookPass, images: readonly IndexedImage[]): Promise<BookPass> {
-  if (process.env.VITEST === "true") return pass;
-  const names = pass.read.pages.flatMap((page) => page.items);
-  if (names.length === 0 || images.length === 0) return pass;
-  try {
-    const result = await checkMenuOpen({
-      images: images.map((image) => ({ dataUrl: image.dataUrl })),
-      items: names.map((item) => ({ name: item.name })),
-    });
-    if (!result.ran) return pass;
-    return {
-      ...pass,
-      openChecked: true,
-      read: {
-        ...pass.read,
-        pages: pass.read.pages.map((page) => ({ ...page, items: applyMenuFlags(page.items, result) })),
-      },
-    };
-  } catch {
-    console.warn("muse-spark-open check skipped: error");
-    return pass;
-  }
+  return {
+    read: parsed.read,
+    model: result.model,
+    latencyMs: result.ms,
+    calls,
+    chunks: [{ images: images.length, latencyMs: result.ms }],
+    perPage,
+  };
 }
 
 function modelOf(perPage: Map<number, PageMeta>): string | null {

@@ -4,17 +4,27 @@ export const DEMO_FIT_MAX_ZOOM = 15;
 export type FitPadding = { top: number; bottom: number; left: number; right: number };
 
 /**
- * Room for the tour card above the map and the bottom sheet on the map.
- * 390 is the phone width. 1280 is the wide viewport, where the bottom nav is hidden.
+ * Ask and the coupon chip share the top row of the map.
+ * Ask is `top-3` (12px) plus a shorter button. The coupon chip is the tall one:
+ * `top-3` 12 + `py-2` 16 + `text-sm` line 20 + `text-xs` line 16 = 64.
+ * Pins need 16px under that row. 72px still covers the chip.
  */
+export const ASK_CHIP_ROW_PX = 12 + 16 + 20 + 16;
+
 export function demoFitPadding(width: number): FitPadding {
   const phone = width < 700;
   return {
-    top: phone ? 72 : 56,
+    top: ASK_CHIP_ROW_PX + 16,
     bottom: phone ? 210 : 180,
     left: 40,
     right: 40,
   };
+}
+
+/** A demo session fits is_demo shops and leaves real shops out of the frame. */
+export function shopsForDemoFit<T extends { isDemo?: boolean }>(shops: readonly T[], demoSession: boolean): T[] {
+  if (!demoSession) return [...shops];
+  return shops.filter((shop) => shop.isDemo === true);
 }
 
 /** MapLibre bounds: southwest, northeast. */
@@ -37,4 +47,48 @@ export function shopBounds(
     [west, south],
     [east, north],
   ];
+}
+
+const TILE_PX = 512;
+
+function mercatorX(lng: number): number {
+  return (lng + 180) / 360;
+}
+
+function mercatorY(lat: number): number {
+  const sine = Math.sin((lat * Math.PI) / 180);
+  return 0.5 - Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI);
+}
+
+/** Zoom MapLibre would pick for these shops in a width×height map, capped at maxZoom. */
+export function fittedZoom(input: {
+  shops: readonly { lat: number; lng: number }[];
+  width: number;
+  height: number;
+  padding?: FitPadding;
+  maxZoom?: number;
+}): number {
+  const padding = input.padding ?? demoFitPadding(input.width);
+  const maxZoom = input.maxZoom ?? DEMO_FIT_MAX_ZOOM;
+  const bounds = shopBounds(input.shops);
+  if (!bounds || input.width <= 0 || input.height <= 0) return maxZoom;
+  const [[west, south], [east, north]] = bounds;
+  const availW = Math.max(1, input.width - padding.left - padding.right);
+  const availH = Math.max(1, input.height - padding.top - padding.bottom);
+  const fracX = Math.max(1e-12, mercatorX(east) - mercatorX(west));
+  const fracY = Math.max(1e-12, mercatorY(south) - mercatorY(north));
+  const zoomX = Math.log2(availW / (fracX * TILE_PX));
+  const zoomY = Math.log2(availH / (fracY * TILE_PX));
+  return Math.min(maxZoom, zoomX, zoomY);
+}
+
+/** Screen pixels between two pins at a zoom. */
+export function screenGapPx(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+  zoom: number,
+): number {
+  const dx = (mercatorX(b.lng) - mercatorX(a.lng)) * TILE_PX * 2 ** zoom;
+  const dy = (mercatorY(b.lat) - mercatorY(a.lat)) * TILE_PX * 2 ** zoom;
+  return Math.hypot(dx, dy);
 }

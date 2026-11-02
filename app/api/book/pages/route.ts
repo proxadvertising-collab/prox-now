@@ -1,3 +1,4 @@
+import { finishOpenCheck, scheduleOpenCheck } from "../../../../lib/ai/openCheck";
 import { MetaCallError, MetaKeyMissing, MetaParseError, MetaTruncated } from "../../../../lib/ai/meta";
 import { uploadBlock, capStatus } from "../../../../lib/book/caps";
 import { mergeHours, hoursFromOwner, type BookHours } from "../../../../lib/book/hours";
@@ -696,7 +697,6 @@ async function commitBook(input: {
           call_id: meta?.callId ?? null,
           faces_blurred: page.facesBlurred,
           photo_hash: page.photoHash,
-          ...(group.read?.openChecked ? { open_check: true } : {}),
           ...(group.aiError ? { error: group.aiError } : {}),
         },
       };
@@ -714,6 +714,29 @@ async function commitBook(input: {
     await removePaths(service, uploaded);
     if (duplicatePage(inserted.error)) return json({ error: "already_there" }, 409);
     return json({ error: "upload_failed" }, 502);
+  }
+
+  if (rows.length > 0) {
+    const jpegById = new Map<string, Buffer>();
+    for (const group of groups) {
+      for (const page of group.stored) jpegById.set(page.id, page.bytes);
+    }
+    scheduleOpenCheck(() =>
+      finishOpenCheck({
+        pages: rows.map((row) => ({
+          id: row.id,
+          extracted: row.extracted,
+          aiMeta: row.ai_meta as Record<string, unknown>,
+          jpeg: jpegById.get(row.id),
+        })),
+        save: async (saved) => {
+          await service
+            .from("shop_book_pages")
+            .update({ extracted: saved.extracted, ai_meta: saved.aiMeta })
+            .eq("id", saved.id);
+        },
+      }),
+    );
   }
 
   const logs = [
@@ -1003,27 +1026,51 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
   } catch (error) {
     aiError = readFailure(error);
   }
+  const openPages: {
+    id: string;
+    extracted: unknown;
+    aiMeta: Record<string, unknown>;
+    jpeg?: Buffer;
+  }[] = [];
   for (const target of targets) {
     const page = read?.read.pages.find((item) => item.index === target.index) ?? null;
     const meta = read?.perPage.get(target.index);
+    const extracted = aiError || !read ? {} : extractedOf(page);
+    const aiMeta = {
+      model: meta?.model ?? null,
+      latency_ms: meta?.latencyMs ?? 0,
+      images_in_call: meta?.imagesInCall ?? 0,
+      call_id: meta?.callId ?? null,
+      faces_blurred: 0,
+      photo_hash: target.photoHash,
+      ...(aiError ? { error: aiError } : {}),
+    };
     await service
       .from("shop_book_pages")
       .update({
-        extracted: aiError || !read ? {} : extractedOf(page),
+        extracted,
         language: page?.language ?? null,
-        ai_meta: {
-          model: meta?.model ?? null,
-          latency_ms: meta?.latencyMs ?? 0,
-          images_in_call: meta?.imagesInCall ?? 0,
-          call_id: meta?.callId ?? null,
-          faces_blurred: 0,
-          photo_hash: target.photoHash,
-          ...(read?.openChecked ? { open_check: true } : {}),
-          ...(aiError ? { error: aiError } : {}),
-        },
+        ai_meta: aiMeta,
       })
       .eq("id", target.id);
+    openPages.push({
+      id: target.id,
+      extracted,
+      aiMeta: aiMeta as Record<string, unknown>,
+      jpeg: prepared.find((item) => item.index === target.index)?.original,
+    });
   }
+  scheduleOpenCheck(() =>
+    finishOpenCheck({
+      pages: openPages,
+      save: async (saved) => {
+        await service
+          .from("shop_book_pages")
+          .update({ extracted: saved.extracted, ai_meta: saved.aiMeta })
+          .eq("id", saved.id);
+      },
+    }),
+  );
   return json({ reading: Boolean(aiError), ai: { model: read?.model ?? null, error: aiError } });
 }
 

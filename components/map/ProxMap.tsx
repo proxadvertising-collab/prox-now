@@ -19,7 +19,7 @@ import { phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, type LatLng } from "@/lib/geo";
 import { getFix } from "@/lib/geo/fix-cache";
 import { needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
-import { DEMO_FIT_MAX_ZOOM, demoFitPadding, shopBounds } from "@/lib/map/demoFit";
+import { DEMO_FIT_MAX_ZOOM, demoFitPadding, shopBounds, shopsForDemoFit } from "@/lib/map/demoFit";
 import { applyDarkOverrides, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import { newestLivePost, pinSheetContent, showOpenBook } from "@/lib/map/pin-sheet";
 import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
@@ -371,7 +371,7 @@ export function ProxMap({
     let autoFit = fitShops;
     const fitDemo = () => {
       if (!autoFit || focusRef.current) return;
-      const bounds = shopBounds(shopsRef.current);
+      const bounds = shopBounds(shopsForDemoFit(shopsRef.current, demoSession));
       const width = typeof window === "undefined" ? map.getContainer().clientWidth : window.innerWidth;
       if (!bounds) {
         map.jumpTo({ center: MAP_DEFAULTS.center, zoom: DEMO_FIT_MAX_ZOOM });

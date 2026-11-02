@@ -718,3 +718,28 @@ describe("thuk jai street migration", () => {
     expect(sql).toContain("supabase/rollbacks/0025_thuk_jai_street.sql");
   });
 });
+
+describe("demo pin gap migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0026_demo_pin_gap.sql"), "utf8");
+  const rollback = readFileSync(resolve(root, "supabase/rollbacks/0026_demo_pin_gap.sql"), "utf8");
+
+  it("moves only the two close demo shops and can be run twice", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("and shops.is_demo = true");
+    expect(sql).toContain("shops.lat is distinct from seed.lat or shops.lng is distinct from seed.lng");
+    expect(sql).toContain("'mala-mafia'");
+    expect(sql).toContain("'coconut-shake-stand'");
+    expect(sql).toContain("12.56950");
+    expect(sql).toContain("12.56680");
+    expect(sql).not.toContain("is_demo = false");
+    expect(sql).not.toContain("delete from");
+    expect(sql).not.toContain("auth.users");
+    expect(sql).not.toContain("thuk-jai-chieo");
+    expect(sql.toLowerCase()).not.toContain("password");
+    expect(rollback).toContain("12.56898");
+    expect(rollback).toContain("12.56745");
+    expect(rollback).toContain("and shops.is_demo = true");
+    expect(rollback).not.toContain("delete from");
+    expect(sql).toContain("supabase/rollbacks/0026_demo_pin_gap.sql");
+  });
+});
