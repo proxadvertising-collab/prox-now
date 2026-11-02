@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { TOUR_KEY } from "@/lib/judge/script";
+import { readTour, TOUR_KEY } from "@/lib/judge/script";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined, back: () => undefined }),
@@ -15,7 +15,7 @@ vi.mock("next/link", () => ({
     createElement("a", { href, ...props }, children),
 }));
 
-import { LiveCamera } from "./LiveCamera";
+import { cameraShellClass, LiveCamera } from "./LiveCamera";
 
 function pageWindow(tour: string | null) {
   const store = new Map<string, string>();
@@ -38,8 +38,8 @@ describe("snap tour offset", () => {
   it("offsets the camera header and sample control in tour mode on /snap", () => {
     pageWindow(JSON.stringify({ cafe: "a", role: "shopper", step: "seed" }));
     const html = renderToStaticMarkup(createElement(LiveCamera));
-    expect(html).toContain("snap-tour");
-    expect(html).toContain("calc(1rem + var(--tour-bar, 0px))");
+    expect(html).not.toContain("snap-tour");
+    expect(html).not.toContain("var(--tour-bar");
     expect(html).not.toContain("judge can use the sample set");
     const shutter = html.slice(html.indexOf("snap-shutter"));
     expect(shutter.startsWith("snap-shutter")).toBe(true);
@@ -50,6 +50,7 @@ describe("snap tour offset", () => {
     const frame = source.slice(source.indexOf("fixed inset-x-0"), source.indexOf("Use pre-seeded photos"));
     expect(frame).toContain("snap-tour");
     expect(source).toContain('style={{ top: "calc(7.5rem + var(--tour-bar, 0px))" }}');
+    expect(source).toContain('top: "calc(1rem + var(--tour-bar, 0px))"');
     const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
     expect(css).toContain(".snap-tour .seed-done");
     expect(css).toContain("top: calc(1rem + var(--tour-bar, 0px))");
@@ -58,6 +59,23 @@ describe("snap tour offset", () => {
     expect(chrome).toContain('setProperty("--tour-bar"');
     expect(chrome).toContain("getBoundingClientRect");
     expect(chrome).not.toContain("pointer-events-none");
+    vi.unstubAllGlobals();
+  });
+
+  it("applies the tour offset class after mount", () => {
+    pageWindow(JSON.stringify({ cafe: "a", role: "shopper", step: "seed" }));
+    const first = renderToStaticMarkup(createElement(LiveCamera));
+    expect(readTour()?.role).toBe("shopper");
+    expect(first).not.toContain("snap-tour");
+    expect(cameraShellClass(false, false).includes("snap-tour")).toBe(false);
+    expect(cameraShellClass(true, false)).toContain("snap-tour");
+    const source = readFileSync(new URL("./LiveCamera.tsx", import.meta.url), "utf8");
+    expect(source).toContain("const [onTour, setOnTour] = useState(false)");
+    expect(source).toContain("setOnTour(Boolean(tour))");
+    expect(source).toContain("className={cameraShellClass(onTour, liveFile != null)}");
+    expect(source).not.toContain("const onTour = Boolean(readTour())");
+    expect(source).not.toContain("useState<Facing>(facingForSession())");
+    expect(source).not.toContain("useRef<Facing>(facingForSession())");
     vi.unstubAllGlobals();
   });
 

@@ -61,6 +61,14 @@ type SeedShot = {
 };
 type ToastState = { text: string; duplicateOf: number | null; shotId: string };
 
+export function cameraShellClass(onTour: boolean, reviewing: boolean): string {
+  return (
+    "fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-0" +
+    (onTour ? " snap-tour" : "") +
+    (reviewing ? " pointer-events-none" : "")
+  );
+}
+
 async function lookupDemoPoint(): Promise<{ lat: number; lng: number } | null> {
   try {
     const supabase = createClient();
@@ -114,7 +122,7 @@ export function LiveCamera({
   const openCameraRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const facingRef = useRef<Facing>(facingForSession());
+  const facingRef = useRef<Facing>("environment");
   const alive = useRef(true);
   const shotsRef = useRef<SeedShot[]>([]);
   const fixRef = useRef<CaptureFix | null>(null);
@@ -124,7 +132,9 @@ export function LiveCamera({
   const sampleNoteShown = useRef(false);
   const loadSamplesRef = useRef<() => Promise<boolean>>(async () => false);
   const facedSeed = useRef(false);
-  const [facing, setFacing] = useState<Facing>(facingForSession());
+  const [facing, setFacing] = useState<Facing>("environment");
+  const [onTour, setOnTour] = useState(false);
+  const [tourShopper, setTourShopper] = useState(false);
   const [cameraCount, setCameraCount] = useState<number | null>(null);
   const [flipFailed, setFlipFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("camera");
@@ -217,6 +227,15 @@ export function LiveCamera({
 
   useEffect(() => {
     if (typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("th")) setLang("th");
+  }, []);
+
+  useEffect(() => {
+    const tour = readTour();
+    setOnTour(Boolean(tour));
+    setTourShopper(tour?.role === "shopper");
+    const stored = facingForSession();
+    facingRef.current = stored;
+    setFacing(stored);
   }, []);
 
   useEffect(() => {
@@ -886,10 +905,9 @@ export function LiveCamera({
     );
   }
 
-  const onTour = Boolean(readTour());
   return (
     <>
-    <div className={"fixed inset-x-0 top-0 z-10 bg-bg text-fg bottom-[calc(7.5rem+env(safe-area-inset-bottom))] md:bottom-0" + (onTour ? " snap-tour" : "") + (liveFile ? " pointer-events-none" : "")}>
+    <div className={cameraShellClass(onTour, liveFile != null)}>
       <video
         ref={videoRef}
         className={(liveFile ? "pointer-events-none opacity-0 " : "") + previewClass(facing)}
@@ -961,7 +979,7 @@ export function LiveCamera({
           </button>
         </div>
       ) : null}
-      {phase === "seed" && onTour && readTour()?.role === "shopper" ? (
+      {phase === "seed" && tourShopper ? (
         <button
           type="button"
           className="absolute top-[7.5rem] inset-x-0 z-20 mx-auto inline-flex min-h-11 w-fit items-center rounded-full bg-accent-soft px-4 text-sm font-semibold text-accent"
