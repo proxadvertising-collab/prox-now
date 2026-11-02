@@ -46,6 +46,7 @@ export function ItemTile({
   photo,
   tags = [],
   category = null,
+  needsCheck = false,
   userLang,
 }: {
   slug: string;
@@ -56,6 +57,7 @@ export function ItemTile({
   photo: string | null;
   tags?: string[];
   category?: string | null;
+  needsCheck?: boolean;
   userLang?: string;
 }) {
   const [qty, setQty] = useState(0);
@@ -131,6 +133,7 @@ export function ItemTile({
       )}
       <div className="min-w-0 flex-1 overflow-hidden">
         <p className="line-clamp-1 text-sm font-bold leading-snug text-fg">{shown.title}</p>
+        {needsCheck ? <p className="text-[11px] font-semibold text-fg-muted">{t(lang, "book.checkThis")}</p> : null}
         {shown.subtitle ? <p className="truncate text-sm text-fg-subtle">{shown.subtitle}</p> : null}
         {priceLabel ? (
           <span className="mt-1 inline-flex rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-accent-ink">{priceLabel}</span>

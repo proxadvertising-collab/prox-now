@@ -19,6 +19,7 @@ import { phaseFor, remainingMs } from "@/lib/freshness";
 import { haversineMeters, type LatLng } from "@/lib/geo";
 import { getFix } from "@/lib/geo/fix-cache";
 import { needsExternalBrowser, type LocateResult } from "@/lib/geo/locate";
+import { DEMO_FIT_MAX_ZOOM, demoFitPadding, shopBounds } from "@/lib/map/demoFit";
 import { applyDarkOverrides, MAP_BRIGHTNESS, MAP_DEFAULTS, STYLE_URL } from "@/lib/map/style";
 import { newestLivePost, pinSheetContent, showOpenBook } from "@/lib/map/pin-sheet";
 import { clampPhotoIndex, sheetCloseUsesHistory, sheetPhotos } from "@/lib/map/sheet";
@@ -155,6 +156,8 @@ export function ProxMap({
   const mapRef = useRef<Map | null>(null);
   const focusRef = useRef<LatLng | null>(focus);
   focusRef.current = focus;
+  const shopsRef = useRef(shops);
+  shopsRef.current = shops;
   const markersRef = useRef<Marker[]>([]);
   const openedPostRef = useRef(false);
   const nowMs = useSyncExternalStore(subscribeClock, getClock, getServerClock);
@@ -348,11 +351,12 @@ export function ProxMap({
 
   useEffect(() => {
     if (webgl !== true || !containerRef.current) return;
+    const fitShops = demoSession || fixtures;
     const map = new Map({
       container: containerRef.current,
       style: STYLE_URL,
       center: MAP_DEFAULTS.center,
-      zoom: MAP_DEFAULTS.zoom,
+      zoom: fitShops ? DEMO_FIT_MAX_ZOOM : MAP_DEFAULTS.zoom,
       minZoom: MAP_DEFAULTS.minZoom,
       maxZoom: MAP_DEFAULTS.maxZoom,
       pitch: MAP_DEFAULTS.pitch,
@@ -364,29 +368,24 @@ export function ProxMap({
     map.touchZoomRotate.disableRotation();
     map.touchPitch.disable();
     map.addControl(new AttributionControl({ compact: true }), "bottom-left");
+    let autoFit = fitShops;
+    const fitDemo = () => {
+      if (!autoFit || focusRef.current) return;
+      const bounds = shopBounds(shopsRef.current);
+      const width = typeof window === "undefined" ? map.getContainer().clientWidth : window.innerWidth;
+      if (!bounds) {
+        map.jumpTo({ center: MAP_DEFAULTS.center, zoom: DEMO_FIT_MAX_ZOOM });
+        return;
+      }
+      map.fitBounds(bounds, { padding: demoFitPadding(width), maxZoom: DEMO_FIT_MAX_ZOOM, animate: false });
+    };
+    map.on("movestart", (event) => {
+      if (event.originalEvent) autoFit = false;
+    });
     map.on("load", () => {
       const point = focusRef.current;
       if (point) map.flyTo({ center: [point.lng, point.lat], zoom: 16, essential: true });
-      if (demoSession) {
-        void (async () => {
-          let lat = DEMO_ZONE_FALLBACK.lat;
-          let lng = DEMO_ZONE_FALLBACK.lng;
-          let zoom = DEMO_ZONE_FALLBACK.zoom;
-          try {
-            const supabase = createClient();
-            const result = await supabase.rpc("demo_zone");
-            const row = Array.isArray(result.data) ? result.data[0] : null;
-            if (row && typeof row.lat === "number" && typeof row.lng === "number") {
-              lat = row.lat;
-              lng = row.lng;
-              if (typeof row.zoom === "number") zoom = row.zoom;
-            }
-          } catch {
-            lat = DEMO_ZONE_FALLBACK.lat;
-          }
-          map.flyTo({ center: [lng, lat], zoom, essential: true });
-        })();
-      }
+      else fitDemo();
       applyDarkOverrides({
         getLayer: (id) => map.getLayer(id),
         setPaintProperty: (layerId, property, value) => {
@@ -407,12 +406,19 @@ export function ProxMap({
     };
     map.on("zoom", onZoom);
     mapRef.current = map;
+    const watched = map.getContainer();
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      fitDemo();
+    });
+    observer.observe(watched);
     return () => {
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
       markersRef.current = [];
     };
-  }, [webgl, demoSession]);
+  }, [webgl, demoSession, fixtures]);
 
   useEffect(() => {
     if (fixtures || demoSession) document.cookie = demoSessionCookie();

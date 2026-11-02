@@ -13,6 +13,7 @@ export type MenuBoardItem = {
   photo: string | null;
   category?: string | null;
   tags?: string[];
+  needsCheck?: boolean;
 };
 
 function groupsOf(items: readonly MenuBoardItem[]): { category: string | null; items: MenuBoardItem[] }[] {
@@ -86,6 +87,7 @@ export function MenuBoard({
                 photo={item.photo}
                 tags={item.tags}
                 category={group.category}
+                needsCheck={item.needsCheck}
               />
             ))}
           </section>

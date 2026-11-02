@@ -65,7 +65,7 @@ export function MapChrome({
 
   return (
     <div className="flex flex-col">
-      <div className="flex h-[calc(100dvh-var(--safe-top)-var(--nav-h)-var(--safe-bottom))] flex-col overflow-hidden md:h-[calc(100dvh-var(--safe-top)-2.75rem)]">
+      <div className="flex h-[calc(100dvh-var(--tour-bar,env(safe-area-inset-top))-var(--nav-h)-var(--safe-bottom))] flex-col overflow-hidden md:h-[calc(100dvh-var(--tour-bar,env(safe-area-inset-top))-2.75rem)]">
         {fixtures ? <DemoBanner /> : null}
         <div className="relative min-h-0 flex-1">
           <MapView

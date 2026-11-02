@@ -18,42 +18,47 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | Live app | https://prox-now.vercel.app |
 | Branch and commit | `main` (same as `feat/judge-mode`), app code `71d312b` |
 | Production deployment | `main` auto-deploys to https://prox-now.vercel.app |
-| Tests | 547 tests, 119 files |
+| Tests | 560 tests, 122 files |
 | Demo video | https://youtube.com/shorts/_fUl4ZByer4 |
 
 ## Try it in 3 minutes
 Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as one of two shared demo accounts. You need no password, camera, location or phone. Do **Judge 1 (shopper) first, then Judge 2 (owner)**, one after the other. Full steps and what each one proves are in [JUDGES.md](JUDGES.md).
 
 ## Meta models used
-Every AI call in the app goes to **`muse-spark-1.3`** on the Meta Model API (`https://api.meta.ai/v1/responses`). No other AI provider is used. The shared client is `lib/ai/meta.ts` (`callSpark`, `callSparkImages`, 25 s timeout).
+Book, snap, order, claim, and ask calls go to **`muse-spark-1.3`** on the Meta Model API (`https://api.meta.ai/v1/responses`). The shared client is `lib/ai/meta.ts` (`callSpark`, `callSparkImages`, 25 s timeout).
 
-| Feature | What the model does | Files |
+After a book read, the same photos and the extracted item names go to Meta **`muse-spark-open`** on Fireworks (`accounts/fireworks/models/muse-spark-open`) when `FIREWORKS_API_KEY` is set. That call is `lib/ai/openCheck.ts`. No key, a 20 s timeout, a non-200, or bad JSON logs one line and the book still posts every Spark item. Confirmed items post as usual. Unconfirmed items still post, flagged "check this" for the owner. The book shows "Double-checked by Muse Spark Open" only when that check returned a verdict.
+
+| Feature | Model | File |
 |---|---|---|
-| Book building | Reads up to 8 photos per call (chunked) into pages by real category, with items, readable prices and the shop's language | `app/api/book/pages/route.ts`, `lib/book/read.ts`, `lib/book/chunk.ts` |
-| Book improve / brand | Adds a new photo to an existing book; reads brand cues from the storefront | `lib/book/improve.ts`, `lib/book/brand.ts` |
-| Seed coach | Per photo: what's in it, whether it's a duplicate or blurry | `app/api/seed/check/route.ts` |
-| Shop match | Matches a snapped photo to a nearby shop using GPS and the sign text | `app/api/analyze/route.ts` |
-| New shop from a sign | Creates a shop from the sign it reads (confidence ≥ 0.6, distance rules) | `app/api/shops/route.ts` |
-| Posts: faces and place facts | Marks face boxes so the server can blur them; reads items, prices, crowd level, open/closed and sign language | `app/api/posts/route.ts` |
-| Ask the map | "What's good right now" over open shops | `lib/gonow/spark.ts`, `app/api/go-now/route.ts` |
-| Order translation | Translates menu item names and the shopper's note into the shop's language for staff | `lib/order/translate.ts`, `app/api/order/translate/route.ts` |
-| Claim check | Checks a real shop's claim photo (handwritten code next to the sign) | `app/api/owner/claim/route.ts` |
-| Coupon suggestion | Suggests a thank-you offer for the owner | `lib/coupon/suggest.ts`, `app/api/owner/suggest-coupon/route.ts` |
-| Proof call | One server-side call that shows the key works | `app/api/meta-ping/route.ts` |
+| Book building | `muse-spark-1.3` | `lib/book/read.ts` via `app/api/book/pages/route.ts` |
+| Book improve | `muse-spark-1.3` | `lib/book/improve.ts` |
+| Book brand | `muse-spark-1.3` | `lib/book/brand.ts` |
+| Seed coach | `muse-spark-1.3` | `app/api/seed/check/route.ts` |
+| Shop match | `muse-spark-1.3` | `app/api/analyze/route.ts` |
+| New shop from a sign | `muse-spark-1.3` | `app/api/shops/route.ts` |
+| Post faces and place facts | `muse-spark-1.3` | `app/api/posts/route.ts` |
+| Ask the map | `muse-spark-1.3` | `lib/gonow/spark.ts` via `app/api/go-now/route.ts` |
+| Order translation | `muse-spark-1.3` | `lib/order/translate.ts` via `app/api/order/translate/route.ts` |
+| Claim check | `muse-spark-1.3` | `app/api/owner/claim/route.ts` |
+| Coupon suggestion | `muse-spark-1.3` | `lib/coupon/suggest.ts` via `app/api/owner/suggest-coupon/route.ts` |
+| Proof call | `muse-spark-1.3` | `app/api/meta-ping/route.ts` |
+| Book item double-check | `accounts/fireworks/models/muse-spark-open` | `lib/ai/openCheck.ts` |
 
-## How it maps to the judging criteria
-| Criterion | Evidence |
+## For judges
+| Criterion | Where to see it |
 |---|---|
-| Impact | Real pilot street, real shop photos in the demo; tourists and shops with no English menu; places people add are exported as public GeoJSON (`app/api/places/export/route.ts`) |
-| Use of Meta AI | 11 features on `muse-spark-1.3`, including multi-image book reading, vision-based face blur, claim-photo checks and translation (table above) |
-| Demo | One-tap `/judge`, a 9-step guided tour with an explainer on every step (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`), pre-seeded real photos so no camera is needed, and End demo resets (`lib/judge/runReset.ts`) |
-| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 547 unit tests in 119 files |
+| Impact (30) | A real Hua Hin street. Shoppers snap a menu and get a book they can order from (`app/(app)/book/[slug]/page.tsx`). Owners thank them with a coupon (`JUDGES.md`). Added places export as GeoJSON (`app/api/places/export/route.ts`). |
+| Meta AI (25) | Every runtime call is in the model map above. `muse-spark-1.3` reads the book, the sign, faces, and the order. `muse-spark-open` double-checks book items when `FIREWORKS_API_KEY` is set (`lib/ai/openCheck.ts`). |
+| Demo (25) | One tap at `/judge`. Nine tour steps with an explainer each (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`). Sample photos, no camera. The map opens fitted to the demo shops. End demo resets (`lib/judge/runReset.ts`). Steps: [JUDGES.md](JUDGES.md). |
+| Depth (20) | Postgres RLS and security-definer RPCs (`supabase/migrations/`, 25 files), shared rate limits (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photos with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 560 unit tests in 122 files |
 
 ## Architecture
 ```mermaid
 flowchart LR
   P[Phone browser<br/>Next.js 16 app] -->|photos, order, ask| API[Next.js route handlers<br/>Vercel sin1]
   API -->|/v1/responses| M[Meta Model API<br/>muse-spark-1.3]
+  API -->|book item check, when the key is set| F[Fireworks<br/>muse-spark-open]
   API -->|RLS + RPCs| DB[(Supabase Postgres)]
   API -->|signed URLs| S[(Supabase Storage<br/>private buckets)]
   P -->|session, realtime wallet| DB
@@ -70,12 +75,13 @@ flowchart LR
 npm install
 cp .env.example .env.local   # fill in values on your machine; never commit it
 npm run dev                  # http://localhost:3000
-npm test                     # vitest: 119 files, 547 tests
+npm test                     # vitest: 122 files, 560 tests
 npm run build
 ```
 `.env.example` (names only):
 ```
 META_API_KEY=
+FIREWORKS_API_KEY=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=

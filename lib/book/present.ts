@@ -10,6 +10,7 @@ export type BookLine = {
   tags?: string[];
   photoUrl?: string;
   category?: string;
+  needsCheck?: boolean;
 };
 
 export type BookPageView = {
@@ -63,6 +64,7 @@ export type BookView = {
   info: ShopInfo;
   reading: boolean;
   sourceLanguage: string | null;
+  openChecked: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -112,6 +114,7 @@ function menuLines(value: unknown, supabaseUrl: string): { section: string | nul
     if (photoUrl) line.photoUrl = photoUrl;
     const category = text(row?.category, 80);
     if (category) line.category = category;
+    if (row?.needsCheck === true) line.needsCheck = true;
     items.push(line);
   }
   return { section: text(record.section, 80), items };
@@ -247,6 +250,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
   const contactRows: { page: number; contacts: PageContacts }[] = [];
   let logoCutout: string | null = null;
   let pageLanguage: string | null = null;
+  let openChecked = false;
   if (Array.isArray(root.pages)) {
     for (const item of root.pages) {
       const page = asRecord(item);
@@ -257,6 +261,7 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
       if (!pageLanguage) pageLanguage = text(page.language, 16);
       const position = typeof page.position === "number" && Number.isFinite(page.position) ? page.position : pages.length;
       const menu = menuLines(page.extracted, supabaseUrl);
+      if (asRecord(page.ai_meta)?.open_check === true) openChecked = true;
       const extracted = asRecord(page.extracted);
       const cutout = cutoutUrl(supabaseUrl, extracted?.logo_url);
       if (cutout) logoCutout = cutout;
@@ -317,5 +322,6 @@ export function presentBook(payload: unknown, supabaseUrl: string): BookView | n
     info: mergeContacts(contactRows),
     reading: pages.some((page) => page.failed),
     sourceLanguage: text(book?.source_language, 16) ?? pageLanguage,
+    openChecked,
   };
 }

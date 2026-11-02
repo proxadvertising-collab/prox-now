@@ -688,3 +688,33 @@ describe("demo shop coordinate migration", () => {
     expect(sql).toContain("supabase/rollbacks/0024_demo_shop_coords.sql");
   });
 });
+
+describe("thuk jai street migration", () => {
+  const sql = readFileSync(resolve(root, "supabase/migrations/0025_thuk_jai_street.sql"), "utf8");
+  const rollback = readFileSync(resolve(root, "supabase/rollbacks/0025_thuk_jai_street.sql"), "utf8");
+
+  it("moves only the demo thuk-jai-chieo row and can be run twice", () => {
+    expect(sql).toContain("Apply it only after the captain writes apply");
+    expect(sql).toContain("update public.shops as shops");
+    expect(sql).toContain("shops.slug = 'thuk-jai-chieo'");
+    expect(sql).toContain("and shops.is_demo = true");
+    expect(sql).toContain("shops.lat is distinct from 12.56510 or shops.lng is distinct from 99.96140");
+    expect(sql).toContain("12.56510");
+    expect(sql).toContain("99.96140");
+    expect(sql).not.toContain("is_demo = false");
+    expect(sql).not.toContain("delete from");
+    expect(sql).not.toContain("auth.users");
+    expect(sql).not.toContain("reset_demo()");
+    expect(sql).not.toContain("eyJ");
+    expect(sql.toLowerCase()).not.toContain("password");
+    expect(sql).not.toContain("mala-mafia");
+    expect(rollback).toContain("thuk-jai-chieo");
+    expect(rollback).toContain("and shops.is_demo = true");
+    expect(rollback).toContain("12.56366");
+    expect(rollback).toContain("99.95917");
+    expect(rollback).not.toContain("12.56860");
+    expect(rollback).not.toContain("delete from");
+    expect(rollback).not.toContain("auth.users");
+    expect(sql).toContain("supabase/rollbacks/0025_thuk_jai_street.sql");
+  });
+});

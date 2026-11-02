@@ -66,6 +66,8 @@ export type MenuItem = {
   photo?: number;
   photoBox?: PhotoBox;
   photoUrl?: string;
+  /** Set by the open-weight check. The owner should look at this line. */
+  needsCheck?: boolean;
 };
 
 export type PhotoBox = {
@@ -820,6 +822,7 @@ export function extractedOf(page: PageRead | null): {
       if (item.category) stored.category = item.category;
       if (item.tags && item.tags.length > 0) stored.tags = item.tags;
       if (item.photoUrl) stored.photoUrl = item.photoUrl;
+      if (item.needsCheck) stored.needsCheck = true;
       return stored;
     }),
   };

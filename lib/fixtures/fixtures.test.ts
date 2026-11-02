@@ -43,7 +43,7 @@ describe("demo fixtures", () => {
       "coconut-shake-stand": [12.56745, 99.96],
       "krua-mae-yen": [12.57063, 99.95438],
       "pak-kapi": [12.56641, 99.95715],
-      "thuk-jai-chieo": [12.56366, 99.95917],
+      "thuk-jai-chieo": [12.5651, 99.9614],
       "clean-together": [12.57455, 99.95861],
       "baan-air": [12.57042, 99.95092],
       "beegee-barber": [12.56079, 99.95491],
@@ -52,6 +52,12 @@ describe("demo fixtures", () => {
       expect(bySlug.get(slug)?.lat).toBe(lat);
       expect(bySlug.get(slug)?.lng).toBe(lng);
     }
+    const thukJai = bySlug.get("thuk-jai-chieo");
+    expect(thukJai).toBeTruthy();
+    const fromCenter = haversineMeters(thukJai!, DEMO_CENTER);
+    expect(walkingMinutes(fromCenter)).toBe(7);
+    const hospital = { lat: 12.56392, lng: 99.95919 };
+    expect(haversineMeters(thukJai!, hospital)).toBeGreaterThanOrEqual(200);
   });
 
   it("keeps each pin on its own shop and names that shop in directions", () => {
@@ -86,11 +92,18 @@ describe("demo fixtures", () => {
     }
     const seed = readFileSync(resolve(root, "supabase/seeds/soi102_shops.sql"), "utf8");
     const move = readFileSync(resolve(root, "supabase/migrations/0024_demo_shop_coords.sql"), "utf8");
+    const street = readFileSync(resolve(root, "supabase/migrations/0025_thuk_jai_street.sql"), "utf8");
     expect(seed).not.toContain("TODO_REAL_COORDS");
     expect(move).not.toContain("TODO_REAL_COORDS");
+    expect(street).toContain("12.56510");
+    expect(street).toContain("99.96140");
+    expect(move).toContain("12.56366");
+    expect(move).toContain("99.95917");
+    expect(move).not.toContain("12.56510");
     for (const shop of FIXTURE_SHOPS) {
       expect(seed).toContain(shop.lat.toFixed(5));
       expect(seed).toContain(shop.lng.toFixed(5));
+      if (shop.slug === "thuk-jai-chieo") continue;
       expect(move).toContain(shop.lat.toFixed(5));
       expect(move).toContain(shop.lng.toFixed(5));
     }

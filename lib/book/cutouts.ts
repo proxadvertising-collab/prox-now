@@ -162,7 +162,15 @@ export function containsSourceUpload(value: unknown): boolean {
 export type BookSurface = {
   heroUrl: string | null;
   logoUrl: string | null;
-  menu: { name: string; nameEn: string | null; price: string | null; photo: string | null; category: string | null; tags?: string[] }[];
+  menu: {
+    name: string;
+    nameEn: string | null;
+    price: string | null;
+    photo: string | null;
+    category: string | null;
+    tags?: string[];
+    needsCheck?: boolean;
+  }[];
   extras: { id: string; imageUrl: null }[];
 };
 
@@ -181,6 +189,7 @@ export function bookSurface(view: {
       photoUrl?: string | null;
       tags?: readonly string[];
       category?: string | null;
+      needsCheck?: boolean;
     }[];
   }[];
 }): BookSurface {
@@ -208,6 +217,7 @@ export function bookSurface(view: {
       };
       const tags = (item.tags ?? []).filter((tag) => tag === "spicy" || tag === "vegan");
       if (tags.length > 0) row.tags = tags;
+      if (item.needsCheck) row.needsCheck = true;
       menu.push(row);
     }
   }

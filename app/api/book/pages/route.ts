@@ -696,6 +696,7 @@ async function commitBook(input: {
           call_id: meta?.callId ?? null,
           faces_blurred: page.facesBlurred,
           photo_hash: page.photoHash,
+          ...(group.read?.openChecked ? { open_check: true } : {}),
           ...(group.aiError ? { error: group.aiError } : {}),
         },
       };
@@ -1017,6 +1018,7 @@ async function retrySeed(service: SupabaseClient, shop: ShopRow): Promise<NextRe
           call_id: meta?.callId ?? null,
           faces_blurred: 0,
           photo_hash: target.photoHash,
+          ...(read?.openChecked ? { open_check: true } : {}),
           ...(aiError ? { error: aiError } : {}),
         },
       })

@@ -225,6 +225,7 @@ export default async function BookPage({
             </button>
           </form>
         ) : null}
+        {view.openChecked ? <p className="text-sm text-fg-muted">{t("en", "book.openCheck")}</p> : null}
         <div
           className="book-theme"
           style={{

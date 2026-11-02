@@ -15,6 +15,7 @@ export type MenuTileData = {
   photo: string | null;
   category?: string | null;
   tags?: string[];
+  needsCheck?: boolean;
 };
 
 export type DealTile = {
