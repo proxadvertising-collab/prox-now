@@ -62,6 +62,29 @@ describe("blurFaces", () => {
     expect(delta).toBeGreaterThan(30);
   });
 
+  it("blurs a small face box and leaves pixels far outside untouched", async () => {
+    const input = await halfAndHalf();
+    const plain = await blurFaces(input, []);
+    const box = [0.46, 0.46, 0.54, 0.54];
+    const blurred = await blurFaces(input, [box]);
+    const base = await sharp(plain).raw().toBuffer({ resolveWithObject: true });
+    const next = await sharp(blurred).raw().toBuffer();
+    const { width, height, channels } = base.info;
+    const at = (x: number, y: number) => (y * width + x) * channels;
+    const far = at(2, 2);
+    expect(Math.abs(base.data[far] - next[far])).toBeLessThan(4);
+    const edge = at(10, Math.floor(height / 2));
+    expect(Math.abs(base.data[edge] - next[edge])).toBeLessThan(4);
+    const center = at(Math.floor(width / 2), Math.floor(height / 2));
+    const delta =
+      Math.abs(base.data[center] - next[center]) +
+      Math.abs(base.data[center + 1] - next[center + 1]) +
+      Math.abs(base.data[center + 2] - next[center + 2]);
+    expect(delta).toBeGreaterThan(30);
+    const padded = 0.08 * 0.2;
+    expect(box[2] - box[0] + padded * 2).toBeLessThan(0.2);
+  });
+
   it("strips metadata from the jpeg", async () => {
     const plain = await sharp({
       create: { width: 24, height: 24, channels: 3, background: { r: 40, g: 50, b: 60 } },

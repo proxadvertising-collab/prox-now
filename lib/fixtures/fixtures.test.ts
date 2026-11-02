@@ -88,7 +88,10 @@ describe("demo fixtures", () => {
       });
       expect(sheet.bookHref).toBe("/book/" + shop.slug);
       expect(sheet.walkMinutes).toBe(walkingMinutes(haversineMeters(DEMO_CENTER, shop)));
-      expect(sheet.goNowHref).toContain(encodeURIComponent(shop.name) + "@" + shop.lat + "," + shop.lng);
+      expect(new URL(sheet.goNowHref).searchParams.get("destination")).toBe(shop.lat + "," + shop.lng);
+      expect(sheet.goNowHref).toContain("travelmode=walking");
+      expect(sheet.goNowHref.includes("@")).toBe(false);
+      expect(sheet.goNowHref.includes(encodeURIComponent(shop.name))).toBe(false);
     }
     const seed = readFileSync(resolve(root, "supabase/seeds/soi102_shops.sql"), "utf8");
     const move = readFileSync(resolve(root, "supabase/migrations/0024_demo_shop_coords.sql"), "utf8");

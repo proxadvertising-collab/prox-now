@@ -8,10 +8,16 @@ const STEP_KEY: Record<string, CopyKey> = {
   match: "ai.step.match",
 };
 
+const MENU_LABELS = new Set(["menu", "menus", "เมนู", "เมนูหลัก", "ราคา", "price", "prices", "price list"]);
+
+function isMenuLabel(value: string): boolean {
+  return MENU_LABELS.has(value.trim().replace(/\s+/g, " ").toLowerCase());
+}
+
 function readShopName(scene: SceneReport): string {
-  const named = scene.readName?.trim();
-  if (named) return named;
-  const sign = scene.signs.find((line) => line.original.trim());
+  const named = scene.readName?.trim() ?? "";
+  if (named && !isMenuLabel(named)) return named;
+  const sign = scene.signs.find((line) => line.original.trim() && !isMenuLabel(line.original));
   return sign?.original.trim() ?? "";
 }
 

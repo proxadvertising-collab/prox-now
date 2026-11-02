@@ -28,7 +28,7 @@ A bar at the top shows **Step N of 9**, with **Swap roles** and **End demo**, an
 | 3 Ask | Open **Map**, tap **Ask**, type e.g. "coffee and brunch" | Open shops come back as AI picks. Outside opening hours the answer is a list of nearby demo shops labelled "Closed now" or "Hours not listed". Either one passes this step | Live recommendations from Meta AI, or the nearby demo list when nothing is open |
 | 4 Translate | In the book, tap **Add** on a few items, open **View order**, type a request in the note box, then tap outside it; it translates by itself | The note in the shop's language | Meta AI translates item names and the note |
 | 5 Order | Tap **Show to staff** | The counter screen with quantities and the translated note | A tourist can order without speaking Thai |
-| 6 Post | From the camera (not the seed tray), tap **Upload photos instead** | A nearby-shop list and **Add this shop** | An upload path that does not need the camera |
+| 6 Post | Leave the seed tray. Open plain `/snap` (no `?tour=1&samples=1`). Tap **Upload photos instead**. If you see **Photo ready. Drop a pin where you took it.**, drop a pin. When it asks **Is this {name}?** tap **Yes, that's it**, then **Post this to the map** | **You're live at {name}** and **See it on the map**. If it is not sure, you get **Which shop is this?** and **Add this shop** before the same post button | A map post from `/snap`. On the seed tray, **Upload photos instead** only adds a seed photo |
 
 ## Judge 2: shop owner
 

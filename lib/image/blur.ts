@@ -101,7 +101,7 @@ export async function blurFaces(
 ): Promise<Buffer> {
   const maxEdge = opts?.maxEdge ?? 1024;
   const quality = opts?.quality ?? 80;
-  const pad = opts?.pad ?? 0.25;
+  const pad = opts?.pad ?? 0.2;
   const rotated = await sharp(jpeg, { failOn: "none" }).rotate().toBuffer();
   const meta = await sharp(rotated).metadata();
   const width = meta.width ?? 1;

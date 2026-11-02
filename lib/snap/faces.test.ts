@@ -38,4 +38,23 @@ describe("face choice", () => {
     const all = previewRgba(pixels, width, height, boxes, []);
     expect(all[left]).not.toBe(pixels[left]);
   });
+
+  it("blurs a small face plus its margin and leaves far pixels alone", () => {
+    const width = 100;
+    const height = 100;
+    const pixels = new Uint8Array(width * height * 4);
+    for (let index = 0; index < pixels.length; index += 4) {
+      pixels[index] = index % 200;
+      pixels[index + 1] = 40;
+      pixels[index + 2] = 90;
+      pixels[index + 3] = 255;
+    }
+    const blurred = previewRgba(pixels, width, height, [[0.46, 0.46, 0.54, 0.54]], []);
+    const far = (2 * width + 2) * 4;
+    expect(blurred[far]).toBe(pixels[far]);
+    const outside = (50 * width + 10) * 4;
+    expect(blurred[outside]).toBe(pixels[outside]);
+    const center = (50 * width + 50) * 4;
+    expect(blurred[center]).not.toBe(pixels[center]);
+  });
 });

@@ -30,14 +30,26 @@ describe("geo", () => {
     expect(routed).toBe(plain + "&origin=" + DEMO_CENTER.lat + "," + DEMO_CENTER.lng);
     expect(walkingDirectionsUrl(point, null)).toBe(plain);
     const named = walkingDirectionsUrl({ ...point, name: "Dawn Cafe" }, DEMO_CENTER);
-    expect(named).toContain("destination=" + encodeURIComponent("Dawn Cafe") + "@12.57,99.96");
+    expect(new URL(named).searchParams.get("destination")).toBe("12.57,99.96");
+    expect(named).toContain("travelmode=walking");
     expect(named).toContain("&origin=" + DEMO_CENTER.lat + "," + DEMO_CENTER.lng);
+    expect(named.includes("@")).toBe(false);
+    expect(named.includes("Dawn")).toBe(false);
     const list = readFileSync(resolve(process.cwd(), "components/map/ShopList.tsx"), "utf8");
     expect(list).toContain("walkingDirectionsUrl(shop, fixtures || demoSession ? DEMO_CENTER : null)");
     const sheet = readFileSync(resolve(process.cwd(), "lib/map/pin-sheet.ts"), "utf8");
     expect(sheet).toContain("walkingDirectionsUrl(input.shop, input.routeOrigin)");
     const map = readFileSync(resolve(process.cwd(), "components/map/ProxMap.tsx"), "utf8");
     expect(map).toContain("routeOrigin: fixtures || demoSession ? DEMO_CENTER : null");
+  });
+
+  it("keeps a named shop on walking directions when there is no origin", () => {
+    const url = walkingDirectionsUrl({ lat: 12.57, lng: 99.96, name: "Pak Kapi" });
+    expect(url).toBe("https://www.google.com/maps/dir/?api=1&destination=12.57,99.96&travelmode=walking");
+    expect(new URL(url).searchParams.get("destination")).toBe("12.57,99.96");
+    expect(url.includes("@")).toBe(false);
+    expect(url.includes("Pak")).toBe(false);
+    expect(url.includes("origin=")).toBe(false);
   });
 
   it("rounds walking minutes up and never below 1", () => {

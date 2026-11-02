@@ -112,6 +112,35 @@ describe("behind the scenes", () => {
     expect(t("th", "ai.newShop", { name: "ฟาร์ม" })).toBe("ร้านใหม่: ฟาร์ม");
   });
 
+  it("names a matched shop and never uses a menu word as a new shop", () => {
+    const base: SceneReport = {
+      model: null,
+      shopId: null,
+      shopName: null,
+      readName: "เมนู",
+      confidence: 0,
+      facesFound: 0,
+      facesBlurred: null,
+      signs: [{ original: "เมนู", translated: "Menu" }],
+      languages: null,
+      steps: [],
+    };
+    const matched = renderToStaticMarkup(
+      createElement(ScenePanel, { scene: { ...base, shopName: "Pak Kapi", shopId: "pak-kapi" } }),
+    );
+    expect(matched).toContain("Match: Pak Kapi");
+    expect(matched.includes("New shop")).toBe(false);
+    const menuOnly = renderToStaticMarkup(createElement(ScenePanel, { scene: base }));
+    expect(menuOnly).toContain(t("en", "ai.noMatch"));
+    expect(menuOnly.includes("New shop")).toBe(false);
+    const fresh = renderToStaticMarkup(createElement(ScenePanel, { scene: { ...base, readName: "Pak Kapi", signs: [] } }));
+    expect(fresh).toContain("New shop: Pak Kapi");
+    const longer = renderToStaticMarkup(
+      createElement(ScenePanel, { scene: { ...base, readName: "Menu House", signs: [] } }),
+    );
+    expect(longer).toContain("New shop: Menu House");
+  });
+
   it("does not name a model in the panel copy", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
     const panel = readFileSync(resolve(root, "components/snap/ScenePanel.tsx"), "utf8");

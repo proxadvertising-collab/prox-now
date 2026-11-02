@@ -20,9 +20,7 @@ export function walkingMinutes(meters: number): number {
 }
 
 export function walkingDirectionsUrl(point: LatLng & { name?: string | null }, origin?: LatLng | null): string {
-  const name = typeof point.name === "string" ? point.name.trim() : "";
-  const at = point.lat + "," + point.lng;
-  const destination = name ? encodeURIComponent(name) + "@" + at : at;
+  const destination = point.lat + "," + point.lng;
   let url = "https://www.google.com/maps/dir/?api=1&destination=" + destination + "&travelmode=walking";
   if (origin) url += "&origin=" + origin.lat + "," + origin.lng;
   return url;
