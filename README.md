@@ -14,7 +14,7 @@ The demo café photos are real photos taken by the founder, not AI-generated.
 | | |
 |---|---|
 | Live app | https://prox-now.vercel.app |
-| Branch and commit | `feat/judge-mode`, `d229e5f` |
+| Branch and commit | `feat/judge-mode`, `70d5f87` |
 | Production deployment | `dpl_BcebcUx6JApMs7GUTjo6YtLtdSxT` |
 | Tests | 542 tests, 119 files |
 | Demo video | TODO |
