@@ -49,8 +49,9 @@ describe("muse spark open check", () => {
     expect(flagged.map((item) => item.needsCheck ?? false)).toEqual([false, false, false]);
     expect(sent.url).toBe(OPEN_CHECK_URL);
     expect(sent.body.model).toBe(OPEN_CHECK_MODEL);
-    expect(sent.body.max_tokens).toBeGreaterThanOrEqual(2000);
+    expect(sent.body.max_tokens).toBe(1500);
     expect(sent.body.max_tokens).toBe(OPEN_CHECK_MAX_TOKENS);
+    expect(sent.body.reasoning_effort).toBe("low");
     expect(sent.authorization).toBe("Bearer test-key");
     expect(warn).not.toHaveBeenCalled();
   });
@@ -73,6 +74,15 @@ describe("muse spark open check", () => {
     expect(flagged.find((item) => item.name === "Soup")?.needsCheck).toBeUndefined();
   });
 
+  it("flags an item when the model appends a price to the name", () => {
+    const flagged = applyMenuFlags(
+      [{ name: "Coconut milk shake" }],
+      { confirmed: [], unconfirmed: ["Coconut milk shake — 45"] },
+    );
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]?.needsCheck).toBe(true);
+  });
+
   it("fails open on timeout", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fetchImpl = ((_: RequestInfo | URL, init?: RequestInit) =>
@@ -88,7 +98,7 @@ describe("muse spark open check", () => {
       fetchImpl,
       timeoutMs: 20,
     });
-    expect(OPEN_CHECK_TIMEOUT_MS).toBe(45_000);
+    expect(OPEN_CHECK_TIMEOUT_MS).toBe(30_000);
     expect(result).toEqual({ ran: false });
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).toContain("timeout");
@@ -150,8 +160,11 @@ describe("muse spark open check", () => {
     const content = sent.body.messages?.[0]?.content ?? [];
     const photos = content.filter((part) => part.type === "image_url");
     expect(photos).toHaveLength(OPEN_CHECK_MAX_PHOTOS);
-    expect(content.find((part) => part.type === "text")?.text).toContain("Pad Thai — 60");
-    expect(content.find((part) => part.type === "text")?.text).toContain("Mango");
+    const text = content.find((part) => part.type === "text")?.text ?? "";
+    expect(text).toContain("Pad Thai");
+    expect(text).toContain("Mango");
+    expect(text).not.toContain("—");
+    expect(text).not.toContain("60");
   });
 
   it("downscales a photo so the long edge is at most 1024", async () => {
@@ -213,7 +226,7 @@ describe("muse spark open check", () => {
       check: async (input) => {
         expect(input.images).toHaveLength(1);
         expect(input.items.map((item) => item.name)).toEqual(["Pad Thai", "Mango"]);
-        expect(input.timeoutMs).toBe(45_000);
+        expect(input.timeoutMs).toBe(30_000);
         return { ran: true, confirmed: ["Pad Thai"], unconfirmed: ["Mango"] };
       },
       save: async (row) => {

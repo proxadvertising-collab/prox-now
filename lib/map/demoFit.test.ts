@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIXTURE_SHOPS } from "../fixtures/shops";
-import { ASK_CHIP_ROW_PX, DEMO_FIT_MAX_ZOOM, demoFitPadding, fittedZoom, screenGapPx, shopBounds, shopsForDemoFit } from "./demoFit";
+import { ASK_CHIP_ROW_PX, ATTRIB_STRIP_TOP_PX, DEMO_FIT_MAX_ZOOM, demoFitPadding, fittedZoom, screenGapPx, shopBounds, shopsForDemoFit } from "./demoFit";
 
 describe("demo map fit", () => {
   it("clears the Ask and coupon chip row at 390 and 1280", () => {
@@ -11,8 +11,9 @@ describe("demo map fit", () => {
     expect(phone.top).toBe(ASK_CHIP_ROW_PX + 16);
     expect(phone.top).toBeGreaterThan(72);
     expect(wide.top).toBe(phone.top);
-    expect(phone.bottom).toBeGreaterThanOrEqual(180);
-    expect(wide.bottom).toBeGreaterThanOrEqual(140);
+    expect(phone.bottom).toBe(210);
+    expect(ATTRIB_STRIP_TOP_PX).toBe(198);
+    expect(wide.bottom).toBe(ATTRIB_STRIP_TOP_PX + 16);
   });
 
   it("fits only is_demo shops during a demo session", () => {

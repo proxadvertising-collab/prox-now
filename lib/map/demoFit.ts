@@ -11,11 +11,20 @@ export type FitPadding = { top: number; bottom: number; left: number; right: num
  */
 export const ASK_CHIP_ROW_PX = 12 + 16 + 20 + 16;
 
+/**
+ * On a wide map the attribution sits up from the map bottom.
+ * `.prox-map .maplibregl-ctrl-bottom-left` is `bottom: 10.5rem` (168).
+ * The compact control adds `margin: 10px`. The strip is one 20px line
+ * (`min-height: 20px`, padding `0 0.5rem`, line-height 20px).
+ * Its top is 168 + 10 + 20. Pins need 16px above that. Phone padding stays 210.
+ */
+export const ATTRIB_STRIP_TOP_PX = 168 + 10 + 20;
+
 export function demoFitPadding(width: number): FitPadding {
   const phone = width < 700;
   return {
     top: ASK_CHIP_ROW_PX + 16,
-    bottom: phone ? 210 : 180,
+    bottom: phone ? 210 : ATTRIB_STRIP_TOP_PX + 16,
     left: 40,
     right: 40,
   };

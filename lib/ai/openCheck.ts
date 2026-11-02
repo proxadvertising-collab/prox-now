@@ -5,8 +5,8 @@ import sharp from "sharp";
 
 export const OPEN_CHECK_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
 export const OPEN_CHECK_MODEL = "accounts/fireworks/models/muse-spark-open";
-export const OPEN_CHECK_TIMEOUT_MS = 45_000;
-export const OPEN_CHECK_MAX_TOKENS = 4000;
+export const OPEN_CHECK_TIMEOUT_MS = 30_000;
+export const OPEN_CHECK_MAX_TOKENS = 1500;
 export const OPEN_CHECK_MAX_PHOTOS = 2;
 export const OPEN_CHECK_MAX_EDGE = 1024;
 
@@ -38,7 +38,7 @@ function keyOf(input: CheckInput): string | null {
 }
 
 export function normItemName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
+  return name.trim().toLowerCase().replace(/\s+/g, " ").replace(/\s+—\s+.*$/, "");
 }
 
 export function applyMenuFlags<T extends { name: string }>(
@@ -137,12 +137,7 @@ function objectAt(text: string, start: number): string | null {
 }
 
 export function openCheckItemText(items: readonly CheckItem[]): string {
-  return items
-    .map((item) => {
-      const price = item.price?.trim();
-      return price ? item.name + " — " + price : item.name;
-    })
-    .join("\n");
+  return items.map((item) => item.name).join("\n");
 }
 
 function promptFor(items: readonly CheckItem[]): string {
@@ -189,6 +184,7 @@ export async function checkMenuOpen(input: CheckInput): Promise<OpenCheckResult>
         body: JSON.stringify({
           model: OPEN_CHECK_MODEL,
           max_tokens: OPEN_CHECK_MAX_TOKENS,
+          reasoning_effort: "low",
           temperature: 0,
           messages: [
             {
