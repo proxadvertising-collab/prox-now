@@ -874,12 +874,12 @@ export function LiveCamera({
         </div>
       ) : null}
       {cameraClosed ? (
-        <div className="absolute inset-x-4 top-1/3 z-20 rounded-lg border border-border bg-surface-1 p-4 text-fg">
-          <p className="text-body">{t(lang, "snap.blocked")}</p>
+        <div className="camera-gate">
+          <p className="camera-blocked text-body">{t(lang, "snap.blocked")}</p>
         </div>
       ) : null}
       {cameraAsk && !cameraClosed ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
+        <div className="camera-gate">
           <button type="button" className="btn-primary min-h-14 px-6 text-lg font-semibold" onClick={() => openCameraRef.current?.()}>
             {t(lang, "snap.turnOn")}
           </button>

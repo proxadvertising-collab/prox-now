@@ -47,6 +47,13 @@ export function tickCooldown(seconds: number): number {
   return seconds > 0 ? seconds - 1 : 0;
 }
 
+/** Supabase email send cap. The code step stays open and the wait starts again. */
+export function emailSendLimit(error: { status?: number; message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  if (error.status === 429 || error.code === "over_email_send_rate_limit") return true;
+  return (error.message ?? "").toLowerCase().includes("over_email_send_rate_limit");
+}
+
 /** Maps a Supabase sign-up error onto a short reason. Confirmation is a separate check. */
 export function signUpFailure(message: string): SignUpProblem {
   const text = message.toLowerCase();

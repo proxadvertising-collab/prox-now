@@ -7,6 +7,7 @@ import {
   codeReady,
   CODE_COOLDOWN_S,
   codeStepAfterSignUp,
+  emailSendLimit,
   resendPlan,
   signInNeedsCode,
   signUpFailure,
@@ -82,6 +83,14 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         password,
       });
       if (signError) {
+        if (emailSendLimit(signError)) {
+          setStep("code");
+          setCode("");
+          setNotice(null);
+          setError(t("en", "auth.emailRate"));
+          setCooldown(CODE_COOLDOWN_S);
+          return;
+        }
         if (signInNeedsCode(signError.message, signError.code)) {
           setStep("code");
           setCode("");
@@ -120,6 +129,12 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         password,
       });
       if (signError) {
+        if (emailSendLimit(signError)) {
+          openCode(address);
+          setNotice(null);
+          setError(t("en", "auth.emailRate"));
+          return;
+        }
         const problem = signUpFailure(signError.message);
         if (problem === "confirm") {
           openCode(address);
@@ -170,7 +185,7 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         setError(t("en", "auth.mismatch"));
         return;
       }
-      window.location.assign(dest);
+      window.location.assign(createDest);
     } catch {
       setError(t("en", "auth.mismatch"));
     } finally {
@@ -187,6 +202,13 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
       const supabase = createClient({ keepSignedIn: keep });
       const { error: resendError } = await supabase.auth.resend({ type: "signup", email: address });
       if (resendError) {
+        if (emailSendLimit(resendError)) {
+          setStep("code");
+          setNotice(null);
+          setError(t("en", "auth.emailRate"));
+          setCooldown(CODE_COOLDOWN_S);
+          return;
+        }
         setError(t("en", "auth.failed"));
         return;
       }
@@ -273,7 +295,7 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
             className="inline-flex min-h-12 w-full items-center justify-center text-base font-semibold text-fg"
             disabled={loading}
           >
-            Use a different email
+            {t("en", "auth.switch")}
           </button>
         </>
       ) : (

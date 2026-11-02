@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { t } from "../copy";
 import {
   CODE_COOLDOWN_S,
   accountDest,
@@ -8,6 +9,7 @@ import {
   codeDigits,
   codeReady,
   codeStepAfterSignUp,
+  emailSendLimit,
   resendPlan,
   signInNeedsCode,
   signUpFailure,
@@ -44,7 +46,9 @@ describe("create account", () => {
     expect(form).toContain('type: "signup"');
     expect(form).toContain('inputMode="numeric"');
     expect(form).toContain('autoComplete="one-time-code"');
-    expect(form).toContain("Use a different email");
+    expect(form).toContain('t("en", "auth.switch")');
+    expect(form).toContain("emailSendLimit");
+    expect(form).toContain('t("en", "auth.emailRate")');
     expect(form).toContain("codeStepAfterSignUp");
     expect(form).toContain("signInNeedsCode");
     expect(form).not.toContain("window.open");
@@ -79,5 +83,32 @@ describe("create account", () => {
     expect(signInNeedsCode("Email not confirmed")).toBe(true);
     expect(signInNeedsCode("Invalid login credentials", "email_not_confirmed")).toBe(true);
     expect(signInNeedsCode("Invalid login credentials")).toBe(false);
+  });
+
+  it("keeps the code step open when email sends are capped, then opens the camera", () => {
+    expect(emailSendLimit(null)).toBe(false);
+    expect(emailSendLimit({ status: 429, message: "Too many requests" })).toBe(true);
+    expect(emailSendLimit({ code: "over_email_send_rate_limit" })).toBe(true);
+    expect(emailSendLimit({ message: "over_email_send_rate_limit" })).toBe(true);
+    expect(emailSendLimit({ status: 400, message: "Invalid login credentials" })).toBe(false);
+    expect(t("en", "auth.emailRate")).toBe("Too many emails just now. Wait a minute, then tap Send a new code.");
+    expect(t("en", "auth.switch")).toBe("Use a different email");
+    expect(t("th", "auth.switch")).toBe("ใช้อีเมลอื่น");
+    const form = readFileSync(resolve(process.cwd(), "app/login/login-form.tsx"), "utf8");
+    const signIn = form.slice(form.indexOf("async function signIn"), form.indexOf("async function signUp"));
+    expect(signIn).toContain("emailSendLimit(signError)");
+    expect(signIn).toContain("setCooldown(CODE_COOLDOWN_S)");
+    expect(signIn).toContain("window.location.assign(dest)");
+    expect(signIn).not.toContain("window.location.assign(createDest)");
+    const signUp = form.slice(form.indexOf("async function signUp"), form.indexOf("function openCode"));
+    expect(signUp).toContain("emailSendLimit(signError)");
+    expect(signUp).toContain("openCode(address)");
+    const confirm = form.slice(form.indexOf("async function confirmCode"), form.indexOf("async function sendCode"));
+    expect(confirm).toContain("window.location.assign(createDest)");
+    expect(confirm).not.toContain("window.location.assign(dest)");
+    const send = form.slice(form.indexOf("async function sendCode"), form.indexOf("function useDifferentEmail"));
+    expect(send).toContain("emailSendLimit(resendError)");
+    expect(send).toContain("setCooldown(CODE_COOLDOWN_S)");
+    expect(send).toContain('t("en", "auth.emailRate")');
   });
 });
