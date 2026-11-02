@@ -8,6 +8,17 @@ Built for one street we know first-hand: Soi 102, Hua Hin, Thailand. Tourists ca
 
 Indie track, theme "Build for Your World". Built during the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026). See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
+The demo café photos are real photos taken by the founder, not AI-generated.
+
+## Submitted build
+| | |
+|---|---|
+| Live app | https://prox-now.vercel.app |
+| Branch and commit | `feat/judge-mode`, `d229e5f` |
+| Production deployment | `dpl_BcebcUx6JApMs7GUTjo6YtLtdSxT` |
+| Tests | 536 tests, 119 files |
+| Demo video | TODO |
+
 ## Try it in 3 minutes
 Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as one of two shared demo accounts. You need no password, camera, location or phone. Do **Judge 1 (shopper) first, then Judge 2 (owner)**, one after the other. Full steps and what each one proves are in [JUDGES.md](JUDGES.md).
 
@@ -34,7 +45,7 @@ Every AI call in the app goes to **`muse-spark-1.3`** on the Meta Model API (`ht
 | Impact | Real pilot street, real shop photos in the demo; tourists and shops with no English menu; places people add are exported as public GeoJSON (`app/api/places/export/route.ts`) |
 | Use of Meta AI | 11 features on `muse-spark-1.3`, including multi-image book reading, vision-based face blur, claim-photo checks and translation (table above) |
 | Demo | One-tap `/judge`, a 9-step guided tour with an explainer on every step (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`), pre-seeded real photos so no camera is needed, and End demo resets (`lib/judge/runReset.ts`) |
-| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 521 unit tests |
+| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 536 unit tests in 119 files |
 
 ## Architecture
 ```mermaid
@@ -57,7 +68,7 @@ flowchart LR
 npm install
 cp .env.example .env.local   # fill in values on your machine; never commit it
 npm run dev                  # http://localhost:3000
-npm test                     # vitest: 116 files, 521 tests
+npm test                     # vitest: 119 files, 536 tests
 npm run build
 ```
 `.env.example` (names only):
@@ -81,3 +92,6 @@ Without `META_API_KEY`, the AI routes return `ai_not_configured` ("The shop read
 
 ## More
 Design: [docs/design/DESIGN.md](docs/design/DESIGN.md) · Build notes: `docs/build/` · Provenance: [docs/PROVENANCE.md](docs/PROVENANCE.md)
+
+## License
+MIT © 2026 PLOT TWIST LLC. See [LICENSE](LICENSE).
