@@ -20,7 +20,7 @@ import { SeedCoach } from "./SeedCoach";
 import { ShopPicker } from "./ShopPicker";
 import { t } from "@/lib/copy";
 import { RadarButton } from "@/components/ui/RadarButton";
-import { cameraStart, shutterAction } from "@/lib/camera/camera-gate";
+import { cameraAskFailed, cameraStart, shutterAction } from "@/lib/camera/camera-gate";
 import { captureFix, stampLine, type CaptureFix } from "@/lib/camera/seed";
 import { getFix } from "@/lib/geo/fix-cache";
 import { bookSavePlan, uploadBookSession, type BookShot } from "@/lib/book/builder";
@@ -138,6 +138,7 @@ export function LiveCamera({
   const [readAgain, setReadAgain] = useState(false);
   const [retryShot, setRetryShot] = useState(false);
   const [cameraClosed, setCameraClosed] = useState(false);
+  const [cameraAsk, setCameraAsk] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [askWhere, setAskWhere] = useState(false);
   const [askJoin, setAskJoin] = useState<Picked | null>(null);
@@ -227,6 +228,7 @@ export function LiveCamera({
             active = adopted.stream;
           }
           streamRef.current = active;
+          setCameraAsk(false);
           if (video) {
             video.srcObject = active;
             void video.play().then(() => {
@@ -238,7 +240,10 @@ export function LiveCamera({
             setCameraCount(devices.filter((device) => device.kind === "videoinput").length);
           }).catch(() => undefined);
         })
-        .catch(() => setCameraClosed(true));
+        .catch(() => {
+          if (stopped) return;
+          if (cameraAskFailed(true) === "gesture") setCameraAsk(true);
+        });
     }
     openCameraRef.current = openCamera;
     void (async () => {
@@ -863,9 +868,21 @@ export function LiveCamera({
       />
       {!liveFile ? (
       <>
-      {!cameraReady && !cameraClosed ? (
+      {!cameraReady && !cameraClosed && !cameraAsk ? (
         <div className="absolute inset-0 z-10 bg-bg p-4 pt-20">
           <SkeletonCards />
+        </div>
+      ) : null}
+      {cameraClosed ? (
+        <div className="absolute inset-x-4 top-1/3 z-20 rounded-lg border border-border bg-surface-1 p-4 text-fg">
+          <p className="text-body">{t(lang, "snap.blocked")}</p>
+        </div>
+      ) : null}
+      {cameraAsk && !cameraClosed ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center">
+          <button type="button" className="btn-primary min-h-14 px-6 text-lg font-semibold" onClick={() => openCameraRef.current?.()}>
+            {t(lang, "snap.turnOn")}
+          </button>
         </div>
       ) : null}
       <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back" style={onTour ? { top: "calc(1rem + var(--tour-bar, 0px))" } : undefined}>

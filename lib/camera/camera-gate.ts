@@ -1,7 +1,12 @@
-export function cameraStart(perm: "granted" | "prompt" | "denied" | null): "auto" | "tap" | "closed" {
-  if (perm === "granted") return "auto";
+/** Granted starts the preview. Prompt and unknown browsers ask once on arrival. Denied stays closed. */
+export function cameraStart(perm: "granted" | "prompt" | "denied" | null): "auto" | "closed" {
   if (perm === "denied") return "closed";
-  return "tap";
+  return "auto";
+}
+
+/** One failed start waits for a tap. It does not ask again by itself. */
+export function cameraAskFailed(failed: boolean): "gesture" | "live" {
+  return failed ? "gesture" : "live";
 }
 
 export function shutterAction(input: {
