@@ -245,6 +245,73 @@ describe("muse spark open check", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it("checks each item only against its own page", async () => {
+    let started = 0;
+    let release: () => void = () => undefined;
+    const bothStarted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls: { names: string[]; photo: string }[] = [];
+    const saved: { id: string; extracted: unknown; aiMeta: Record<string, unknown> }[] = [];
+    await finishOpenCheck({
+      pages: [
+        {
+          id: "page-a",
+          extracted: { items: [{ name: "Pad Thai" }, { name: "Soup" }] },
+          aiMeta: { photo_hash: "a" },
+          jpeg: Buffer.from("page-a"),
+        },
+        {
+          id: "page-b",
+          extracted: { items: [{ name: "Soup" }] },
+          aiMeta: { photo_hash: "b" },
+          jpeg: Buffer.from("page-b"),
+        },
+        {
+          id: "page-empty",
+          extracted: { items: [] },
+          aiMeta: { photo_hash: "empty" },
+          jpeg: Buffer.from("page-empty"),
+        },
+      ],
+      downscale: async (jpeg) => "data:image/jpeg;base64," + jpeg.toString("utf8"),
+      check: async (input) => {
+        started += 1;
+        if (started === 2) release();
+        await bothStarted;
+        const names = input.items.map((item) => item.name);
+        const photo = input.images[0]?.dataUrl ?? "";
+        calls.push({ names, photo });
+        expect(input.images).toHaveLength(1);
+        expect(input.timeoutMs).toBe(30_000);
+        if (photo.endsWith("page-a")) {
+          expect(names).toEqual(["Pad Thai", "Soup"]);
+          return { ran: true, confirmed: ["Pad Thai"], unconfirmed: ["Soup"] };
+        }
+        expect(names).toEqual(["Soup"]);
+        return { ran: true, confirmed: ["Soup"], unconfirmed: [] };
+      },
+      save: async (row) => {
+        saved.push(row);
+      },
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => call.photo).sort()).toEqual([
+      "data:image/jpeg;base64,page-a",
+      "data:image/jpeg;base64,page-b",
+    ]);
+    const pageA = saved.find((row) => row.id === "page-a");
+    const pageB = saved.find((row) => row.id === "page-b");
+    const itemsA = (pageA?.extracted as { items: { name: string; needsCheck?: boolean }[] }).items;
+    const itemsB = (pageB?.extracted as { items: { name: string; needsCheck?: boolean }[] }).items;
+    expect(itemsA.find((item) => item.name === "Pad Thai")?.needsCheck).toBeUndefined();
+    expect(itemsA.find((item) => item.name === "Soup")?.needsCheck).toBe(true);
+    expect(itemsB.find((item) => item.name === "Soup")?.needsCheck).toBeUndefined();
+    expect(pageA?.aiMeta).toEqual({ photo_hash: "a", open_check: true });
+    expect(pageB?.aiMeta).toEqual({ photo_hash: "b", open_check: true });
+    expect(saved.find((row) => row.id === "page-empty")).toBeUndefined();
+  });
+
   it("logs one line when the after-save check throws", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     let queued: (() => Promise<void>) | null = null;

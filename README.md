@@ -18,7 +18,7 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | Live app | https://prox-now.vercel.app |
 | Branch and commit | `main` (same as `feat/judge-mode`), app code `71d312b` |
 | Production deployment | `main` auto-deploys to https://prox-now.vercel.app |
-| Tests | 570 tests, 122 files |
+| Tests | 571 tests, 122 files |
 | Demo video | https://youtube.com/shorts/_fUl4ZByer4 |
 
 ## Try it in 3 minutes
@@ -27,7 +27,7 @@ Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as 
 ## Meta models used
 Most Spark calls go through `lib/ai/meta.ts` (`callSpark`, `callSparkImages`, 25 s timeout) to **`muse-spark-1.3`** on the Meta Model API (`https://api.meta.ai/v1/responses`). `lib/gonow/spark.ts`, `lib/order/translate.ts`, and `app/api/meta-ping/route.ts` are direct calls to that same endpoint.
 
-After the book is saved, `lib/ai/openCheck.ts` sends the extracted item text and at most two photos, each downscaled to 1024 px, to Meta **`muse-spark-open`** on Fireworks (`accounts/fireworks/models/muse-spark-open`) when `FIREWORKS_API_KEY` is set. The check runs in `after()` with a 30 s timeout and does not delay the save. No key, a timeout, a non-200, or bad JSON logs one line and the book still posts every Spark item. Confirmed items post as usual. Unconfirmed items still post, flagged "check this" for the owner. On the next load, once a verdict exists, the book shows "Double-checked by Muse Spark Open".
+After the book is saved, `lib/ai/openCheck.ts` checks each page on its own, up to 4 pages at once, against Meta **`muse-spark-open`** on Fireworks (`accounts/fireworks/models/muse-spark-open`) when `FIREWORKS_API_KEY` is set. Each call sends that page's item names and its photo, downscaled to 1024 px. The checks run in `after()` with a 30 s timeout each and do not delay the save. No key, a timeout, a non-200, or bad JSON fails open for that page and the book still posts every Spark item. An item is flagged "check this" only when its own page's check says unconfirmed. On the next load, once a verdict exists, the book shows "Double-checked by Muse Spark Open".
 
 | Feature | Model | File |
 |---|---|---|
@@ -51,7 +51,7 @@ After the book is saved, `lib/ai/openCheck.ts` sends the extracted item text and
 | Impact (30) | A real Hua Hin street. Shoppers snap a menu and get a book they can order from (`app/(app)/book/[slug]/page.tsx`). Owners thank them with a coupon (`JUDGES.md`). Added places export as GeoJSON (`app/api/places/export/route.ts`). |
 | Meta AI (25) | Every runtime call is in the model map above. Most Spark calls go through `lib/ai/meta.ts`. `lib/gonow/spark.ts`, `lib/order/translate.ts`, and `app/api/meta-ping/route.ts` call the same endpoint directly. `muse-spark-open` double-checks book items after the save when `FIREWORKS_API_KEY` is set (`lib/ai/openCheck.ts`). |
 | Demo (25) | One tap at `/judge`. Nine tour steps with an explainer each (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`). Sample photos, no camera. The map opens fitted to the demo shops. End demo resets (`lib/judge/runReset.ts`). Steps: [JUDGES.md](JUDGES.md). |
-| Depth (20) | Postgres RLS and security-definer RPCs (`supabase/migrations/`, 24 files through 0024; 0025 and 0026 are files only until apply), shared rate limits (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photos with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 570 unit tests in 122 files |
+| Depth (20) | Postgres RLS and security-definer RPCs (`supabase/migrations/`, 24 files through 0024; 0025 and 0026 are files only until apply), shared rate limits (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photos with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 571 unit tests in 122 files |
 
 ## Architecture
 ```mermaid
@@ -75,7 +75,7 @@ flowchart LR
 npm install
 cp .env.example .env.local   # fill in values on your machine; never commit it
 npm run dev                  # http://localhost:3000
-npm test                     # vitest: 122 files, 570 tests
+npm test                     # vitest: 122 files, 571 tests
 npm run build
 ```
 `.env.example` (names only):

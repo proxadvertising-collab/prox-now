@@ -9,6 +9,7 @@ export const OPEN_CHECK_TIMEOUT_MS = 30_000;
 export const OPEN_CHECK_MAX_TOKENS = 1500;
 export const OPEN_CHECK_MAX_PHOTOS = 2;
 export const OPEN_CHECK_MAX_EDGE = 1024;
+export const OPEN_CHECK_MAX_PAGES = 4;
 
 export type OpenVerdict = { confirmed: string[]; unconfirmed: string[] };
 
@@ -262,52 +263,73 @@ function storedItems(extracted: unknown): { name: string; price?: string | null 
   return items;
 }
 
+type OpenSave = (row: { id: string; extracted: unknown; aiMeta: Record<string, unknown> }) => Promise<void>;
+
+/** One page, one photo. A miss leaves that page alone. */
+async function checkSavedPage(
+  page: SavedOpenPage,
+  check: typeof checkMenuOpen,
+  downscale: (jpeg: Buffer) => Promise<string>,
+  save: OpenSave,
+): Promise<void> {
+  const items = storedItems(page.extracted);
+  if (items.length === 0) return;
+  const images: { dataUrl: string }[] = [];
+  if (page.jpeg) {
+    try {
+      images.push({ dataUrl: await downscale(page.jpeg) });
+    } catch {
+      // A bad photo is skipped. The names are still checked.
+    }
+  }
+  const result = await check({ images, items, timeoutMs: OPEN_CHECK_TIMEOUT_MS });
+  if (!result.ran) return;
+  const record = asRecord(page.extracted);
+  if (!record || !Array.isArray(record.items)) return;
+  const flagged = applyMenuFlags(
+    record.items.filter((item): item is { name: string } => Boolean(asRecord(item) && typeof asRecord(item)?.name === "string")),
+    result,
+  );
+  const byName = new Map(flagged.map((item) => [normItemName(item.name), item.needsCheck === true]));
+  const itemsNext = record.items.map((item) => {
+    const row = asRecord(item);
+    if (!row || typeof row.name !== "string") return item;
+    if (!byName.get(normItemName(row.name))) return item;
+    return { ...row, needsCheck: true };
+  });
+  await save({
+    id: page.id,
+    extracted: { ...record, items: itemsNext },
+    aiMeta: { ...page.aiMeta, open_check: true },
+  });
+}
+
 /**
  * Writes the verdict into shop_book_pages.extracted (needsCheck on items)
  * and shop_book_pages.ai_meta (open_check). Both columns already exist.
- * A miss leaves the saved rows alone.
+ * Each page is checked against its own photo. A miss leaves that page alone.
  */
 export async function finishOpenCheck(input: {
   pages: readonly SavedOpenPage[];
   check?: typeof checkMenuOpen;
   downscale?: (jpeg: Buffer) => Promise<string>;
-  save: (row: { id: string; extracted: unknown; aiMeta: Record<string, unknown> }) => Promise<void>;
+  save: OpenSave;
 }): Promise<void> {
-  const items = input.pages.flatMap((page) => storedItems(page.extracted));
-  if (items.length === 0) return;
+  const pages = input.pages
+    .filter((page) => storedItems(page.extracted).length > 0)
+    .slice(0, OPEN_CHECK_MAX_PAGES);
+  if (pages.length === 0) return;
   const check = input.check ?? checkMenuOpen;
   const downscale = input.downscale ?? downscaleOpenJpeg;
-  const images: { dataUrl: string }[] = [];
-  for (const page of input.pages) {
-    if (!page.jpeg || images.length >= OPEN_CHECK_MAX_PHOTOS) continue;
-    try {
-      images.push({ dataUrl: await downscale(page.jpeg) });
-    } catch {
-      // A bad photo is skipped. The text list is still checked.
-    }
-  }
-  const result = await check({ images, items, timeoutMs: OPEN_CHECK_TIMEOUT_MS });
-  if (!result.ran) return;
-  for (const page of input.pages) {
-    const record = asRecord(page.extracted);
-    if (!record || !Array.isArray(record.items)) continue;
-    const flagged = applyMenuFlags(
-      record.items.filter((item): item is { name: string } => Boolean(asRecord(item) && typeof asRecord(item)?.name === "string")),
-      result,
-    );
-    const byName = new Map(flagged.map((item) => [normItemName(item.name), item.needsCheck === true]));
-    const itemsNext = record.items.map((item) => {
-      const row = asRecord(item);
-      if (!row || typeof row.name !== "string") return item;
-      if (!byName.get(normItemName(row.name))) return item;
-      return { ...row, needsCheck: true };
-    });
-    await input.save({
-      id: page.id,
-      extracted: { ...record, items: itemsNext },
-      aiMeta: { ...page.aiMeta, open_check: true },
-    });
-  }
+  await Promise.all(
+    pages.map(async (page) => {
+      try {
+        await checkSavedPage(page, check, downscale, input.save);
+      } catch {
+        warnSkip("error");
+      }
+    }),
+  );
 }
 
 /** Runs after the response. Outside a request (tests) it does nothing and the saved book stands. */
