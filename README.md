@@ -1,6 +1,6 @@
 # Prox Now
 
-**Live:** https://prox-now.vercel.app · **Judges:** https://prox-now.vercel.app/judge ([JUDGES.md](JUDGES.md)) · **Video:** TODO (captain adds link)
+**Live:** https://prox-now.vercel.app · **Judges:** https://prox-now.vercel.app/judge ([JUDGES.md](JUDGES.md)) · **Video:** [3-minute demo](https://youtube.com/shorts/_fUl4ZByer4)
 
 Prox Now makes a street's small shops readable and orderable in any language. A shopper snaps a shop's sign or menu. Meta's `muse-spark-1.3` turns the photos into the shop's **book**, with one page per real category, items, and prices only when they're readable. The shopper asks the map what's good right now, builds an order, and shows staff a translated order screen. The owner claims the shop and thanks the people who snapped it or built its book with a coupon, and the shopper scratches it in their wallet.
 
@@ -16,10 +16,10 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | | |
 |---|---|
 | Live app | https://prox-now.vercel.app |
-| Branch and commit | `feat/judge-mode`, `752e04c` |
-| Production deployment | `dpl_J7jUhsJs6hHgLjtduQFtPdkrMVoL` |
+| Branch and commit | `main` (same as `feat/judge-mode`), app code `71d312b` |
+| Production deployment | `main` auto-deploys to https://prox-now.vercel.app |
 | Tests | 544 tests, 119 files |
-| Demo video | TODO |
+| Demo video | https://youtube.com/shorts/_fUl4ZByer4 |
 
 ## Try it in 3 minutes
 Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as one of two shared demo accounts. You need no password, camera, location or phone. Do **Judge 1 (shopper) first, then Judge 2 (owner)**, one after the other. Full steps and what each one proves are in [JUDGES.md](JUDGES.md).
