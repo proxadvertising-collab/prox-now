@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, nextClearState, staffCloseHref } from "../../components/order/OrderUi";
 
 const line = {
@@ -68,6 +68,53 @@ describe("order page", () => {
     expect(html).toContain("z-50");
     expect(staffCloseHref("http://localhost/book/mala/order?staff=1")).toBe("/book/mala/order");
     expect(staffCloseHref("/book/mala/order?tour=1&staff=1")).toBe("/book/mala/order?tour=1");
+    expect(html).not.toContain("tour-bar");
+  });
+
+  it("pushes the staff list down by the tour bar only in tour mode", () => {
+    const store = new Map<string, string>();
+    store.set("prox-judge-tour", JSON.stringify({ cafe: "a", role: "shopper", step: "order" }));
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    });
+    const touring = renderToStaticMarkup(
+      createElement(OrderSheet, {
+        shopName: "Farm to Go",
+        logoUrl: null,
+        place: null,
+        lines: [line],
+        note: "",
+        translation: "",
+        totalLabel: "",
+        unpriced: 0,
+        lang: "en",
+        staff: true,
+      }),
+    );
+    expect(touring).toContain("padding-top:calc(1.5rem + var(--tour-bar, 0px))");
+    expect(touring.indexOf("var(--tour-bar")).toBeLessThan(touring.indexOf("Done · เสร็จ"));
+    expect(touring.slice(touring.indexOf("Done · เสร็จ"))).not.toContain("tour-bar");
+    vi.unstubAllGlobals();
+    const plain = renderToStaticMarkup(
+      createElement(OrderSheet, {
+        shopName: "Farm to Go",
+        logoUrl: null,
+        place: null,
+        lines: [line],
+        note: "",
+        translation: "",
+        totalLabel: "",
+        unpriced: 0,
+        lang: "en",
+        staff: true,
+      }),
+    );
+    expect(plain).not.toContain("tour-bar");
+    expect(plain).toContain("Done · เสร็จ");
   });
 
   it("leaves the address off when the shop has none", () => {

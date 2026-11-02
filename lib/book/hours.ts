@@ -97,6 +97,33 @@ export function parseWeekday(value: unknown): number | null {
   return DAY_NAME[text] ?? null;
 }
 
+function everyDayName(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const text = value.trim().toLowerCase().replace(/\s+/g, " ");
+  return text === "daily" || text === "every day" || text === "everyday" || text === "all" || text === "all days";
+}
+
+function rawSaysDaily(raw: string | null): boolean {
+  return raw !== null && /\bdaily\b/i.test(raw);
+}
+
+function dailyClock(raw: string | null): { open: number; close: number } | null {
+  if (!rawSaysDaily(raw) || !raw) return null;
+  const match = /(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)\s*(?:-|–|—|to)\s*(\d{1,2}(?::\d{2})?(?:\s*[ap]m)?)/i.exec(raw);
+  if (!match) return null;
+  const open = parseClock(match[1]);
+  const close = parseClock(match[2]);
+  if (open === null || close === null || open >= 24 * 60) return null;
+  return { open, close };
+}
+
+function pushEveryDay(days: DayHours[], open: number, close: number): void {
+  for (let d = 0; d <= 6; d += 1) {
+    if (days.length >= 14) break;
+    days.push({ d, open: formatMinutes(open), close: formatMinutes(close) });
+  }
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -112,15 +139,32 @@ export function parseHours(value: unknown, source: BookHours["source"] = "photo"
       if (days.length >= 14) break;
       const item = asRecord(row);
       if (!item) continue;
-      const d = parseWeekday(item.d);
       const open = parseClock(item.open);
       const close = parseClock(item.close);
-      if (d === null || open === null || close === null) continue;
-      if (open >= 24 * 60) continue;
+      if (open === null || close === null || open >= 24 * 60) continue;
+      const lone = rawDays.length === 1 && (item.d == null || item.d === "");
+      if (everyDayName(item.d) || lone) {
+        pushEveryDay(days, open, close);
+        continue;
+      }
+      const d = parseWeekday(item.d);
+      if (d === null) continue;
       days.push({ d, open: formatMinutes(open), close: formatMinutes(close) });
     }
   }
   const raw = typeof record.raw === "string" && record.raw.trim() ? record.raw.trim().slice(0, 400) : null;
+  if (days.length === 1 && rawSaysDaily(raw)) {
+    const open = parseClock(days[0]?.open);
+    const close = parseClock(days[0]?.close);
+    if (open !== null && close !== null) {
+      days.length = 0;
+      pushEveryDay(days, open, close);
+    }
+  }
+  if (days.length === 0) {
+    const fromRaw = dailyClock(raw);
+    if (fromRaw) pushEveryDay(days, fromRaw.open, fromRaw.close);
+  }
   if (days.length === 0 && !raw) return null;
   return { days, raw, source };
 }

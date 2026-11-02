@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { displayName } from "../../lib/book/display";
 import { t } from "../../lib/copy";
+import { readTour } from "../../lib/judge/script";
 import { MoreSheet } from "../shell/MoreSheet";
 import {
   browserStorage,
@@ -151,9 +152,13 @@ export function OrderSheet({
     return () => window.clearTimeout(timer);
   }, [clearPhase]);
   if (staff) {
+    const onTour = Boolean(readTour());
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-bg text-fg">
-        <div className="min-h-0 flex-1 overflow-auto p-6">
+        <div
+          className="min-h-0 flex-1 overflow-auto p-6"
+          style={onTour ? { paddingTop: "calc(1.5rem + var(--tour-bar, 0px))" } : undefined}
+        >
         <h1 className="text-4xl font-bold leading-tight">{shopName}</h1>
         <div className="mt-8 flex flex-col gap-6">
           {lines.map((line) => {

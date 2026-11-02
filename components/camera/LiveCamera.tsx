@@ -862,11 +862,11 @@ export function LiveCamera({
       <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back" style={onTour ? { top: "calc(1rem + var(--tour-bar, 0px))" } : undefined}>
         ←
       </Link>
-      {onTour ? (
-        <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white" style={{ top: "calc(4rem + var(--tour-bar, 0px))" }}>
+      {onTour ? null : (
+        <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white">
           {explainer("seed").body}
         </p>
-      ) : null}
+      )}
       {phase === "camera" ? (
         <button type="button" className="seed-open" onClick={() => void openPicker()}>
           {t(lang, "seed.shop")}

@@ -18,6 +18,29 @@ describe("parseHours", () => {
     });
   });
 
+  it("treats Daily and a one-entry day list as every day", () => {
+    const parsed = parseHours({
+      days: [{ d: "Daily", open: "16:00", close: "23:00" }],
+      raw: "Daily 16:00-23:00",
+    });
+    expect(parsed?.days.map((day) => day.d)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(openState(parsed, BANGKOK, new Date("2026-11-01T11:00:00.000Z"))).toEqual({
+      state: "open",
+      opensAt: null,
+    });
+    expect(openState(parsed, BANGKOK, new Date("2026-10-31T18:00:00.000Z"))).toEqual({
+      state: "closed",
+      opensAt: "16:00",
+    });
+    const fromOneWeekday = parseHours({
+      days: [{ d: "mon", open: "16:00", close: "23:00" }],
+      raw: "Daily 16:00-23:00",
+    });
+    expect(fromOneWeekday?.days).toHaveLength(7);
+    expect(openState(fromOneWeekday, BANGKOK, new Date("2026-11-01T11:00:00.000Z")).state).toBe("open");
+    expect(openState(fromOneWeekday, BANGKOK, new Date("2026-10-31T18:00:00.000Z")).state).toBe("closed");
+  });
+
   it("returns null when nothing can be read", () => {
     expect(parseHours(null)).toBeNull();
     expect(parseHours({ days: [{ d: "holiday", open: "later", close: "soon" }] })).toBeNull();
