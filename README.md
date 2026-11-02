@@ -16,7 +16,7 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | | |
 |---|---|
 | Live app | https://prox-now.vercel.app |
-| Branch and commit | `feat/judge-mode`, `70d5f87` |
+| Branch and commit | `feat/judge-mode`, `752e04c` |
 | Production deployment | `dpl_J7jUhsJs6hHgLjtduQFtPdkrMVoL` |
 | Tests | 544 tests, 119 files |
 | Demo video | TODO |
