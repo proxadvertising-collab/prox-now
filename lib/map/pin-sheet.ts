@@ -53,6 +53,7 @@ export function pinSheetContent(input: {
   posts: readonly PinSheetPost[];
   now: number;
   origin: LatLng | null;
+  routeOrigin?: LatLng | null;
   missing?: readonly string[] | null;
 }): PinSheet {
   const post = newestLivePost(input.posts, input.now);
@@ -66,7 +67,7 @@ export function pinSheetContent(input: {
     walkMinutes: meters === null ? null : walkingMinutes(meters),
     photoUrl: post?.photoUrl ?? null,
     freshness,
-    goNowHref: walkingDirectionsUrl(input.shop),
+    goNowHref: walkingDirectionsUrl(input.shop, input.routeOrigin),
     bookHref: bookHref(input.shop.slug),
     buildHref: bookBuildHref(input.shop.slug),
     showBuild: bookNeedsBuild(input.missing === undefined ? null : input.missing),

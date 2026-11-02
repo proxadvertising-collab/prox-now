@@ -11,7 +11,7 @@ export type FixtureShop = {
 export const DEMO_CENTER = { lat: 12.5684, lng: 99.9577 };
 
 export const FIXTURE_SHOPS: FixtureShop[] = [
-  { id: "mala-mafia", slug: "mala-mafia", name: "Mala Mafia", category: "food", lat: 12.56850, lng: 99.95750 }, // TODO_REAL_COORDS
+  { id: "mala-mafia", slug: "mala-mafia", name: "Farm to Go (demo)", category: "food", lat: 12.56850, lng: 99.95750 }, // TODO_REAL_COORDS
   { id: "coconut-shake-stand", slug: "coconut-shake-stand", name: "Coconut shake stand", nameLocal: "มะพร้าวปั่นนมสด", category: "drink", lat: 12.56835, lng: 99.95790 }, // TODO_REAL_COORDS
   { id: "krua-mae-yen", slug: "krua-mae-yen", name: "Krua Mae Yen", category: "food", lat: 12.56870, lng: 99.95810 }, // TODO_REAL_COORDS
   { id: "pak-kapi", slug: "pak-kapi", name: "Pak Kapi", nameLocal: "ปากกะปิ", category: "food", lat: 12.56820, lng: 99.95730 }, // TODO_REAL_COORDS

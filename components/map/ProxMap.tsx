@@ -602,6 +602,7 @@ export function ProxMap({
         posts: sheetPosts,
         now: tick,
         origin: askAt,
+        routeOrigin: fixtures || demoSession ? DEMO_CENTER : null,
         missing: bookMissing,
       })
     : null;

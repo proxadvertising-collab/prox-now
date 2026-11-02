@@ -19,12 +19,13 @@ export function walkingMinutes(meters: number): number {
   return Math.max(1, Math.ceil(meters / 80));
 }
 
-export function walkingDirectionsUrl(point: LatLng): string {
-  return (
+export function walkingDirectionsUrl(point: LatLng, origin?: LatLng | null): string {
+  let url =
     "https://www.google.com/maps/dir/?api=1&destination=" +
     point.lat +
     "," +
     point.lng +
-    "&travelmode=walking"
-  );
+    "&travelmode=walking";
+  if (origin) url += "&origin=" + origin.lat + "," + origin.lng;
+  return url;
 }

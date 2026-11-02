@@ -26,6 +26,7 @@ describe("demo fixtures", () => {
     }
     const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "shops.ts"), "utf8");
     expect((source.match(/TODO_REAL_COORDS/g) ?? []).length).toBeGreaterThanOrEqual(8);
+    expect(FIXTURE_SHOPS.find((shop) => shop.slug === "mala-mafia")?.name).toBe("Farm to Go (demo)");
   });
 
   it("places the eight shops on the given coordinates", () => {

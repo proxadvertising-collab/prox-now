@@ -48,6 +48,9 @@ describe("desktop snap", () => {
     expect(camera).toContain("takePin");
     expect(camera).toContain("snap.retry");
     expect(camera).toContain("snap.where");
+    expect(camera).toContain("snap.photoReady");
+    expect(camera).toContain("replaceReady");
+    expect(camera).toContain("bottom-[calc(12.75rem+env(safe-area-inset-bottom))]");
     expect(camera).not.toContain("Location is required for a shot.");
     expect(camera).toContain("confirm.named");
     expect(camera).toContain("confirm.different");

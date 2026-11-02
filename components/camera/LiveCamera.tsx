@@ -141,6 +141,8 @@ export function LiveCamera({
   const [cameraAsk, setCameraAsk] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [askWhere, setAskWhere] = useState(false);
+  const [readyShots, setReadyShots] = useState<string[]>([]);
+  const readyUrls = useRef<string[]>([]);
   const [askJoin, setAskJoin] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
@@ -149,6 +151,25 @@ export function LiveCamera({
   const pendingPick = useRef(false);
   const shopPointRef = useRef<{ lat: number; lng: number; name: string } | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      for (const url of readyUrls.current) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  function replaceReady(files: readonly File[]) {
+    for (const url of readyUrls.current) URL.revokeObjectURL(url);
+    const next = files.map((file) => URL.createObjectURL(file));
+    readyUrls.current = next;
+    setReadyShots(next);
+  }
+
+  function clearReady() {
+    for (const url of readyUrls.current) URL.revokeObjectURL(url);
+    readyUrls.current = [];
+    setReadyShots([]);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -533,10 +554,12 @@ export function LiveCamera({
     const fix = await placeForShot();
     if (!fix) {
       pendingUploads.current = files;
+      replaceReady(files);
       setAskWhere(true);
-      setNote(t(lang, "snap.where"));
+      setNote("");
       return;
     }
+    clearReady();
     pendingUploads.current = null;
     await keepUploads(files, fix);
   }
@@ -559,6 +582,7 @@ export function LiveCamera({
       shop: shopPointRef.current,
     });
     if (!chosen) return;
+    clearReady();
     const fix: CaptureFix = { lat: chosen.lat, lng: chosen.lng, accuracy: null, at: chosen.at, source: chosen.source };
     const next = afterPin({ pickerWaiting: pendingPick.current, uploadsWaiting: pendingUploads.current?.length ?? 0 });
     if (next === "picker") {
@@ -828,11 +852,18 @@ export function LiveCamera({
         className={
           (reviewing
             ? "fixed inset-x-4 z-40 bottom-[calc(13rem+env(safe-area-inset-bottom))] "
-            : "absolute inset-x-4 bottom-8 z-30 ") +
+            : "pin-ask fixed inset-x-4 z-30 bottom-[calc(12.75rem+env(safe-area-inset-bottom))] ") +
           "flex flex-col gap-2 rounded-lg border border-border bg-surface-1 p-3 text-fg"
         }
       >
-        <p className="text-body">{t(lang, "snap.where")}</p>
+        {readyShots.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto">
+            {readyShots.map((url) => (
+              <img key={url} className="h-16 w-16 shrink-0 rounded-md object-cover" src={url} alt="" />
+            ))}
+          </div>
+        ) : null}
+        <p className="text-body">{readyShots.length > 0 ? t(lang, "snap.photoReady") : t(lang, "snap.where")}</p>
         {shop ? (
           <button
             type="button"
@@ -888,11 +919,11 @@ export function LiveCamera({
       <Link className="absolute left-4 top-4 z-20 inline-flex min-h-11 min-w-11 items-center text-2xl text-white" href="/map" aria-label="Back" style={onTour ? { top: "calc(1rem + var(--tour-bar, 0px))" } : undefined}>
         ←
       </Link>
-      {onTour ? null : (
+      {onTour ? (
         <p className="pointer-events-none absolute inset-x-4 top-16 z-20 truncate whitespace-nowrap text-sm text-white">
           {explainer("seed").body}
         </p>
-      )}
+      ) : null}
       {phase === "camera" ? (
         <button type="button" className="seed-open" onClick={() => void openPicker()}>
           {t(lang, "seed.shop")}
@@ -985,7 +1016,7 @@ export function LiveCamera({
         </button>
       )}
       {whereSheet(false)}
-      {note ? (
+      {note && !askWhere ? (
         <div className="absolute inset-x-4 bottom-32 z-20 flex flex-col items-center gap-2">
           <p className="text-center text-body">{note}</p>
           {retryShot ? (

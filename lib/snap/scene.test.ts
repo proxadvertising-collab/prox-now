@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { ScenePanel } from "@/components/snap/ScenePanel";
+import { t } from "../copy";
 import { emptyMatcherResult, parseMatcherResult } from "../ai/matcher";
-import { analyzeFailure, buildScene, prependSteps } from "./scene";
+import { analyzeFailure, buildScene, prependSteps, type SceneReport } from "./scene";
 
 describe("behind the scenes", () => {
   it("reads the model, match, faces, sign pair, and step times from the response", () => {
@@ -29,6 +33,7 @@ describe("behind the scenes", () => {
     });
     expect(scene.model).toBe("response-model");
     expect(scene.shopName).toBe("Mala Mafia");
+    expect(scene.readName).toBeNull();
     expect(scene.confidence).toBe(0.92);
     expect(scene.facesFound).toBe(2);
     expect(scene.facesBlurred).toBeNull();
@@ -77,6 +82,34 @@ describe("behind the scenes", () => {
     expect(analyzeFailure(429, "rate_limited")).toBe("rate");
     expect(analyzeFailure(502, "upstream")).toBe("net");
     expect(analyzeFailure(200, undefined)).toBeNull();
+  });
+
+  it("hides a zero confidence and names a shop the photo read", () => {
+    const base: SceneReport = {
+      model: null,
+      shopId: null,
+      shopName: null,
+      readName: "Farm to Go",
+      confidence: 0,
+      facesFound: 0,
+      facesBlurred: null,
+      signs: [],
+      languages: null,
+      steps: [],
+    };
+    const named = renderToStaticMarkup(createElement(ScenePanel, { scene: base }));
+    expect(named).toContain("New shop: Farm to Go");
+    expect(named.includes("Confidence")).toBe(false);
+    const blank = renderToStaticMarkup(createElement(ScenePanel, { scene: { ...base, readName: null } }));
+    expect(blank).toContain(t("en", "ai.noMatch"));
+    expect(blank.includes("Confidence")).toBe(false);
+    const matched = renderToStaticMarkup(
+      createElement(ScenePanel, { scene: { ...base, shopName: "Dawn Cafe", confidence: 0.4 } }),
+    );
+    expect(matched).toContain("Match: Dawn Cafe");
+    expect(matched).toContain("Confidence: 0.4");
+    expect(t("en", "ai.newShop", { name: "Farm to Go" })).toBe("New shop: Farm to Go");
+    expect(t("th", "ai.newShop", { name: "ฟาร์ม" })).toBe("ร้านใหม่: ฟาร์ม");
   });
 
   it("does not name a model in the panel copy", () => {

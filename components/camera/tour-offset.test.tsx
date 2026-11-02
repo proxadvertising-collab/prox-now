@@ -40,7 +40,7 @@ describe("snap tour offset", () => {
     const html = renderToStaticMarkup(createElement(LiveCamera));
     expect(html).toContain("snap-tour");
     expect(html).toContain("calc(1rem + var(--tour-bar, 0px))");
-    expect(html).not.toContain("judge can use the sample set");
+    expect(html).toContain("judge can use the sample set");
     const shutter = html.slice(html.indexOf("snap-shutter"));
     expect(shutter.startsWith("snap-shutter")).toBe(true);
     expect(shutter).toContain("Upload photos instead");
@@ -66,7 +66,7 @@ describe("snap tour offset", () => {
     const html = renderToStaticMarkup(createElement(LiveCamera));
     expect(html).not.toContain("snap-tour");
     expect(html).not.toContain("var(--tour-bar");
-    expect(html).toContain("judge can use the sample set");
+    expect(html).not.toContain("judge can use the sample set");
     expect(html).toContain("Upload photos instead");
     vi.unstubAllGlobals();
   });

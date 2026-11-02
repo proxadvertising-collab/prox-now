@@ -6,6 +6,7 @@ export type SceneReport = {
   model: string | null;
   shopId: string | null;
   shopName: string | null;
+  readName: string | null;
   confidence: number;
   facesFound: number;
   facesBlurred: number | null;
@@ -71,6 +72,7 @@ export function buildScene(input: {
     model: cleanModel(input.model),
     shopId: input.result.shopId,
     shopName: input.shopName,
+    readName: input.result.placeName?.trim() || null,
     confidence: input.result.confidence,
     facesFound: input.result.faces.length,
     facesBlurred: blurred,

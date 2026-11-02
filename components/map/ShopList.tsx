@@ -53,7 +53,7 @@ export function ShopList({
               {walkLine(origin, shop)}
               <a
                 className="mt-3 inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
-                href={walkingDirectionsUrl(shop)}
+                href={walkingDirectionsUrl(shop, fixtures || demoSession ? DEMO_CENTER : null)}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -88,7 +88,7 @@ export function ShopList({
               {walkLine(origin, shop)}
               <a
                 className="mt-3 inline-flex min-h-12 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-accent-ink no-underline"
-                href={walkingDirectionsUrl(shop)}
+                href={walkingDirectionsUrl(shop, fixtures || demoSession ? DEMO_CENTER : null)}
                 target="_blank"
                 rel="noopener noreferrer"
               >

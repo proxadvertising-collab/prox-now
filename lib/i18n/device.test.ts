@@ -40,6 +40,15 @@ describe("device language", () => {
     expect(wallet).toContain("SkeletonCards");
     expect(owner).toContain("SkeletonCards");
     expect(camera).toContain("SkeletonCards");
+    const map = readFileSync(resolve(root, "app/(app)/map/page.tsx"), "utf8");
+    expect(map).toContain("<Suspense fallback={<SkeletonCards />}>");
+    expect(map.match(/return <SkeletonCards \/>/g)?.length).toBe(2);
+    const book = readFileSync(resolve(root, "app/(app)/book/[slug]/page.tsx"), "utf8");
+    expect(book).toContain("book.demoEmpty");
+    expect(book).toContain('href="/judge"');
+    expect(book).toContain("isDemo: row.is_demo === true");
+    expect(book).toContain("emptyBook(shop?.isDemo === true)");
+    expect(book).toContain('t("en", "book.empty")');
     expect(camera).toContain("bg-bg");
     expect(camera).not.toContain("bg-[#FFF8F1]");
     expect(camera).toContain("snap-shutter");

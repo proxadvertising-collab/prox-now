@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { MapChrome } from "@/components/map/MapChrome";
+import { SkeletonCards } from "@/components/ui/SkeletonCards";
 import { DEMO_ZONE_FALLBACK } from "@/lib/demo/zone";
 import { DEMO_CENTER, FIXTURE_SHOPS } from "@/lib/fixtures/shops";
 import { getLivePosts } from "@/lib/posts/source";
@@ -36,7 +37,7 @@ async function MapFromDatabase() {
       .from("shops")
       .select("id, slug, name, name_local, category, lat, lng, is_demo");
     const { data, error } = demoSession ? await shopQuery : await shopQuery.eq("is_demo", false);
-    if (error || !data) return <MapChrome shops={FIXTURE_SHOPS} fixtures />;
+    if (error || !data) return <SkeletonCards />;
     const shops = mapShopsFromRows(data as MapShopRow[], zone, { includeDemo: demoSession });
     const posts = await getLivePosts();
     return (
@@ -50,14 +51,14 @@ async function MapFromDatabase() {
     );
   } catch (error) {
     if (isDigest(error)) throw error;
-    return <MapChrome shops={FIXTURE_SHOPS} fixtures />;
+    return <SkeletonCards />;
   }
 }
 
 export default function MapPage() {
   if (!hasShopEnv()) return <MapChrome shops={FIXTURE_SHOPS} fixtures />;
   return (
-    <Suspense fallback={<MapChrome shops={FIXTURE_SHOPS} fixtures />}>
+    <Suspense fallback={<SkeletonCards />}>
       <MapFromDatabase />
     </Suspense>
   );

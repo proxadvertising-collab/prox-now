@@ -82,6 +82,9 @@ describe("pin sheet", () => {
   it("leaves walk time unknown until there is a real origin", () => {
     const sheet = pinSheetContent({ shop, posts: [], now, origin: null });
     expect(sheet.walkMinutes).toBeNull();
+    expect(sheet.goNowHref.includes("origin=")).toBe(false);
+    const demo = pinSheetContent({ shop, posts: [], now, origin, routeOrigin: origin });
+    expect(demo.goNowHref).toContain("&origin=12.57,99.96");
   });
 
   it("turns 4500 m into a 57 minute walk", () => {

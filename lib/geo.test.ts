@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_CENTER, FIXTURE_SHOPS } from "./fixtures/shops";
-import { haversineMeters, walkingMinutes } from "./geo";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { haversineMeters, walkingDirectionsUrl, walkingMinutes } from "./geo";
 
 describe("geo", () => {
   it("measures a short north step and zero for the same point", () => {
@@ -17,6 +19,22 @@ describe("geo", () => {
     expect(mala).toBeTruthy();
     expect(coconut).toBeTruthy();
     expect(haversineMeters(mala!, coconut!)).toBeLessThan(200);
+  });
+
+  it("adds a demo origin to walking directions and leaves a real visit unchanged", () => {
+    const point = { lat: 12.57, lng: 99.96 };
+    const plain = walkingDirectionsUrl(point);
+    expect(plain).toBe("https://www.google.com/maps/dir/?api=1&destination=12.57,99.96&travelmode=walking");
+    expect(plain.includes("origin=")).toBe(false);
+    const routed = walkingDirectionsUrl(point, DEMO_CENTER);
+    expect(routed).toBe(plain + "&origin=" + DEMO_CENTER.lat + "," + DEMO_CENTER.lng);
+    expect(walkingDirectionsUrl(point, null)).toBe(plain);
+    const list = readFileSync(resolve(process.cwd(), "components/map/ShopList.tsx"), "utf8");
+    expect(list).toContain("walkingDirectionsUrl(shop, fixtures || demoSession ? DEMO_CENTER : null)");
+    const sheet = readFileSync(resolve(process.cwd(), "lib/map/pin-sheet.ts"), "utf8");
+    expect(sheet).toContain("walkingDirectionsUrl(input.shop, input.routeOrigin)");
+    const map = readFileSync(resolve(process.cwd(), "components/map/ProxMap.tsx"), "utf8");
+    expect(map).toContain("routeOrigin: fixtures || demoSession ? DEMO_CENTER : null");
   });
 
   it("rounds walking minutes up and never below 1", () => {

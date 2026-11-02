@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { retryReading } from "@/lib/book/retry";
 import { BookAddPhotos } from "@/components/book/BookAddPhotos";
@@ -45,13 +46,24 @@ function coord(value: unknown): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
-async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string; lat: number | null; lng: number | null } | null> {
+async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string; lat: number | null; lng: number | null; isDemo: boolean } | null> {
   const supabase = await createClient();
-  const query = supabase.from("shops").select("id, slug, name, lat, lng");
+  const query = supabase.from("shops").select("id, slug, name, lat, lng, is_demo");
   const result = UUID.test(key) ? await query.eq("id", key).maybeSingle() : await query.eq("slug", key).maybeSingle();
   const row = result.data;
   if (!row || typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.name !== "string") return null;
-  return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng) };
+  return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng), isDemo: row.is_demo === true };
+}
+
+function emptyBook(demo: boolean) {
+  if (!demo) return <p className="text-body text-fg">{t("en", "book.empty")}</p>;
+  return (
+    <p className="text-body text-fg">
+      <Link href="/judge" className="font-semibold text-fg underline">
+        {t("en", "book.demoEmpty")}
+      </Link>
+    </p>
+  );
 }
 
 export default async function BookPage({
@@ -84,7 +96,7 @@ export default async function BookPage({
     return (
       <div className="flex flex-col gap-3">
         <h1 className="text-title font-bold text-fg">{t("en", "sheet.openBook")}</h1>
-        <p className="text-body text-fg">{t("en", "book.empty")}</p>
+        {emptyBook(false)}
         <BookAddPhotos shopId={key} name={key} shop={null} />
         {actions(key, key)}
       </div>
@@ -126,7 +138,7 @@ export default async function BookPage({
       return (
         <div className="flex flex-col gap-3">
           <h1 className="text-title font-bold text-fg">{name}</h1>
-          <p className="text-body text-fg">{t("en", "book.empty")}</p>
+          {emptyBook(shop?.isDemo === true)}
           <BookAddPhotos shopId={shop?.id ?? key} name={name} shop={point} />
           {actions(shop?.id ?? key, view?.slug ?? shop?.slug ?? key)}
         </div>
@@ -267,7 +279,7 @@ export default async function BookPage({
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-body text-fg">{t("en", "book.empty")}</p>
+        {emptyBook(false)}
         <BookAddPhotos shopId={key} name={key} shop={null} />
         {actions(key, key)}
       </div>
