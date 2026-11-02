@@ -7,6 +7,7 @@ import { ClaimShop } from "@/components/owner/ClaimShop";
 import { BookSwiper } from "@/components/book/BookSwiper";
 import { SeededActions } from "@/components/book/SeededActions";
 import { t } from "@/lib/copy";
+import { sampleBookHeld, tourHref } from "@/lib/judge/script";
 import { presentBook } from "@/lib/book/present";
 import { bookCardColors } from "@/lib/book/palette";
 import { bookSurface } from "@/lib/book/cutouts";
@@ -53,6 +54,24 @@ async function shopByKey(key: string): Promise<{ id: string; slug: string; name:
   const row = result.data;
   if (!row || typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.name !== "string") return null;
   return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng), isDemo: row.is_demo === true };
+}
+
+function addPhotos(
+  shop: { isDemo: boolean; slug: string } | null,
+  shopId: string,
+  name: string,
+  point: { lat: number; lng: number } | null,
+) {
+  if (shop && sampleBookHeld(shop)) {
+    return (
+      <p className="text-body text-fg">
+        <Link href={tourHref("shopper")} className="font-semibold text-fg underline">
+          {t("en", "book.demoFarm")}
+        </Link>
+      </p>
+    );
+  }
+  return <BookAddPhotos shopId={shopId} name={name} shop={point} />;
 }
 
 function emptyBook(demo: boolean) {
@@ -139,7 +158,7 @@ export default async function BookPage({
         <div className="flex flex-col gap-3">
           <h1 className="text-title font-bold text-fg">{name}</h1>
           {emptyBook(shop?.isDemo === true)}
-          <BookAddPhotos shopId={shop?.id ?? key} name={name} shop={point} />
+          {addPhotos(shop, shop?.id ?? key, name, point)}
           {actions(shop?.id ?? key, view?.slug ?? shop?.slug ?? key)}
         </div>
       );
@@ -271,7 +290,7 @@ export default async function BookPage({
           })}
         </BookSwiper>
         </div>
-        <BookAddPhotos shopId={shop?.id ?? key} name={name} shop={point} />
+        {addPhotos(shop, shop?.id ?? key, name, point)}
         {actions(shop?.id ?? key, view.slug, surface.heroUrl ?? view.pages.find((page) => page.imageUrl)?.imageUrl ?? null, claimMode)}
       </div>
     );

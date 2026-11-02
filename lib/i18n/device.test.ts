@@ -28,7 +28,8 @@ describe("device language", () => {
     expect(profile).toContain("LanguageSwitch");
     const staff = readFileSync(resolve(import.meta.dirname, "../../components/order/OrderUi.tsx"), "utf8");
     expect(staff).toContain("shopStaffLanguage");
-    expect(staff).toContain("onPointerDown");
+    expect(staff).toContain('t(lang, "order.clear")');
+    expect(staff).toContain("CLEAR_UNDO_MS");
     expect(staff).toContain("btn-secondary");
   });
 

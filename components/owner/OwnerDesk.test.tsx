@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -51,5 +52,18 @@ describe("owner desk order", () => {
     expect(t("en", ownerEmptyKey(true))).toBe(
       "Nothing yet. Judge 1 builds the book first: tap Swap roles, or Start fresh demo on /judge.",
     );
+  });
+
+  it("renames give coupon and drops the book card without a reload", () => {
+    expect(t("en", "loop.give")).toBe("Keep and send coupon");
+    expect(t("th", "loop.give")).toBe("เก็บไว้แล้วส่งคูปอง");
+    expect(t("en", "loop.noThanks")).toBe("No thanks");
+    const desk = readFileSync(new URL("./OwnerDesk.tsx", import.meta.url), "utf8");
+    const thank = desk.slice(desk.indexOf("async function thank"), desk.indexOf("async function dismissThanks"));
+    const dismiss = desk.slice(desk.indexOf("async function dismissThanks"), desk.indexOf("async function act"));
+    expect(thank).toContain("dropThanks(item)");
+    expect(thank).not.toContain("await load()");
+    expect(dismiss).toContain("dropThanks(item)");
+    expect(dismiss).not.toContain("await load()");
   });
 });

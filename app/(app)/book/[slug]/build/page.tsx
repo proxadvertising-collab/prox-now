@@ -12,15 +12,15 @@ function coord(value: unknown): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
-async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string; lat: number | null; lng: number | null } | null> {
+async function shopByKey(key: string): Promise<{ id: string; slug: string; name: string; lat: number | null; lng: number | null; isDemo: boolean } | null> {
   if (!hasShopEnv()) return null;
   try {
     const supabase = await createClient();
-    const query = supabase.from("shops").select("id, slug, name, lat, lng");
+    const query = supabase.from("shops").select("id, slug, name, lat, lng, is_demo");
     const result = UUID.test(key) ? await query.eq("id", key).maybeSingle() : await query.eq("slug", key).maybeSingle();
     const row = result.data;
     if (!row || typeof row.id !== "string" || typeof row.slug !== "string" || typeof row.name !== "string") return null;
-    return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng) };
+    return { id: row.id, slug: row.slug, name: row.name, lat: coord(row.lat), lng: coord(row.lng), isDemo: row.is_demo === true };
   } catch {
     return null;
   }
@@ -38,6 +38,7 @@ export default async function BuildBookPage({ params }: { params: Promise<{ slug
       name={shop?.name ?? key}
       lat={shop?.lat ?? null}
       lng={shop?.lng ?? null}
+      isDemo={shop?.isDemo === true}
     />
   );
 }

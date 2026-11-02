@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { seedBookPath } from "../book/seedName";
-import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, SEEN_KEY, showExplainer, startJudgeTour, swapShopperHref, swapTour, tourHref, TOUR_KEY, writeSeen } from "./script";
+import { advanceStep, BOOK_PROGRESS, clearJudgeTour, DEMO_CAFES, demoShopTarget, EXPLAINERS, judgeSampleSave, noteBookThanks, pathStep, rememberSeen, sampleBookHeld, SEEN_KEY, showExplainer, startJudgeTour, swapShopperHref, swapTour, tourHref, TOUR_KEY, writeSeen } from "./script";
 
 describe("judge script", () => {
   it("has a step for each named beat, including a book thanks", () => {
@@ -67,6 +67,18 @@ describe("judge script", () => {
     expect(demoShopTarget("coconut-shake-stand", { id: shopId, slug: "coconut-shake-stand", name: "Coconut shake stand" })?.id).toBe(shopId);
     expect(demoShopTarget("mala-mafia", { id: "mala-mafia", slug: "mala-mafia" })).toBeNull();
     expect(tourHref("shopper")).toBe("/snap?tour=1&samples=1");
+    expect(sampleBookHeld({ isDemo: true, slug: "krua-mae-yen" })).toBe(true);
+    expect(sampleBookHeld({ isDemo: true, slug: "coconut-shake-stand" })).toBe(true);
+    expect(sampleBookHeld({ isDemo: true, slug: DEMO_CAFES.a.slug })).toBe(false);
+    expect(sampleBookHeld({ isDemo: false, slug: "krua-mae-yen" })).toBe(false);
+    const bookPage = readFileSync(resolve(process.cwd(), "app/(app)/book/[slug]/page.tsx"), "utf8");
+    const builder = readFileSync(resolve(process.cwd(), "components/book/BookBuilder.tsx"), "utf8");
+    expect(bookPage).toContain("sampleBookHeld");
+    expect(bookPage).toContain('t("en", "book.demoFarm")');
+    expect(bookPage).toContain('tourHref("shopper")');
+    expect(bookPage).toContain("BookAddPhotos");
+    expect(builder).toContain("sampleBookHeld({ isDemo, slug })");
+    expect(builder).toContain('t("en", "book.demoFarm")');
     expect(tourHref("owner")).toBe("/owner?tour=1");
     expect(camera).not.toContain('explainer("seed").body');
     expect(camera).not.toContain("truncate whitespace-nowrap");
@@ -82,18 +94,28 @@ describe("judge script", () => {
     expect(rememberSeen(["book"], "seed")).toEqual(["book", "seed"]);
     expect(rememberSeen(["seed"], "seed")).toEqual(["seed"]);
     const store = new Map<string, string>();
+    const session = new Map<string, string>();
     vi.stubGlobal("window", {
       localStorage: {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => void store.set(key, value),
         removeItem: (key: string) => void store.delete(key),
       },
+      sessionStorage: {
+        getItem: (key: string) => session.get(key) ?? null,
+        setItem: (key: string, value: string) => void session.set(key, value),
+        removeItem: (key: string) => void session.delete(key),
+      },
     });
     startJudgeTour({ cafe: "a", role: "shopper", step: "seed" });
     writeSeen(["seed"]);
+    session.set(TOUR_KEY, "{\"cafe\":\"a\"}");
+    session.set(SEEN_KEY, "[\"seed\"]");
     clearJudgeTour();
     expect(store.has(TOUR_KEY)).toBe(false);
     expect(store.has(SEEN_KEY)).toBe(false);
+    expect(session.has(TOUR_KEY)).toBe(false);
+    expect(session.has(SEEN_KEY)).toBe(false);
     vi.unstubAllGlobals();
   });
 

@@ -16,6 +16,8 @@
 | Judge 1 (shopper) | Explorer | the camera, `/snap?tour=1&samples=1` |
 | Judge 2 (shop owner) | Owner (already owns the 8 demo shops) | the owner desk, `/owner?tour=1` |
 
+Farm to Go is the demo shop the sample photos belong to (its link still says mala-mafia).
+
 A bar at the top shows **Step N of 9**, with **Swap roles** and **End demo**, and a short card explains each step.
 
 ## Judge 1: shopper

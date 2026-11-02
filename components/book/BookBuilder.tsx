@@ -25,6 +25,7 @@ import {
   type BookTile,
 } from "@/lib/book/builder";
 import { resizeToJpeg } from "@/lib/image/resize";
+import { sampleBookHeld, tourHref } from "@/lib/judge/script";
 import { snapSeedHref } from "@/lib/snap/target";
 import { frameSaveKey } from "@/lib/snap/where";
 
@@ -64,12 +65,14 @@ export function BookBuilder({
   name,
   lat,
   lng,
+  isDemo = false,
 }: {
   shopId: string;
   slug: string;
   name: string;
   lat: number | null;
   lng: number | null;
+  isDemo?: boolean;
 }) {
   const router = useRouter();
   const pointRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -93,6 +96,7 @@ export function BookBuilder({
   }, []);
 
   useEffect(() => {
+    if (sampleBookHeld({ isDemo, slug })) return;
     let cancel = false;
     void (async () => {
       const shop = lat != null && lng != null ? { lat, lng } : null;
@@ -120,7 +124,7 @@ export function BookBuilder({
     return () => {
       cancel = true;
     };
-  }, [lat, lng, attempt]);
+  }, [lat, lng, attempt, isDemo, slug]);
 
   function recheck() {
     setNote("");
@@ -208,6 +212,19 @@ export function BookBuilder({
       ))}
     </ul>
   );
+
+  if (sampleBookHeld({ isDemo, slug })) {
+    return (
+      <div className="flex flex-col gap-3">
+        <h1 className="text-title font-bold text-fg">{name}</h1>
+        <p className="text-body text-fg">
+          <a href={tourHref("shopper")} className="font-semibold text-fg underline">
+            {t("en", "book.demoFarm")}
+          </a>
+        </p>
+      </div>
+    );
+  }
 
   if (gate === "checking") {
     return (

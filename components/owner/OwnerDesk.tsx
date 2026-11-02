@@ -181,6 +181,11 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
     setError("");
   }
 
+  function dropThanks(item: BookCard) {
+    setBookThanks((rows) => rows.filter((row) => row.shopId !== item.shopId || row.contributorId !== item.contributorId));
+    setOfferFor(null);
+  }
+
   async function thank(item: BookCard) {
     setBusy(true);
     setError("");
@@ -202,8 +207,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
       }
       buzz();
       setNote(t("en", "loop.sent", { name: item.authorName || "" }));
-      setOfferFor(null);
-      await load();
+      dropThanks(item);
     } catch {
       setError(t("en", "loop.fail"));
     } finally {
@@ -226,8 +230,7 @@ export function OwnerDesk({ initialShops = [] }: { initialShops?: OwnerShop[] })
         return;
       }
       buzz();
-      setOfferFor(null);
-      await load();
+      dropThanks(item);
     } catch {
       setError(t("en", "loop.fail"));
     } finally {

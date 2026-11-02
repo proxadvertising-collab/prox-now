@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { displayName } from "../../lib/book/display";
 import { t } from "../../lib/copy";
 import { readTour } from "../../lib/judge/script";
@@ -94,17 +94,7 @@ export function useOrderSnap(pathname: string): { slug: string; count: number; l
   return snap;
 }
 
-export type ClearPhase = "idle" | "armed";
-
-/** First tap arms the clear. Second tap clears. A timeout drops back to idle. */
-export function nextClearState(
-  state: ClearPhase,
-  event: "tap" | "timeout" | "close",
-): { state: ClearPhase; action: "arm" | "clear" | "idle" } {
-  if (event === "timeout" || event === "close") return { state: "idle", action: "idle" };
-  if (state === "idle") return { state: "armed", action: "arm" };
-  return { state: "idle", action: "clear" };
-}
+export const CLEAR_UNDO_MS = 5000;
 
 export function OrderSheet({
   shopName,
@@ -121,6 +111,7 @@ export function OrderSheet({
   onTranslate,
   onQty,
   onClear,
+  onUndo,
   onStaff,
   onDone,
   busy = false,
@@ -140,19 +131,23 @@ export function OrderSheet({
   onTranslate?: () => void;
   onQty?: (id: string, qty: number) => void;
   onClear?: () => void;
+  onUndo?: () => void;
   onStaff?: () => void;
   onDone?: () => void;
   busy?: boolean;
   failed?: boolean;
 }) {
-  const [clearPhase, setClearPhase] = useState<ClearPhase>("idle");
+  const [onTour, setOnTour] = useState(false);
+  const [undoTick, setUndoTick] = useState(0);
   useEffect(() => {
-    if (clearPhase !== "armed" || typeof window === "undefined") return;
-    const timer = window.setTimeout(() => setClearPhase(nextClearState("armed", "timeout").state), 4000);
+    setOnTour(Boolean(readTour()));
+  }, []);
+  useEffect(() => {
+    if (undoTick === 0 || typeof window === "undefined") return;
+    const timer = window.setTimeout(() => setUndoTick(0), CLEAR_UNDO_MS);
     return () => window.clearTimeout(timer);
-  }, [clearPhase]);
+  }, [undoTick]);
   if (staff) {
-    const onTour = Boolean(readTour());
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-bg text-fg">
         <div
@@ -260,32 +255,38 @@ export function OrderSheet({
       <button type="button" className="h-14 rounded-2xl bg-accent text-lg font-bold text-accent-ink active:scale-95" onClick={onStaff}>
         {t(lang, "order.staff")}
       </button>
-      <MoreSheet label="More" onClose={() => setClearPhase(nextClearState(clearPhase, "close").state)}>
-        {(close) => (
-          <>
-            <button type="button" className="btn-secondary h-12 w-full" onClick={onTranslate}>
-              {t(lang, "order.translate")}
-            </button>
-            <button
-              type="button"
-              className="h-12 rounded-2xl text-sm font-semibold text-fg-muted"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                const next = nextClearState(clearPhase, "tap");
-                if (next.action === "clear") {
-                  onClear?.();
-                  setClearPhase("idle");
-                  close();
-                  return;
-                }
-                setClearPhase(next.state);
-              }}
-            >
-              {clearPhase === "armed" ? "Tap again to clear" : t(lang, "order.clear")}
-            </button>
-          </>
-        )}
+      {lines.length > 0 ? (
+        <button
+          type="button"
+          className="h-12 rounded-2xl border border-border text-base font-semibold text-fg"
+          onClick={() => {
+            onClear?.();
+            setUndoTick((tick) => tick + 1);
+          }}
+        >
+          {t(lang, "order.clear")}
+        </button>
+      ) : null}
+      <MoreSheet label="More">
+        <button type="button" className="btn-secondary h-12 w-full" onClick={onTranslate}>
+          {t(lang, "order.translate")}
+        </button>
       </MoreSheet>
+      {undoTick > 0 ? (
+        <p role="status" className="fixed inset-x-4 bottom-6 z-50 flex items-center justify-between gap-3 rounded-2xl bg-fg px-4 py-3 text-bg">
+          <span>{t(lang, "order.cleared")}</span>
+          <button
+            type="button"
+            className="min-h-11 font-bold"
+            onClick={() => {
+              setUndoTick(0);
+              onUndo?.();
+            }}
+          >
+            {t(lang, "order.undo")}
+          </button>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -326,6 +327,7 @@ export function OrderClient({
   const [staff, setStaff] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const undone = useRef<OrderState | null>(null);
 
   useEffect(() => {
     const nextLang = navigator.language || "en";
@@ -401,7 +403,16 @@ export function OrderClient({
       onNote={(value) => commit(setOrderNote(state, value))}
       onTranslate={() => void translate(state.note)}
       onQty={(id, qty) => commit(setLineQty(state, id, qty))}
-      onClear={() => commit(clearOrder())}
+      onClear={() => {
+        undone.current = readOrder(slug, browserStorage());
+        commit(clearOrder());
+      }}
+      onUndo={() => {
+        const previous = undone.current;
+        if (!previous) return;
+        undone.current = null;
+        commit(previous);
+      }}
       onStaff={openStaff}
       onDone={() => {
         setStaff(false);

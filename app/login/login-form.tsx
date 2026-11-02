@@ -15,6 +15,7 @@ import {
   verifyOutcome,
 } from "@/lib/auth/signup";
 import { t } from "@/lib/copy";
+import { clearJudgeTour } from "@/lib/judge/script";
 import {
   KEEP_STORAGE_KEY,
   SESSION_MIRROR_KEY,
@@ -64,6 +65,12 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
     if (shouldClearTabSession(persistence, mirror)) createClient();
   }, [dest]);
 
+  async function releaseTour(supabase: ReturnType<typeof createClient>) {
+    const found = await supabase.from("demo_accounts").select("role").limit(1);
+    if (found.error) return;
+    if (!found.data || found.data.length === 0) clearJudgeTour();
+  }
+
   async function signIn() {
     const address = email.trim();
     if (!isEmail(address)) {
@@ -102,6 +109,7 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         setError(t("en", "auth.failed"));
         return;
       }
+      await releaseTour(supabase);
       window.location.assign(dest);
     } catch {
       setError(t("en", "auth.failed"));
@@ -148,6 +156,7 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         openCode(address);
         return;
       }
+      await releaseTour(supabase);
       window.location.assign(createDest);
     } catch {
       setError(t("en", "auth.failed"));
@@ -185,6 +194,7 @@ export function LoginForm({ dest, createDest, failed }: { dest: string; createDe
         setError(t("en", "auth.mismatch"));
         return;
       }
+      await releaseTour(supabase);
       window.location.assign(createDest);
     } catch {
       setError(t("en", "auth.mismatch"));

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, nextClearState, staffCloseHref } from "../../components/order/OrderUi";
+import { OrderBar, OrderClient, OrderSheet, bookBarPadClass, CLEAR_UNDO_MS, staffCloseHref } from "../../components/order/OrderUi";
 
 const line = {
   id: "tea",
@@ -38,6 +38,9 @@ describe("order page", () => {
     expect(html.split("ไม่ใส่มะเขือเทศ").length - 1).toBe(1);
     expect(html).toContain("฿80");
     expect(html).toContain("+ 1 items without price");
+    expect(html).toContain("Clear order");
+    expect(html).not.toContain("Tap again to clear");
+    expect(html.indexOf("Clear order")).toBeLessThan(html.indexOf(">More<"));
   });
 
   it("shows the staff card in the menu language", () => {
@@ -95,9 +98,11 @@ describe("order page", () => {
         staff: true,
       }),
     );
-    expect(touring).toContain("padding-top:calc(1.5rem + var(--tour-bar, 0px))");
-    expect(touring.indexOf("var(--tour-bar")).toBeLessThan(touring.indexOf("Done · เสร็จ"));
-    expect(touring.slice(touring.indexOf("Done · เสร็จ"))).not.toContain("tour-bar");
+    expect(touring).not.toContain("tour-bar");
+    const source = readFileSync(new URL("../../components/order/OrderUi.tsx", import.meta.url), "utf8");
+    expect(source).toContain("setOnTour(Boolean(readTour()))");
+    expect(source).toContain('paddingTop: "calc(1.5rem + var(--tour-bar, 0px))"');
+    expect(source).not.toContain("const onTour = Boolean(readTour())");
     vi.unstubAllGlobals();
     const plain = renderToStaticMarkup(
       createElement(OrderSheet, {
@@ -132,12 +137,17 @@ describe("order page", () => {
   });
 });
 
-describe("clear order arming", () => {
-  it("arms, clears, and drops back to idle", () => {
-    expect(nextClearState("idle", "tap")).toEqual({ state: "armed", action: "arm" });
-    expect(nextClearState("armed", "tap")).toEqual({ state: "idle", action: "clear" });
-    expect(nextClearState("armed", "timeout")).toEqual({ state: "idle", action: "idle" });
-    expect(nextClearState("armed", "close")).toEqual({ state: "idle", action: "idle" });
+describe("clear order", () => {
+  it("clears in one tap and keeps an undo for 5 seconds", () => {
+    expect(CLEAR_UNDO_MS).toBe(5000);
+    const source = readFileSync(new URL("../../components/order/OrderUi.tsx", import.meta.url), "utf8");
+    const sheet = source.slice(source.indexOf("export function OrderSheet"), source.indexOf("function sheetLines"));
+    expect(sheet.indexOf('t(lang, "order.clear")')).toBeLessThan(sheet.indexOf("<MoreSheet"));
+    expect(sheet).toContain("CLEAR_UNDO_MS");
+    expect(sheet).toContain('t(lang, "order.undo")');
+    expect(sheet).not.toContain("nextClearState");
+    expect(sheet).not.toContain("Tap again to clear");
+    expect(source).toContain("undone.current = readOrder");
   });
 });
 

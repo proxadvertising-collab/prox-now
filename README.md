@@ -18,7 +18,7 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | Live app | https://prox-now.vercel.app |
 | Branch and commit | `main` (same as `feat/judge-mode`), app code `71d312b` |
 | Production deployment | `main` auto-deploys to https://prox-now.vercel.app |
-| Tests | 544 tests, 119 files |
+| Tests | 547 tests, 119 files |
 | Demo video | https://youtube.com/shorts/_fUl4ZByer4 |
 
 ## Try it in 3 minutes
@@ -47,7 +47,7 @@ Every AI call in the app goes to **`muse-spark-1.3`** on the Meta Model API (`ht
 | Impact | Real pilot street, real shop photos in the demo; tourists and shops with no English menu; places people add are exported as public GeoJSON (`app/api/places/export/route.ts`) |
 | Use of Meta AI | 11 features on `muse-spark-1.3`, including multi-image book reading, vision-based face blur, claim-photo checks and translation (table above) |
 | Demo | One-tap `/judge`, a 9-step guided tour with an explainer on every step (`lib/judge/script.ts`, `components/judge/TourChrome.tsx`), pre-seeded real photos so no camera is needed, and End demo resets (`lib/judge/runReset.ts`) |
-| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 544 unit tests in 119 files |
+| Technical depth | Postgres row-level security and security-definer RPCs (`supabase/migrations/`, 23 files), shared rate limits in the DB (`lib/rate/window.ts`, `0010_rate_limits.sql`), private photo buckets served with signed URLs (`0021_private_photos.sql`, `app/api/media/`), server-side face blur, and 547 unit tests in 119 files |
 
 ## Architecture
 ```mermaid
@@ -70,7 +70,7 @@ flowchart LR
 npm install
 cp .env.example .env.local   # fill in values on your machine; never commit it
 npm run dev                  # http://localhost:3000
-npm test                     # vitest: 119 files, 544 tests
+npm test                     # vitest: 119 files, 547 tests
 npm run build
 ```
 `.env.example` (names only):

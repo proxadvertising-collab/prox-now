@@ -98,14 +98,17 @@ describe("create account", () => {
     const signIn = form.slice(form.indexOf("async function signIn"), form.indexOf("async function signUp"));
     expect(signIn).toContain("emailSendLimit(signError)");
     expect(signIn).toContain("setCooldown(CODE_COOLDOWN_S)");
+    expect(signIn).toContain("await releaseTour(supabase)");
     expect(signIn).toContain("window.location.assign(dest)");
     expect(signIn).not.toContain("window.location.assign(createDest)");
     const signUp = form.slice(form.indexOf("async function signUp"), form.indexOf("function openCode"));
     expect(signUp).toContain("emailSendLimit(signError)");
     expect(signUp).toContain("openCode(address)");
     const confirm = form.slice(form.indexOf("async function confirmCode"), form.indexOf("async function sendCode"));
+    expect(confirm).toContain("await releaseTour(supabase)");
     expect(confirm).toContain("window.location.assign(createDest)");
     expect(confirm).not.toContain("window.location.assign(dest)");
+    expect(form).toContain('if (!found.data || found.data.length === 0) clearJudgeTour();');
     const send = form.slice(form.indexOf("async function sendCode"), form.indexOf("function useDifferentEmail"));
     expect(send).toContain("emailSendLimit(resendError)");
     expect(send).toContain("setCooldown(CODE_COOLDOWN_S)");

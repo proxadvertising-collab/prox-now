@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { t } from "@/lib/copy";
+import { redeemFailureKey } from "@/lib/owner/redeem";
 
 type Detector = { detect: (source: HTMLVideoElement) => Promise<{ rawValue?: string }[]> };
 
@@ -69,7 +70,7 @@ export function RedeemForm() {
       });
       const body = (await response.json().catch(() => null)) as { error?: string; holder_name?: string } | null;
       if (!response.ok) {
-        setError(t("en", "loop.fail"));
+        setError(t("en", redeemFailureKey(body?.error)));
         return;
       }
       setName(body?.holder_name ?? "");

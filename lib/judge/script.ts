@@ -170,9 +170,18 @@ export function writeSeen(seen: readonly string[]): void {
   window.localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
 }
 
+/** Other demo shops do not get Farm to Go's sample-photo build. */
+export function sampleBookHeld(shop: { isDemo: boolean; slug: string }): boolean {
+  return shop.isDemo === true && shop.slug !== DEMO_CAFES.a.slug;
+}
+
 /** Drop the tour and the seen cards. A real account must not inherit them. */
 export function clearJudgeTour(): void {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(TOUR_KEY);
   window.localStorage.removeItem(SEEN_KEY);
+  const session = window.sessionStorage;
+  if (!session) return;
+  session.removeItem(TOUR_KEY);
+  session.removeItem(SEEN_KEY);
 }
