@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { t } from "../copy";
 import { emptyMatcherResult, parseMatcherResult } from "../ai/matcher";
-import { analyzeFailure, buildScene, prependSteps, type SceneReport } from "./scene";
+import { analyzeFailure, buildScene, prependSteps, sceneForPickedShop, type SceneReport } from "./scene";
 
 describe("behind the scenes", () => {
   it("reads the model, match, faces, sign pair, and step times from the response", () => {
@@ -131,14 +131,35 @@ describe("behind the scenes", () => {
     expect(matched).toContain("Match: Pak Kapi");
     expect(matched.includes("New shop")).toBe(false);
     const menuOnly = renderToStaticMarkup(createElement(ScenePanel, { scene: base }));
-    expect(menuOnly).toContain(t("en", "ai.noMatch"));
-    expect(menuOnly.includes("New shop")).toBe(false);
+    expect(menuOnly).toContain("New shop: New shop");
+    expect(menuOnly.includes("New shop: เมนู")).toBe(false);
+    const price = renderToStaticMarkup(
+      createElement(ScenePanel, {
+        scene: {
+          ...base,
+          readName: "ผัดไทย 60.-",
+          signs: [{ original: "ผัดไทย 60.-", translated: "Pad Thai 60.-" }],
+        },
+      }),
+    );
+    expect(price).toContain("New shop: New shop");
+    expect(price.includes("New shop: ผัดไทย")).toBe(false);
+    const picked = renderToStaticMarkup(
+      createElement(ScenePanel, {
+        scene: sceneForPickedShop(
+          {
+            ...base,
+            readName: "ผัดไทย 60.-",
+            signs: [{ original: "ผัดไทย 60.-", translated: "Pad Thai 60.-" }],
+          },
+          { id: "pak-kapi", name: "Pak Kapi" },
+        ),
+      }),
+    );
+    expect(picked).toContain("Match: Pak Kapi");
+    expect(picked.includes("New shop")).toBe(false);
     const fresh = renderToStaticMarkup(createElement(ScenePanel, { scene: { ...base, readName: "Pak Kapi", signs: [] } }));
     expect(fresh).toContain("New shop: Pak Kapi");
-    const longer = renderToStaticMarkup(
-      createElement(ScenePanel, { scene: { ...base, readName: "Menu House", signs: [] } }),
-    );
-    expect(longer).toContain("New shop: Menu House");
   });
 
   it("does not name a model in the panel copy", () => {

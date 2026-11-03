@@ -1,3 +1,5 @@
+import { capFaceBox } from "../image/face-box";
+
 export type NormBox = [number, number, number, number];
 
 function clamp(value: number, min: number, max: number): number {
@@ -18,7 +20,7 @@ export function cleanFaceBoxes(value: unknown): NormBox[] {
     if (x2 < x1) [x1, x2] = [x2, x1];
     if (y2 < y1) [y1, y2] = [y2, y1];
     if (x2 - x1 < 0.002 || y2 - y1 < 0.002) continue;
-    clean.push([x1, y1, x2, y2]);
+    clean.push(capFaceBox([x1, y1, x2, y2]));
     if (clean.length === 20) break;
   }
   return clean;
@@ -54,13 +56,14 @@ export function previewRgba(
   const block = 8;
   boxes.forEach((box, index) => {
     if (shown.includes(index)) return;
-    const boxW = Math.max(0, box[2] - box[0]);
-    const boxH = Math.max(0, box[3] - box[1]);
+    const capped = capFaceBox(box);
+    const boxW = Math.max(0, capped[2] - capped[0]);
+    const boxH = Math.max(0, capped[3] - capped[1]);
     const pad = 0.2;
-    const x0 = clamp(Math.floor((box[0] - boxW * pad) * width), 0, Math.max(0, width - 1));
-    const y0 = clamp(Math.floor((box[1] - boxH * pad) * height), 0, Math.max(0, height - 1));
-    const x1 = clamp(Math.ceil((box[2] + boxW * pad) * width), x0 + 1, width);
-    const y1 = clamp(Math.ceil((box[3] + boxH * pad) * height), y0 + 1, height);
+    const x0 = clamp(Math.floor((capped[0] - boxW * pad) * width), 0, Math.max(0, width - 1));
+    const y0 = clamp(Math.floor((capped[1] - boxH * pad) * height), 0, Math.max(0, height - 1));
+    const x1 = clamp(Math.ceil((capped[2] + boxW * pad) * width), x0 + 1, width);
+    const y1 = clamp(Math.ceil((capped[3] + boxH * pad) * height), y0 + 1, height);
     for (let y = y0; y < y1; y += block) {
       for (let x = x0; x < x1; x += block) {
         const source = (Math.min(y, height - 1) * width + Math.min(x, width - 1)) * 4;

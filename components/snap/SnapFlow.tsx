@@ -16,13 +16,13 @@ import { FaceChooser, PublishPreview } from "@/components/snap/FaceChooser";
 import { cleanFaceBoxes, showFacesPayload, toggleShown, type NormBox } from "@/lib/snap/faces";
 import { buildOriginalSave, dropOriginalMemory } from "@/lib/snap/original";
 import { postStandIn } from "@/lib/snap/place";
-import { SHOP_CATEGORIES, type ShopCategory } from "@/lib/snap/prefill";
+import { firstShopName, SHOP_CATEGORIES, shopNameCandidate, type ShopCategory } from "@/lib/snap/prefill";
 import { ScenePanel } from "@/components/snap/ScenePanel";
 import { BEHIND_KEY, showBehind } from "@/lib/snap/behind";
 import { subscribeSnapFile, takeSnapFile } from "@/lib/snap/handoff";
 import { bookBuildHref } from "@/lib/book/builder";
 import { snapShopHref } from "@/lib/snap/target";
-import { analyzeFailure, prependSteps, type SceneReport } from "@/lib/snap/scene";
+import { analyzeFailure, prependSteps, sceneForPickedShop, type SceneReport } from "@/lib/snap/scene";
 import { livePostErrorKey } from "@/lib/snap/publish";
 
 type ShopCard = {
@@ -397,19 +397,25 @@ export function SnapFlow({
     });
   }
 
+  function rememberShop(shop: { id: string; name: string }) {
+    setScene((current) => (current ? sceneForPickedShop(current, shop) : current));
+  }
+
   function openProposed(place: ProposedPlace) {
-    const local = place.nameLocal ?? "";
     const nextCategory = SHOP_CATEGORIES.includes(place.category) ? place.category : "other";
-    setName(place.name);
+    const cleaned = firstShopName(place.name, place.nameLocal) || "New shop";
+    const localRaw = shopNameCandidate(place.nameLocal);
+    const local = localRaw && localRaw !== "New shop" && localRaw !== cleaned ? localRaw : "";
+    setName(cleaned);
     setNameLocal(local);
     setCategory(nextCategory);
-    setProposed(place);
+    setProposed({ ...place, name: cleaned });
     setAddError("");
     setShowLogin(false);
     setAlreadyHere(false);
     setPhase("add");
     writeDraft({
-      name: place.name,
+      name: cleaned,
       nameLocal: local,
       category: nextCategory,
       lat: pointRef.current?.lat ?? null,
@@ -587,11 +593,12 @@ export function SnapFlow({
       setProposed(place);
       const sign = body.result.signText?.[0];
       setReadName(
-        place?.name?.trim() ||
-          (typeof body.result.placeName === "string" ? body.result.placeName.trim() : "") ||
-          sign?.translated?.trim() ||
-          sign?.original?.trim() ||
-          "",
+        firstShopName(
+          place?.name,
+          typeof body.result.placeName === "string" ? body.result.placeName : null,
+          sign?.translated,
+          sign?.original,
+        ) ?? "",
       );
       setAlreadyHere(false);
       setDemo((current) => current || Boolean(body.demo));
@@ -629,6 +636,7 @@ export function SnapFlow({
         setAskWhich(false);
         setGuessId(guess.id);
         setChosen(guess);
+        rememberShop(guess);
         setPhase("confirm");
         return;
       }
@@ -682,6 +690,7 @@ export function SnapFlow({
 
   function choose(shop: ShopCard) {
     setChosen(shop);
+    rememberShop(shop);
     setAdded(false);
     setPostError("");
     setShowLogin(false);

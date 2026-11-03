@@ -172,6 +172,40 @@ describe("business name", () => {
     expect(sanitizeShopName("  Dawn\nCafe  ")).toBe("Dawn Cafe");
     expect(sanitizeShopName("!!!")).toBeNull();
   });
+
+  it("rejects a price line and a menu word, then keeps a picked shop name", () => {
+    expect(
+      readBusiness({
+        ...basePlace,
+        placeName: "ผัดไทย 60.-",
+        placeKind: "business",
+        placeConfidence: 0.9,
+      })?.name,
+    ).toBe("New shop");
+    expect(
+      readBusiness({
+        ...basePlace,
+        placeName: "เมนู",
+        placeKind: "business",
+        placeConfidence: 0.88,
+      })?.name,
+    ).toBe("New shop");
+    expect(
+      readBusiness({
+        ...basePlace,
+        signText: [{ original: "ผัดไทย 60.-", translated: "Pad Thai 60.-" }],
+      })?.name,
+    ).toBe("New shop");
+    expect(
+      readBusiness({
+        ...basePlace,
+        placeName: "Pak Kapi",
+        placeKind: "business",
+        placeConfidence: 0.9,
+        signText: [{ original: "ผัดไทย 60.-", translated: "Pad Thai 60.-" }],
+      })?.name,
+    ).toBe("Pak Kapi");
+  });
 });
 
 describe("new shop gates", () => {

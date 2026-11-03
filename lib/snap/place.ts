@@ -1,6 +1,6 @@
 import type { PlaceKind } from "../ai/matcher";
 import type { LatLng } from "../geo";
-import { mapCategory, prefillShop, type ShopCategory } from "./prefill";
+import { firstShopName, mapCategory, prefillShop, rejectedNameLine, shopNameCandidate, type ShopCategory } from "./prefill";
 
 /**
  * How far a Snap may be tied to a shop.
@@ -140,31 +140,52 @@ export function editedNameAllowed(submitted: string, modelName: string): boolean
   return false;
 }
 
+function localShopName(value: string | null | undefined, chosen: string): string | null {
+  const local = shopNameCandidate(value);
+  if (!local || local === "New shop") return null;
+  if (local === chosen) return null;
+  return local;
+}
+
 export function readBusiness(result: PlaceSource): BusinessRead | null {
   const kind = result.placeKind;
-  const named = result.placeName ? sanitizeShopName(result.placeName) : null;
+  const named = firstShopName(result.placeName, result.placeNameLocal);
   const confidence = result.placeConfidence;
   if (named && kind !== "public" && kind !== "none" && confidence >= PLACE_NAME_CONFIDENCE) {
-    const local = result.placeNameLocal ? sanitizeShopName(result.placeNameLocal) : null;
     return {
       name: named,
-      nameLocal: local,
+      nameLocal: localShopName(result.placeNameLocal, named),
       category: mapCategory(result.category),
       confidence,
     };
   }
   if (kind === "public" || kind === "none") return null;
-  if (named && confidence < PLACE_NAME_CONFIDENCE) return null;
+  if (named && named !== "New shop" && confidence < PLACE_NAME_CONFIDENCE) return null;
   if (!(result.qualityScore > 2)) return null;
   const filled = prefillShop({ signText: result.signText, category: result.category });
-  const fallback = sanitizeShopName(filled.name);
-  if (!fallback) return null;
-  return {
-    name: fallback,
-    nameLocal: filled.nameLocal ? sanitizeShopName(filled.nameLocal) : null,
-    category: filled.category,
-    confidence: 0.7,
-  };
+  const fallback = firstShopName(filled.name, filled.nameLocal);
+  if (fallback && fallback !== "New shop") {
+    return {
+      name: fallback,
+      nameLocal: localShopName(filled.nameLocal, fallback),
+      category: filled.category,
+      confidence: 0.7,
+    };
+  }
+  const rejectedLine =
+    named === "New shop" ||
+    rejectedNameLine(result.placeName) ||
+    rejectedNameLine(result.placeNameLocal) ||
+    result.signText.some((line) => rejectedNameLine(line.original) || rejectedNameLine(line.translated));
+  if (rejectedLine) {
+    return {
+      name: "New shop",
+      nameLocal: null,
+      category: mapCategory(result.category),
+      confidence: named === "New shop" ? confidence : 0.7,
+    };
+  }
+  return null;
 }
 
 export function isPublicPlace(result: PlaceSource): boolean {

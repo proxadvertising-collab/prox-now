@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { capFaceBox } from "./face-box";
 
 type NormBox = [number, number, number, number];
 
@@ -77,8 +78,10 @@ export function normalizeBoxes(boxes: number[][]): NormBox[] {
     }
     if (!absorbed) merged.push(box);
   }
-  return merged.slice(0, 20);
+  return merged.slice(0, 20).map(capFaceBox);
 }
+
+export { capFaceBox };
 
 async function obscure(region: Buffer, width: number, height: number): Promise<Buffer> {
   const sigma = Math.max(12, Math.round(Math.min(width, height) / 8));

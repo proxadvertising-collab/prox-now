@@ -31,9 +31,9 @@ describe("face choice", () => {
       [0.5, 0, 1, 1],
     ];
     const kept = previewRgba(pixels, width, height, boxes, [0]);
-    const left = (width + 1) * 4;
+    const left = (4 * width + 4) * 4;
     expect(kept[left]).toBe(pixels[left]);
-    const right = (4 * width + width - 1) * 4;
+    const right = (4 * width + 12) * 4;
     expect(kept[right]).not.toBe(pixels[right]);
     const all = previewRgba(pixels, width, height, boxes, []);
     expect(all[left]).not.toBe(pixels[left]);

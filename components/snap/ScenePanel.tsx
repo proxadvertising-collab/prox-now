@@ -1,5 +1,6 @@
 import { t, type CopyKey } from "@/lib/copy";
 import type { SceneReport } from "@/lib/snap/scene";
+import { shopNameCandidate } from "@/lib/snap/prefill";
 
 const STEP_KEY: Record<string, CopyKey> = {
   locate: "ai.step.locate",
@@ -8,17 +9,27 @@ const STEP_KEY: Record<string, CopyKey> = {
   match: "ai.step.match",
 };
 
-const MENU_LABELS = new Set(["menu", "menus", "เมนู", "เมนูหลัก", "ราคา", "price", "prices", "price list"]);
-
-function isMenuLabel(value: string): boolean {
-  return MENU_LABELS.has(value.trim().replace(/\s+/g, " ").toLowerCase());
+function usableShopName(value: string | null | undefined): string {
+  const next = shopNameCandidate(value);
+  return next && next !== "New shop" ? next : "";
 }
 
 function readShopName(scene: SceneReport): string {
-  const named = scene.readName?.trim() ?? "";
-  if (named && !isMenuLabel(named)) return named;
-  const sign = scene.signs.find((line) => line.original.trim() && !isMenuLabel(line.original));
-  return sign?.original.trim() ?? "";
+  const named = usableShopName(scene.readName);
+  if (named) return named;
+  for (const line of scene.signs) {
+    const original = usableShopName(line.original);
+    if (original) return original;
+    const translated = usableShopName(line.translated);
+    if (translated) return translated;
+  }
+  if (shopNameCandidate(scene.readName) === "New shop") return "New shop";
+  for (const line of scene.signs) {
+    if (shopNameCandidate(line.original) === "New shop" || shopNameCandidate(line.translated) === "New shop") {
+      return "New shop";
+    }
+  }
+  return "";
 }
 
 export function ScenePanel({ scene }: { scene: SceneReport }) {

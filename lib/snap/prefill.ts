@@ -52,10 +52,55 @@ function looksLikePriceOrPhone(text: string): boolean {
   return false;
 }
 
+const DISH_LINE = /ผัดไทย|ต้มยำ|ก๋วยเตี๋ยว|ข้าวผัด|ชานม|น้ำปั่น|pad\s*thai|fried\s*rice|smoothie/i;
+const SHOP_WORD = /ร้าน|shop|cafe|café|restaurant|kitchen|house|bar|stand|stall|บาร์|คาเฟ่/i;
+
+/** A menu line, a price, or a dish is not a shop name. */
+export function rejectedShopName(value: string): boolean {
+  const text = value.trim().replace(/\s+/g, " ");
+  if (!text) return false;
+  if (/เมนู|menu/i.test(text)) return true;
+  if (/[0-9๐-๙]/.test(text) || /฿|บาท|\.(?:\s*-)|\b(?:baht|thb)\b/i.test(text)) return true;
+  if (DISH_LINE.test(text) && !SHOP_WORD.test(text)) return true;
+  return false;
+}
+
+/** A real name, "New shop" when the text is a menu line, or null when it is empty. */
+export function shopNameCandidate(value: string | null | undefined): string | null {
+  const clean = (value ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length < 2 || clean.length > 80) return null;
+  if (!/[A-Za-z\u00C0-\u024F\u0E00-\u0E7F\u4E00-\u9FFF]/.test(clean)) return null;
+  if (rejectedShopName(clean)) return "New shop";
+  return clean;
+}
+
+/** A menu or dish line that someone might mistake for the shop. A bare price is not one. */
+export function rejectedNameLine(value: string | null | undefined): boolean {
+  const text = (value ?? "").trim();
+  if (text.length < 2 || looksLikePriceOrPhone(text)) return false;
+  return shopNameCandidate(text) === "New shop";
+}
+
+/** First real shop name. Menu lines collapse to "New shop" only when nothing else is a name. */
+export function firstShopName(...values: (string | null | undefined)[]): string | null {
+  let fallback = false;
+  for (const value of values) {
+    const next = shopNameCandidate(value);
+    if (!next) continue;
+    if (next !== "New shop") return next;
+    fallback = true;
+  }
+  return fallback ? "New shop" : null;
+}
+
 function looksLikeShopName(text: string): boolean {
   const value = text.trim();
   if (value.length < 2 || value.length > 80) return false;
   if (looksLikePriceOrPhone(value)) return false;
+  if (rejectedShopName(value)) return false;
   return /[A-Za-z\u0E00-\u0E7F\u4E00-\u9FFF]/.test(value);
 }
 

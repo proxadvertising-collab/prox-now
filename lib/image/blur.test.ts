@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { blurFaces, normalizeBoxes } from "./blur";
+import { blurFaces, capFaceBox, normalizeBoxes } from "./blur";
 
 async function halfAndHalf(): Promise<Buffer> {
   const width = 100;
@@ -26,9 +26,24 @@ describe("normalizeBoxes", () => {
       boxes.push([start, 0.8, start + 0.03, 0.9]);
     }
     const result = normalizeBoxes(boxes);
-    expect(result[0]).toEqual([0, 0, 1, 1]);
+    expect(result[0]).toEqual([0.25, 0.25, 0.75, 0.75]);
     expect(result.length).toBeLessThanOrEqual(20);
     expect(result.some((box) => box.length !== 4)).toBe(false);
+  });
+
+  it("shrinks one oversized face around its center and still returns it", () => {
+    const raw: [number, number, number, number] = [0.08, 0.06, 0.68, 0.51];
+    const capped = capFaceBox(raw);
+    const boxes = normalizeBoxes([raw]);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]).toEqual(capped);
+    const width = capped[2] - capped[0];
+    const height = capped[3] - capped[1];
+    expect(width * height).toBeCloseTo(0.25, 5);
+    expect(width / height).toBeCloseTo((raw[2] - raw[0]) / (raw[3] - raw[1]), 5);
+    expect((capped[0] + capped[2]) / 2).toBeCloseTo((raw[0] + raw[2]) / 2, 5);
+    expect((capped[1] + capped[3]) / 2).toBeCloseTo((raw[1] + raw[3]) / 2, 5);
+    expect(normalizeBoxes([])).toEqual([]);
   });
 
   it("merges heavily overlapping boxes", () => {
@@ -73,8 +88,14 @@ describe("blurFaces", () => {
     const at = (x: number, y: number) => (y * width + x) * channels;
     const far = at(2, 2);
     expect(Math.abs(base.data[far] - next[far])).toBeLessThan(4);
-    const edge = at(10, Math.floor(height / 2));
-    expect(Math.abs(base.data[edge] - next[edge])).toBeLessThan(4);
+    const outsideMargin = at(30, Math.floor(height / 2));
+    expect(Math.abs(base.data[outsideMargin] - next[outsideMargin])).toBeLessThan(4);
+    const margin = at(44, Math.floor(height / 2));
+    const marginDelta =
+      Math.abs(base.data[margin] - next[margin]) +
+      Math.abs(base.data[margin + 1] - next[margin + 1]) +
+      Math.abs(base.data[margin + 2] - next[margin + 2]);
+    expect(marginDelta).toBeGreaterThan(15);
     const center = at(Math.floor(width / 2), Math.floor(height / 2));
     const delta =
       Math.abs(base.data[center] - next[center]) +

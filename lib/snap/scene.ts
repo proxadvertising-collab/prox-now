@@ -1,4 +1,5 @@
 import type { MatcherResult } from "../ai/matcher";
+import { shopNameCandidate } from "./prefill";
 
 export type SceneStep = { step: string; ms: number };
 
@@ -72,7 +73,7 @@ export function buildScene(input: {
     model: cleanModel(input.model),
     shopId: input.result.shopId,
     shopName: input.shopName,
-    readName: input.result.placeName?.trim() || null,
+    readName: shopNameCandidate(input.result.placeName),
     confidence: input.result.confidence,
     facesFound: input.result.faces.length,
     facesBlurred: blurred,
@@ -91,6 +92,12 @@ export function analyzeFailure(
   if (status === 429 || error === "rate_limited") return "rate";
   if (status >= 400) return "net";
   return null;
+}
+
+export function sceneForPickedShop(scene: SceneReport, shop: { id: string; name: string }): SceneReport {
+  const name = shop.name.trim();
+  if (!name) return scene;
+  return { ...scene, shopId: shop.id, shopName: name };
 }
 
 export function prependSteps(scene: SceneReport, steps: readonly SceneStep[]): SceneReport {

@@ -8,6 +8,7 @@ export function facePrompt(indexes: readonly number[]): string {
     "Output ONLY JSON. No markdown. No extra keys.\n" +
     '{"pages":[{"index":1,"faces":[[0.1,0.1,0.2,0.2]]}]}\n' +
     "faces are normalized [x1,y1,x2,y2] boxes, origin top-left, each value from 0 to 1. " +
+    "Draw a tight box around each head only, from forehead to chin and ear to ear, one box per face. " +
     "Include every real human face, including partial faces. Use an empty array when there is no face. " +
     "Do not describe the person. One pages entry per image. " +
     "The images are numbered: " +
