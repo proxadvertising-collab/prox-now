@@ -1,6 +1,6 @@
 # Prox Now
 
-**Live:** https://prox-now.vercel.app · **Judges:** https://prox-now.vercel.app/judge ([JUDGES.md](JUDGES.md)) · **Video:** [3-minute demo](https://youtube.com/shorts/_fUl4ZByer4)
+**Live:** https://prox-now.vercel.app · **Judges:** https://prox-now.vercel.app/judge ([JUDGES.md](JUDGES.md)) · **Video:** [2:15 demo](https://youtube.com/shorts/_fUl4ZByer4)
 
 Prox Now makes a street's small shops readable and orderable in any language. A shopper snaps a shop's sign or menu. Meta's `muse-spark-1.3` turns the photos into the shop's **book**, with one page per real category, items, and prices only when they're readable. The shopper asks the map what's good right now, builds an order, and shows staff a translated order screen. The owner claims the shop and thanks the people who snapped it or built its book with a coupon, and the shopper scratches it in their wallet.
 
@@ -21,7 +21,7 @@ The shop in the demo video is a real all-Thai shop in Hua Hin, built live with P
 | Tests | 578 tests, 122 files |
 | Demo video | https://youtube.com/shorts/_fUl4ZByer4 |
 
-## Try it in 3 minutes
+## Try it in 2:15
 Open https://prox-now.vercel.app/judge. The buttons sign you in with one tap as one of two shared demo accounts. You need no password, camera, location or phone. Do **Judge 1 (shopper) first, then Judge 2 (owner)**, one after the other. Full steps and what each one proves are in [JUDGES.md](JUDGES.md).
 
 ## Meta models used
@@ -46,6 +46,9 @@ After the book is saved, `lib/ai/openCheck.ts` checks each page on its own, up t
 | Book item double-check | `accounts/fireworks/models/muse-spark-open` | `lib/ai/openCheck.ts` (after the book is saved) |
 
 ## For judges
+
+Tap Start fresh demo first.
+
 | Criterion | Where to see it |
 |---|---|
 | Impact (30) | A real Hua Hin street. Shoppers snap a menu and get a book they can order from (`app/(app)/book/[slug]/page.tsx`). Owners thank them with a coupon (`JUDGES.md`). Added places export as GeoJSON (`app/api/places/export/route.ts`). |

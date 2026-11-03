@@ -17,7 +17,7 @@ export default function Landing() {
           Snap a menu in any language, and Meta AI builds the shop&apos;s <span className="text-accent">book</span>, so you can ask, translate and order. Owners claim the shop and reward you with a coupon.
         </h1>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href="/start" className="btn-primary min-h-14 w-auto px-8 no-underline">
+          <Link href="/judge" className="btn-primary min-h-14 w-auto px-8 no-underline">
             Try it
           </Link>
           <Link href="/judge" className="btn-secondary min-h-14 px-8 no-underline">

@@ -37,8 +37,10 @@ describe("sign-in gate", () => {
     const login = readFileSync(resolve(root, "app/login/page.tsx"), "utf8");
     const form = readFileSync(resolve(root, "app/login/login-form.tsx"), "utf8");
     expect(start).toContain("openingDest");
-    expect(home).toContain('href="/start"');
+    expect(home).toContain('href="/judge" className="btn-primary');
     expect(home).toContain('href="/judge"');
+    expect(home).not.toContain('href="/start"');
+    expect(home).not.toContain('href="/map"');
     expect(home).toContain("Try it");
     expect(home).not.toContain("wonder-full");
     expect(home).not.toContain("openingDest");
