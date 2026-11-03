@@ -4,6 +4,8 @@
 
 Prox Now makes a street's small shops readable and orderable in any language. A shopper snaps a shop's sign or menu. Meta's `muse-spark-1.3` turns the photos into the shop's **book**, with one page per real category, items, and prices only when they're readable. The shopper asks the map what's good right now, builds an order, and shows staff a translated order screen. The owner claims the shop and thanks the people who snapped it or built its book with a coupon, and the shopper scratches it in their wallet.
 
+**Shoppers are the shop's ads.** Every snap a shopper posts is a live, local, face-blurred ad for that shop, pinned on the map where nearby people are deciding where to go right now. The owner doesn't buy ads. They tap Keep on the posts they like, and the poster gets a coupon. Building a shop's book earns one too. Shoppers get rewarded for spreading the word, and owners only pay with a discount that brings the poster back through the door.
+
 Built for one street we know first-hand: Soi 102, Hua Hin, Thailand. Tourists can't read the Thai menus, and the tiny shops have no website or English menu.
 
 Indie track, theme "Build for Your World". Built during the Meta Global AI Developer Hackathon (Oct 26 to Nov 4, 2026). See [docs/PROVENANCE.md](docs/PROVENANCE.md).
